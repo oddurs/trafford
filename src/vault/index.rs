@@ -236,7 +236,7 @@ impl Vault {
                 });
             }
         }
-        hits.sort_by(|a, b| b.score.cmp(&a.score));
+        hits.sort_by_key(|h| std::cmp::Reverse(h.score));
         hits.truncate(limit);
         hits
     }
@@ -273,7 +273,7 @@ impl Vault {
             })
             .filter(|(s, _)| *s > 0)
             .collect();
-        scored.sort_by(|a, b| b.0.cmp(&a.0));
+        scored.sort_by_key(|(score, _)| std::cmp::Reverse(*score));
         scored.into_iter().take(limit).map(|(_, n)| n).collect()
     }
 
