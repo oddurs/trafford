@@ -93,9 +93,9 @@ context_pane = true
 ## Development
 
 ```sh
-cargo test          # 77 unit tests, no fixtures required
-cargo clippy --all-targets
-cargo fmt
+cargo test          # unit tests live beside the code they cover
+cargo clippy --all-targets -- -D warnings
+cargo fmt --all --check
 ```
 
 Working on this with an agent? Read [CLAUDE.md](CLAUDE.md) for the architecture
