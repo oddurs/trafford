@@ -487,9 +487,13 @@ impl App {
     // ---- overlays ------------------------------------------------------
 
     fn overlay_key(&mut self, key: KeyEvent) {
-        // Esc always dismisses, except that it also cancels a running stream.
         if key.code == KeyCode::Esc {
-            self.overlay = None;
+            match escape_target(self.overlay.as_ref()) {
+                Escape::Close => self.overlay = None,
+                // The diff was opened from the git pane, so esc goes back to
+                // it rather than dropping the user all the way to the editor.
+                Escape::ReopenGitPane => self.open_git_pane(),
+            }
             return;
         }
         let Some(overlay) = self.overlay.take() else {
@@ -803,6 +807,20 @@ impl App {
     }
 }
 
+/// Where `esc` lands when an overlay is open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Escape {
+    Close,
+    ReopenGitPane,
+}
+
+pub fn escape_target(overlay: Option<&Overlay>) -> Escape {
+    match overlay {
+        Some(Overlay::Diff { .. }) => Escape::ReopenGitPane,
+        _ => Escape::Close,
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum PickerKind {
     Palette,
@@ -866,7 +884,24 @@ pub const HELP: &[(&str, &str)] = &[
 
 #[cfg(test)]
 mod tests {
-    use crate::app::fuzzy_match;
+    use super::{escape_target, Escape};
+    use crate::app::{fuzzy_match, Overlay};
+
+    #[test]
+    fn escape_from_the_diff_returns_to_the_git_pane() {
+        let diff = Overlay::Diff {
+            title: "diff · a.md".into(),
+            body: String::new(),
+            scroll: 0,
+        };
+        assert_eq!(escape_target(Some(&diff)), Escape::ReopenGitPane);
+    }
+
+    #[test]
+    fn escape_from_every_other_overlay_closes_it() {
+        assert_eq!(escape_target(Some(&Overlay::Help)), Escape::Close);
+        assert_eq!(escape_target(None), Escape::Close);
+    }
 
     #[test]
     fn fuzzy_matches_subsequences_only() {
