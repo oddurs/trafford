@@ -7,11 +7,16 @@ modal editor, git integration, and a note-grounded assistant.
 
 ```sh
 cargo test                  # unit tests live beside the code they cover
-cargo clippy --all-targets  # must be clean; CI fails on warnings
-cargo fmt                   # must be clean; CI checks --check
+cargo clippy --all-targets -- -D warnings   # CI fails on any warning
+cargo fmt --all --check     # CI checks this exact form
 cargo run -- init /tmp/v    # scaffold a throwaway vault
 cargo run -- /tmp/v         # open it
 ```
+
+CI runs the **latest stable** toolchain, which knows lints yours may not. A
+clean local clippy is not proof the build is green — `rustup update stable`
+first, or run `cargo +<version> clippy` with the version CI reports. Two
+`unnecessary_sort_by` errors reached `main` this way already.
 
 ## Layout
 

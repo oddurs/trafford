@@ -59,6 +59,15 @@ than in the subject, so `git log --oneline` stays readable and
 Co-Authored-By: Claude <noreply@anthropic.com>
 ```
 
+### Run what CI runs
+
+`cargo test` passing locally is not the same gate as CI. Match the commands
+exactly — `cargo clippy --all-targets -- -D warnings`, `cargo fmt --all
+--check` — **and** the toolchain, because CI tracks the latest stable and a
+lint that does not exist in your version cannot warn you about itself. When a
+run fails, read the log before changing anything: `gh run view <id>
+--log-failed`.
+
 ### Slicing
 
 The single highest-leverage habit: commit in slices a human can hold in their
