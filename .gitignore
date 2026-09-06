@@ -1,0 +1,9 @@
+/target
+**/*.rs.bk
+*.pdb
+
+.DS_Store
+.venv/
+
+# Personal overrides, not shared
+.claude/settings.local.json
