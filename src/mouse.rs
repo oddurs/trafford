@@ -6,6 +6,7 @@
 //! reached with a key can be reached with the mouse.
 
 use crate::app::{App, ContextTarget, Focus, Overlay, SidebarTab};
+use crate::editor::Mode;
 use crate::tree::Entry;
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 
@@ -17,6 +18,7 @@ impl App {
         let (c, r) = (event.column, event.row);
         match event.kind {
             MouseEventKind::Down(MouseButton::Left) => self.click(c, r, event),
+            MouseEventKind::Drag(MouseButton::Left) => self.drag(c, r, event),
             MouseEventKind::ScrollUp => self.scroll(c, r, -(WHEEL as isize)),
             MouseEventKind::ScrollDown => self.scroll(c, r, WHEEL as isize),
             _ => {}
@@ -34,12 +36,29 @@ impl App {
             self.click_sidebar(c, r);
         } else if self.panes.editor_hit(c, r) {
             self.focus = Focus::Editor;
+            if matches!(self.editor.mode, Mode::Visual | Mode::VisualLine) {
+                self.editor.mode = Mode::Normal;
+            }
             self.click_editor(c, r, event);
         } else if self.panes.context_hit(c, r) {
             self.click_context(c, r);
         } else if self.panes.assistant_hit(c, r) {
             self.focus = Focus::Assistant;
         }
+    }
+
+    /// Dragging in the editor selects. The editor's operators are line-wise,
+    /// so the selection is too — dragging then pressing `y` or `d` does what
+    /// the highlight showed, rather than something subtly narrower.
+    fn drag(&mut self, c: u16, r: u16, event: MouseEvent) {
+        if self.overlay.is_some() || !self.panes.editor_hit(c, r) {
+            return;
+        }
+        if self.editor.mode != Mode::VisualLine {
+            self.editor.anchor = (self.editor.buf.row, self.editor.buf.col);
+            self.editor.mode = Mode::VisualLine;
+        }
+        self.click_editor(c, r, event);
     }
 
     fn scroll(&mut self, c: u16, r: u16, delta: isize) {
