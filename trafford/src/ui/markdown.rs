@@ -311,206 +311,305 @@ impl<'a> Renderer<'a> {
         out.finish()
     }
 
-    /// Scan inline markup. With `conceal` off, every input character ends up in
-    /// exactly one span.
+    /// Turn the scanner's pieces into styled spans.
+    ///
+    /// Every decision about *what is there* was made in [`scan`]; everything
+    /// here is about how a terminal draws it. The HTML backend in `site/` is
+    /// the same function written against tags instead of styles, which is the
+    /// point of the split — there is one inline scanner in this program, for
+    /// the same reason there is one heading scanner.
     fn inline(&self, out: &mut Out, text: &str, base: Style) {
         let t = self.theme;
-        let chars: Vec<char> = text.chars().collect();
-        let mut plain = String::new();
-        let mut i = 0;
-
-        macro_rules! flush {
-            () => {
-                if !plain.is_empty() {
-                    let taken = std::mem::take(&mut plain);
-                    out.push(&taken, base);
-                }
+        for piece in scan(text) {
+            let shown = |all: &'_ str, inner: &'_ str| -> String {
+                if self.conceal { inner } else { all }.to_string()
             };
-        }
-
-        /// The source run, or just its middle when concealing.
-        macro_rules! shown {
-            ($all:expr, $inner:expr) => {
-                if self.conceal {
-                    $inner
-                } else {
-                    $all
+            match &piece.kind {
+                Inline::Text => out.push(&piece.raw, base),
+                Inline::Code { inner } => {
+                    out.push(&shown(&piece.raw, inner), Style::default().fg(t.code))
                 }
-            };
-        }
-
-        while i < chars.len() {
-            // [[wikilink]] and [[wikilink|alias]]
-            if chars[i] == '[' && chars.get(i + 1) == Some(&'[') {
-                if let Some(end) = find_pair(&chars, i + 2, ']') {
-                    let inner: String = chars[i + 2..end].iter().collect();
-                    let target = inner
-                        .split(['|', '#'])
-                        .next()
-                        .unwrap_or(&inner)
-                        .trim()
-                        .to_string();
-                    // `[[Note#Heading|alias]]`: the heading sits between the
-                    // target and any alias.
-                    let heading = inner
-                        .split_once('#')
-                        .map(|(_, rest)| rest.split('|').next().unwrap_or(rest).trim())
-                        .filter(|h| !h.is_empty())
-                        .map(str::to_string);
-                    // An alias is what the author wanted read; without one the
-                    // whole inner text is, headings included.
-                    let shown_inner = match inner.split_once('|') {
-                        Some((_, alias)) => alias.to_string(),
-                        None => inner.clone(),
-                    };
-                    let all: String = chars[i..end + 2].iter().collect();
-                    let colour = if (self.resolves)(&target) {
+                Inline::Strong { inner } => {
+                    out.push(&shown(&piece.raw, inner), base.add_modifier(Modifier::BOLD))
+                }
+                Inline::Emphasis { inner } => out.push(
+                    &shown(&piece.raw, inner),
+                    base.add_modifier(Modifier::ITALIC),
+                ),
+                Inline::Highlight { inner } => out.push(
+                    &shown(&piece.raw, inner),
+                    Style::default().fg(t.bg).bg(t.accent),
+                ),
+                Inline::Wiki {
+                    target,
+                    heading,
+                    label,
+                } => {
+                    let colour = if (self.resolves)(target) {
                         t.link
                     } else {
                         t.broken
                     };
-                    flush!();
                     out.push_link(
-                        shown!(&all, &shown_inner),
+                        &shown(&piece.raw, label),
                         Style::default()
                             .fg(colour)
                             .add_modifier(Modifier::UNDERLINED),
-                        target,
-                        heading,
+                        target.clone(),
+                        heading.clone(),
                         Target::Note,
                     );
-                    i = end + 2;
-                    continue;
                 }
-            }
-
-            // [text](url)
-            if chars[i] == '[' {
-                if let Some(close) = chars[i..].iter().position(|c| *c == ']').map(|p| p + i) {
-                    if chars.get(close + 1) == Some(&'(') {
-                        if let Some(paren) = chars[close..]
-                            .iter()
-                            .position(|c| *c == ')')
-                            .map(|p| p + close)
-                        {
-                            let label: String = chars[i + 1..close].iter().collect();
-                            let url: String = chars[close + 2..paren].iter().collect();
-                            flush!();
-                            if self.conceal {
-                                out.push_link(
-                                    &label,
-                                    Style::default()
-                                        .fg(t.link)
-                                        .add_modifier(Modifier::UNDERLINED),
-                                    url,
-                                    None,
-                                    Target::Url,
-                                );
-                            } else {
-                                let bracketed: String = chars[i..=close].iter().collect();
-                                let parens: String = chars[close + 1..=paren].iter().collect();
-                                out.push_link(
-                                    &bracketed,
-                                    Style::default().fg(t.link),
-                                    url.clone(),
-                                    None,
-                                    Target::Url,
-                                );
-                                out.push(&parens, t.faded());
-                            }
-                            i = paren + 1;
-                            continue;
-                        }
+                Inline::Link { url, label } => {
+                    if self.conceal {
+                        out.push_link(
+                            label,
+                            Style::default()
+                                .fg(t.link)
+                                .add_modifier(Modifier::UNDERLINED),
+                            url.clone(),
+                            None,
+                            Target::Url,
+                        );
+                    } else {
+                        // Source form: the label is the link, the parenthesised
+                        // URL is punctuation that happens to be readable.
+                        out.push_link(
+                            &format!("[{label}]"),
+                            Style::default().fg(t.link),
+                            url.clone(),
+                            None,
+                            Target::Url,
+                        );
+                        out.push(&format!("({url})"), t.faded());
                     }
                 }
+                Inline::Tag { name } => out.push_link(
+                    &piece.raw,
+                    Style::default().fg(t.tag),
+                    name.clone(),
+                    None,
+                    Target::Tag,
+                ),
             }
+        }
+    }
+}
 
-            // `inline code`
-            if chars[i] == '`' {
-                if let Some(end) = chars[i + 1..]
-                    .iter()
-                    .position(|c| *c == '`')
-                    .map(|p| p + i + 1)
-                {
-                    let all: String = chars[i..=end].iter().collect();
-                    let inner: String = chars[i + 1..end].iter().collect();
-                    flush!();
-                    out.push(shown!(&all, &inner), Style::default().fg(t.code));
-                    i = end + 1;
-                    continue;
-                }
+/// A run of inline markup, described by what it means rather than by how it
+/// is drawn.
+///
+/// `raw` is the source characters the piece covers, exactly — concatenate
+/// every piece's `raw` and you have the line back. That is what
+/// `scanning_covers_every_character` pins, and it is the property the editor
+/// path depends on: styling a piece cannot add or drop a character if the
+/// pieces already add up to the source.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Piece {
+    pub raw: String,
+    pub kind: Inline,
+}
+
+/// What a [`Piece`] is. The payload is what survives concealment — the text a
+/// reader was meant to see, plus wherever it points.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Inline {
+    /// No markup. `raw` is the text.
+    Text,
+    /// `` `code` ``
+    Code { inner: String },
+    /// `**bold**`
+    Strong { inner: String },
+    /// `*italic*` or `_italic_`
+    Emphasis { inner: String },
+    /// `==highlight==`
+    Highlight { inner: String },
+    /// `[[Note#Heading|alias]]`
+    Wiki {
+        /// The note name, with any `#heading` and `|alias` stripped.
+        target: String,
+        /// The section named after the `#`, which the target drops.
+        heading: Option<String>,
+        /// What the author wanted read: the alias, or the whole inner text.
+        label: String,
+    },
+    /// `[label](url)`
+    Link { url: String, label: String },
+    /// `#tag` — the hash is part of the tag, not syntax wrapped around it.
+    Tag { name: String },
+}
+
+/// Find the inline markup in one line of a note.
+///
+/// This is the only inline scanner in the program. The terminal renderer maps
+/// its output to styles; the docs site maps the same output to HTML. A second
+/// scanner is the same class of bug as a second heading scanner — it agrees
+/// with this one until the day it does not, and then a link is drawn in one
+/// place and not the other.
+///
+/// Nothing here knows about code blocks: a fenced line is not scanned at all,
+/// which is the caller's decision because only the caller is reading the note
+/// in order.
+pub fn scan(text: &str) -> Vec<Piece> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out: Vec<Piece> = Vec::new();
+    let mut plain = String::new();
+    let mut i = 0;
+
+    macro_rules! flush {
+        () => {
+            if !plain.is_empty() {
+                out.push(Piece {
+                    raw: std::mem::take(&mut plain),
+                    kind: Inline::Text,
+                });
             }
+        };
+    }
 
-            // **bold**
-            if chars[i] == '*' && chars.get(i + 1) == Some(&'*') {
-                if let Some(end) = find_run(&chars, i + 2, '*', 2) {
-                    let all: String = chars[i..end + 2].iter().collect();
-                    let inner: String = chars[i + 2..end].iter().collect();
-                    flush!();
-                    out.push(shown!(&all, &inner), base.add_modifier(Modifier::BOLD));
-                    i = end + 2;
-                    continue;
-                }
+    macro_rules! piece {
+        ($from:expr, $to:expr, $kind:expr) => {{
+            flush!();
+            out.push(Piece {
+                raw: chars[$from..$to].iter().collect(),
+                kind: $kind,
+            });
+        }};
+    }
+
+    while i < chars.len() {
+        // [[wikilink]] and [[wikilink|alias]]
+        if chars[i] == '[' && chars.get(i + 1) == Some(&'[') {
+            if let Some(end) = find_pair(&chars, i + 2, ']') {
+                let inner: String = chars[i + 2..end].iter().collect();
+                let target = inner
+                    .split(['|', '#'])
+                    .next()
+                    .unwrap_or(&inner)
+                    .trim()
+                    .to_string();
+                // `[[Note#Heading|alias]]`: the heading sits between the
+                // target and any alias.
+                let heading = inner
+                    .split_once('#')
+                    .map(|(_, rest)| rest.split('|').next().unwrap_or(rest).trim())
+                    .filter(|h| !h.is_empty())
+                    .map(str::to_string);
+                // An alias is what the author wanted read; without one the
+                // whole inner text is, headings included.
+                let label = match inner.split_once('|') {
+                    Some((_, alias)) => alias.to_string(),
+                    None => inner.clone(),
+                };
+                piece!(
+                    i,
+                    end + 2,
+                    Inline::Wiki {
+                        target,
+                        heading,
+                        label,
+                    }
+                );
+                i = end + 2;
+                continue;
             }
+        }
 
-            // ==highlight==
-            if chars[i] == '=' && chars.get(i + 1) == Some(&'=') {
-                if let Some(end) = find_run(&chars, i + 2, '=', 2) {
-                    let all: String = chars[i..end + 2].iter().collect();
-                    let inner: String = chars[i + 2..end].iter().collect();
-                    flush!();
-                    out.push(shown!(&all, &inner), Style::default().fg(t.bg).bg(t.accent));
-                    i = end + 2;
-                    continue;
-                }
-            }
-
-            // *italic* or _italic_
-            if (chars[i] == '*' || chars[i] == '_') && chars.get(i + 1) != Some(&chars[i]) {
-                let delim = chars[i];
-                if let Some(end) = chars[i + 1..]
-                    .iter()
-                    .position(|c| *c == delim)
-                    .map(|p| p + i + 1)
-                {
-                    if end > i + 1 {
-                        let all: String = chars[i..=end].iter().collect();
-                        let inner: String = chars[i + 1..end].iter().collect();
-                        flush!();
-                        out.push(shown!(&all, &inner), base.add_modifier(Modifier::ITALIC));
-                        i = end + 1;
+        // [text](url)
+        if chars[i] == '[' {
+            if let Some(close) = chars[i..].iter().position(|c| *c == ']').map(|p| p + i) {
+                if chars.get(close + 1) == Some(&'(') {
+                    if let Some(paren) = chars[close..]
+                        .iter()
+                        .position(|c| *c == ')')
+                        .map(|p| p + close)
+                    {
+                        let label: String = chars[i + 1..close].iter().collect();
+                        let url: String = chars[close + 2..paren].iter().collect();
+                        piece!(i, paren + 1, Inline::Link { url, label });
+                        i = paren + 1;
                         continue;
                     }
                 }
             }
+        }
 
-            // #tag at a word boundary. The hash is part of the tag, not syntax
-            // wrapped around it, so it survives concealment.
-            if chars[i] == '#' && (i == 0 || chars[i - 1].is_whitespace()) {
-                let mut end = i + 1;
-                while end < chars.len()
-                    && (chars[end].is_alphanumeric()
-                        || chars[end] == '-'
-                        || chars[end] == '_'
-                        || chars[end] == '/')
-                {
-                    end += 1;
-                }
+        // `inline code`
+        if chars[i] == '`' {
+            if let Some(end) = chars[i + 1..]
+                .iter()
+                .position(|c| *c == '`')
+                .map(|p| p + i + 1)
+            {
+                let inner: String = chars[i + 1..end].iter().collect();
+                piece!(i, end + 1, Inline::Code { inner });
+                i = end + 1;
+                continue;
+            }
+        }
+
+        // **bold**
+        if chars[i] == '*' && chars.get(i + 1) == Some(&'*') {
+            if let Some(end) = find_run(&chars, i + 2, '*', 2) {
+                let inner: String = chars[i + 2..end].iter().collect();
+                piece!(i, end + 2, Inline::Strong { inner });
+                i = end + 2;
+                continue;
+            }
+        }
+
+        // ==highlight==
+        if chars[i] == '=' && chars.get(i + 1) == Some(&'=') {
+            if let Some(end) = find_run(&chars, i + 2, '=', 2) {
+                let inner: String = chars[i + 2..end].iter().collect();
+                piece!(i, end + 2, Inline::Highlight { inner });
+                i = end + 2;
+                continue;
+            }
+        }
+
+        // *italic* or _italic_
+        if (chars[i] == '*' || chars[i] == '_') && chars.get(i + 1) != Some(&chars[i]) {
+            let delim = chars[i];
+            if let Some(end) = chars[i + 1..]
+                .iter()
+                .position(|c| *c == delim)
+                .map(|p| p + i + 1)
+            {
                 if end > i + 1 {
-                    let all: String = chars[i..end].iter().collect();
-                    let name: String = chars[i + 1..end].iter().collect();
-                    flush!();
-                    out.push_link(&all, Style::default().fg(t.tag), name, None, Target::Tag);
-                    i = end;
+                    let inner: String = chars[i + 1..end].iter().collect();
+                    piece!(i, end + 1, Inline::Emphasis { inner });
+                    i = end + 1;
                     continue;
                 }
             }
-
-            plain.push(chars[i]);
-            i += 1;
         }
-        flush!();
+
+        // #tag at a word boundary. The hash is part of the tag, not syntax
+        // wrapped around it, so it survives concealment.
+        if chars[i] == '#' && (i == 0 || chars[i - 1].is_whitespace()) {
+            let mut end = i + 1;
+            while end < chars.len()
+                && (chars[end].is_alphanumeric()
+                    || chars[end] == '-'
+                    || chars[end] == '_'
+                    || chars[end] == '/')
+            {
+                end += 1;
+            }
+            if end > i + 1 {
+                let name: String = chars[i + 1..end].iter().collect();
+                piece!(i, end, Inline::Tag { name });
+                i = end;
+                continue;
+            }
+        }
+
+        plain.push(chars[i]);
+        i += 1;
     }
+    flush!();
+    out
 }
 
 /// Split a leading list marker (`- `, `* `, `1. `, `- [ ] `) from a line.
@@ -591,6 +690,52 @@ mod tests {
         "unclosed [[link and `code",
         "héllo **wörld** ✨",
     ];
+
+    /// The invariant, one level down: the pieces add up to the line.
+    ///
+    /// This is where `styling_alone_preserves_every_character` now comes from.
+    /// The span mapper cannot drop a character if the scanner already covers
+    /// every one of them, and the HTML backend in `site/` gets the same
+    /// guarantee for free — which is the whole argument for there being one
+    /// scanner rather than two.
+    #[test]
+    fn scanning_covers_every_character() {
+        for line in SAMPLES {
+            let joined: String = scan(line).iter().map(|p| p.raw.as_str()).collect();
+            assert_eq!(joined, *line, "pieces do not add up to the source");
+        }
+    }
+
+    /// A piece says what it is, not what colour it will be. Pinned because the
+    /// HTML backend reads these and nothing else.
+    #[test]
+    fn a_piece_carries_what_survives_concealment() {
+        let pieces = scan("see [[Notes/Deep Work#Rules|the rules]] and #focus/deep");
+        let wiki = pieces
+            .iter()
+            .find(|p| matches!(p.kind, Inline::Wiki { .. }))
+            .expect("a wikilink");
+        assert_eq!(wiki.raw, "[[Notes/Deep Work#Rules|the rules]]");
+        assert_eq!(
+            wiki.kind,
+            Inline::Wiki {
+                target: "Notes/Deep Work".into(),
+                heading: Some("Rules".into()),
+                label: "the rules".into(),
+            }
+        );
+        let tag = pieces
+            .iter()
+            .find(|p| matches!(p.kind, Inline::Tag { .. }))
+            .expect("a tag");
+        assert_eq!(tag.raw, "#focus/deep");
+        assert_eq!(
+            tag.kind,
+            Inline::Tag {
+                name: "focus/deep".into()
+            }
+        );
+    }
 
     /// The invariant, still: styling alone never adds or removes a character.
     ///
