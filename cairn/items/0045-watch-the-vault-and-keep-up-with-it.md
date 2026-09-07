@@ -2,8 +2,9 @@
 id: 45
 title: Watch the vault and keep up with it
 type: feature
-status: backlog
+status: done
 milestone: v0.5
+assignee: Oddur Sigurdsson
 depends_on:
 - 43
 - 44
@@ -60,16 +61,16 @@ it.
 
 ## Acceptance criteria
 
-- [ ] A note edited by another program updates on screen without a keystroke
-- [ ] A note created by another program appears in the tree and the switcher
-- [ ] A deleted note disappears, and links to it go from resolved to broken
-- [ ] Backlinks and tags reflect an edit made elsewhere
-- [ ] An unsaved buffer is never replaced by a watcher event
-- [ ] trafford's own saves cause no visible churn
-- [ ] The fold state of a note that changed underneath is dropped, since it is
+- [x] A note edited by another program updates on screen without a keystroke
+- [x] A note created by another program appears in the tree and the switcher
+- [x] A deleted note disappears, and links to it go from resolved to broken
+- [x] Backlinks and tags reflect an edit made elsewhere
+- [x] An unsaved buffer is never replaced by a watcher event
+- [x] trafford's own saves cause no visible churn
+- [x] The fold state of a note that changed underneath is dropped, since it is
       keyed by line
-- [ ] A burst of writes — a git checkout, a bulk rename — costs one rescan
-- [ ] Watching failing (a platform without it, too many files) is a status
+- [x] A burst of writes — a git checkout, a bulk rename — costs one rescan
+- [x] Watching failing (a platform without it, too many files) is a status
       message and not a crash; `reindex` still works
 
 ## Notes

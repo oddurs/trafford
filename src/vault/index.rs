@@ -345,6 +345,22 @@ impl Vault {
         self.root.join(id)
     }
 
+    /// The id of the note at a path, if the vault holds one there.
+    ///
+    /// An id is a relative path with `/` separators, so this is the inverse of
+    /// `path_for` — but it answers `None` for a file the index has never seen,
+    /// which is how the watcher tells "somebody edited a note" from "somebody
+    /// added one".
+    pub fn id_for_path(&self, path: &Path) -> Option<String> {
+        let rel = path.strip_prefix(&self.root).ok()?;
+        let id = rel
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/");
+        self.get(&id).map(|n| n.id.clone())
+    }
+
     /// Create a new note, making parent directories as needed. Returns its id.
     pub fn create_note(&mut self, rel: &str, contents: &str) -> Result<String> {
         let path = self.resolve_new_path(rel)?;
