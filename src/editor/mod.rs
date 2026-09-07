@@ -108,18 +108,20 @@ impl Editor {
         }
     }
 
-    /// Keep the cursor inside a viewport `height` rows tall.
-    pub fn sync_scroll(&mut self, height: usize) {
+    /// Keep a screen row inside a viewport `height` rows tall.
+    ///
+    /// Takes the row the cursor is *drawn* on rather than the buffer line it
+    /// is in, so a folded line scrolls by what is visible.
+    pub fn sync_scroll_visual(&mut self, cursor_row: usize, total: usize, height: usize) {
         if height == 0 {
             return;
         }
-        if self.buf.row < self.scroll {
-            self.scroll = self.buf.row;
-        } else if self.buf.row >= self.scroll + height {
-            self.scroll = self.buf.row + 1 - height;
+        if cursor_row < self.scroll {
+            self.scroll = cursor_row;
+        } else if cursor_row >= self.scroll + height {
+            self.scroll = cursor_row + 1 - height;
         }
-        let max_scroll = self.buf.len().saturating_sub(1);
-        self.scroll = self.scroll.min(max_scroll);
+        self.scroll = self.scroll.min(total.saturating_sub(1));
     }
 
     pub fn on_key(&mut self, key: KeyEvent) -> EditorAction {
@@ -678,14 +680,16 @@ mod tests {
         assert_eq!(ed.buf.line(0), "a");
     }
 
+    /// Scrolling is in screen rows now, which with no wrapping are the same
+    /// as buffer lines — so this pins the behaviour it always had.
     #[test]
     fn scroll_follows_the_cursor() {
         let mut ed = editor(&"x\n".repeat(50));
         ed.buf.goto_line(40);
-        ed.sync_scroll(10);
+        ed.sync_scroll_visual(40, 51, 10);
         assert!(ed.scroll <= 40 && 40 < ed.scroll + 10);
         ed.buf.goto_line(0);
-        ed.sync_scroll(10);
+        ed.sync_scroll_visual(0, 51, 10);
         assert_eq!(ed.scroll, 0);
     }
 }

@@ -125,6 +125,11 @@ Four things that each cost an afternoon, so they are worth knowing:
   shell invocation, the build still runs on unchanged source and reports
   success. Use `set -e`, or chain with `&&`.
 
+- **`git checkout <file>` reverts *everything* uncommitted in that file.** It
+  looks like undoing the last edit and is not. It has thrown away finished work
+  here twice, the second time a whole afternoon's wiring — copy the file aside
+  first, or revert the specific edit with the same tool that made it.
+
 - **Send `esc` as its own step.** A terminal delivers ESC glued to the next key
   as `Alt+key`, so `b"\x1bа"` is one keypress, not two.
 
