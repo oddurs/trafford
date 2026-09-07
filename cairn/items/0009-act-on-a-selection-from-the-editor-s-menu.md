@@ -2,8 +2,9 @@
 id: 9
 title: Act on a selection from the editor's menu
 type: feature
-status: backlog
+status: doing
 milestone: v0.3
+assignee: Oddur Sigurdsson
 created: 2026-09-07
 updated: 2026-09-07
 priority: p2

@@ -26,6 +26,9 @@ pub const COMMANDS: &[(&str, &str, &str)] = &[
     ("expand-all", "Sidebar: expand every folder", "E"),
     ("collapse-all", "Sidebar: collapse every folder", "C"),
     ("clear-tag-filter", "Sidebar: clear the tag filter", "c"),
+    ("indent-selection", "Indent the selected lines", ">>"),
+    ("outdent-selection", "Outdent the selected lines", "<<"),
+    ("delete-selection", "Delete the selected lines", "d"),
     ("reindex", "Reindex vault from disk", ""),
     ("git-panel", "Git: review changes", "ctrl-g"),
     ("git-commit", "Git: commit all changes", ""),
@@ -184,6 +187,24 @@ impl App {
             "collapse-all" => {
                 self.collapse_all();
                 self.focus = Focus::Sidebar;
+            }
+            // These go through the editor's own operators rather than a
+            // second implementation, so undo behaves the same either way.
+            "indent-selection" | "outdent-selection" | "delete-selection" => {
+                let Some((start, end)) = self.editor.selection_rows() else {
+                    self.set_status("nothing selected");
+                    return;
+                };
+                self.editor.buf.checkpoint();
+                match key {
+                    "indent-selection" => self.editor.buf.shift_lines(start, end, true),
+                    "outdent-selection" => self.editor.buf.shift_lines(start, end, false),
+                    _ => {
+                        self.editor.buf.delete_lines(start, end - start + 1);
+                    }
+                }
+                self.editor.mode = crate::editor::Mode::Normal;
+                self.focus = Focus::Editor;
             }
             "clear-tag-filter" => {
                 self.tag_filter = None;
@@ -433,6 +454,18 @@ impl App {
                     self.set_status(format!("asked the terminal to copy the {what}"))
                 }
                 Err(err) => self.set_status(format!("could not copy: {err}")),
+            },
+            A::ExtractSelection => match self.editor.selected_text() {
+                Some(text) => {
+                    let guess = crate::app::suggest_note_name(&text);
+                    self.overlay = Some(Overlay::Prompt(Prompt {
+                        kind: PromptKind::ExtractNote(text),
+                        title: "Move these lines into".into(),
+                        input: guess,
+                        hint: "a link replaces them here".into(),
+                    }));
+                }
+                None => self.set_status("nothing selected"),
             },
             A::MoveNote(id) => self.open_move_picker(&id),
             A::DuplicateNote(id) => match self.vault.duplicate_note(&id) {
@@ -1009,6 +1042,7 @@ impl App {
                     PromptKind::NewNote | PromptKind::NewNoteFromLink => self.create_note(&value),
                     PromptKind::Rename => self.rename_current(&value),
                     PromptKind::Commit => self.commit_all(&value),
+                    PromptKind::ExtractNote(text) => self.extract_selection(&value, &text),
                     PromptKind::SaveAnswerAs => {
                         let answer = self.chat.last_answer().unwrap_or_default().to_string();
                         match self.vault.create_note(&value, &answer) {

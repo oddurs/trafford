@@ -265,7 +265,8 @@ impl App {
                     None => items.push(item("Write this note…", A::CreateNote(target))),
                 }
             }
-            // With lines selected, copying them is the obvious thing to offer.
+            // The one moment the interface knows exactly what you mean is
+            // when something is selected, so those actions lead.
             if let Some(selection) = self.editor.selected_text() {
                 let lines = selection.lines().count();
                 items.push(item(
@@ -275,6 +276,14 @@ impl App {
                         text: selection,
                     },
                 ));
+                items.push(item("Make a note from this…", A::ExtractSelection));
+                items.push(item(
+                    "Ask the assistant about this",
+                    A::Command("ask-selection"),
+                ));
+                items.push(item("Indent", A::Command("indent-selection")));
+                items.push(item("Outdent", A::Command("outdent-selection")));
+                items.push(item("Delete these lines", A::Command("delete-selection")));
             }
             if let Some(id) = self.current.clone() {
                 items.push(item(
