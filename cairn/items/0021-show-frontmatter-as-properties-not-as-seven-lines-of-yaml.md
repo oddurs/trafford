@@ -2,8 +2,9 @@
 id: 21
 title: Show frontmatter as properties, not as seven lines of YAML
 type: feature
-status: backlog
+status: done
 milestone: v0.5
+assignee: Oddur Sigurdsson
 created: 2026-09-07
 updated: 2026-09-07
 priority: p1

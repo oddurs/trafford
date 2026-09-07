@@ -383,6 +383,21 @@ impl PreviewView {
         let theme = renderer.theme;
         let mut in_code = false;
         let mut i = 0;
+
+        // Frontmatter, collapsed to what a reader uses. 123 of the 129 notes
+        // this was built against open with six lines of it — a fifth of the
+        // first screen spent on bookkeeping before a sentence appears.
+        if let Some((pairs, body)) = crate::vault::note::frontmatter_block(source) {
+            for drawn in properties(&pairs, renderer) {
+                lines.push(drawn);
+                // Every drawn row belongs to the block's first line. There is no
+                // sensible mapping from a chip back to the YAML line it came
+                // from, and the top of the block is where a click should land.
+                sources.push(0);
+                numbered.push(false);
+            }
+            i = body;
+        }
         while i < source.len() {
             let raw = &source[i];
             let opens = markdown::is_fence(raw);
@@ -485,6 +500,57 @@ impl PreviewView {
     pub fn texts(&self) -> Vec<String> {
         self.lines.iter().map(|r| r.text.clone()).collect()
     }
+}
+
+/// Frontmatter drawn as properties: the tags a reader clicks, then whatever
+/// else the block held, dimmed.
+///
+/// At most two rows, and nothing is dropped — a key nobody anticipated still
+/// appears, it just appears out of the way.
+fn properties(
+    pairs: &[(String, String)],
+    renderer: &markdown::Renderer<'_>,
+) -> Vec<markdown::Rendered> {
+    let theme = renderer.theme;
+    let mut out = Vec::new();
+
+    let tags: Vec<String> = pairs
+        .iter()
+        .filter(|(k, _)| k == "tags" || k == "tag")
+        .flat_map(|(_, v)| v.split(','))
+        .map(|t| t.trim().trim_matches('"').trim_start_matches('#'))
+        .filter(|t| !t.is_empty())
+        .map(str::to_string)
+        .collect();
+
+    if !tags.is_empty() {
+        let mut row = markdown::Rendered::default();
+        for (n, tag) in tags.iter().enumerate() {
+            if n > 0 {
+                row = row.suffixed(" · ", theme.faded());
+            }
+            row = row.with_link(
+                &format!("#{tag}"),
+                Style::default().fg(theme.tag),
+                tag.clone(),
+                markdown::Target::Tag,
+            );
+        }
+        out.push(row);
+    }
+
+    // Everything else in the order it was written, so a key that is not
+    // understood is still visible rather than silently swallowed.
+    let rest: Vec<String> = pairs
+        .iter()
+        .filter(|(k, _)| k != "tags" && k != "tag")
+        .filter(|(_, v)| !v.is_empty())
+        .map(|(k, v)| format!("{k} {v}"))
+        .collect();
+    if !rest.is_empty() {
+        out.push(markdown::Rendered::default().suffixed(&rest.join("  ·  "), theme.faded()));
+    }
+    out
 }
 
 /// How wide text may be before it folds.
@@ -1793,6 +1859,80 @@ mod tests {
         let (_t, view) = preview_of(&["```", "**not bold**", "```", "**bold**"], 40);
         assert_eq!(view.lines[1].text, "**not bold**", "inside the fence");
         assert_eq!(view.lines[3].text, "bold", "after it");
+    }
+
+    const FRONTMATTER: [&str; 9] = [
+        "---",
+        "created: 2026-03-22",
+        "tags:",
+        "  - status/active",
+        "  - type/reference",
+        "---",
+        "",
+        "# Title",
+        "body",
+    ];
+
+    #[test]
+    fn frontmatter_collapses_to_the_things_a_reader_uses() {
+        let (_t, view) = preview_of(&FRONTMATTER, 60);
+        let drawn: Vec<&str> = view.lines.iter().map(|r| r.text.as_str()).collect();
+        assert_eq!(
+            drawn,
+            [
+                "#status/active · #type/reference",
+                "created 2026-03-22",
+                "",
+                "▾ Title",
+                "body",
+            ],
+            "six lines of YAML became two"
+        );
+    }
+
+    #[test]
+    fn a_property_tag_is_clickable_and_names_the_tag() {
+        let (_t, view) = preview_of(&FRONTMATTER, 60);
+        let link = view.link_at(0, 2).expect("a tag under the pointer");
+        assert_eq!(
+            link.target, "status/active",
+            "no leading hash in the target"
+        );
+        assert_eq!(link.kind, markdown::Target::Tag);
+        // The second chip answers too, and the separator between them does not.
+        assert_eq!(
+            view.link_at(0, 20).map(|l| l.target.as_str()),
+            Some("type/reference")
+        );
+        assert!(view.link_at(0, 16).is_none(), "the separator is not a tag");
+    }
+
+    #[test]
+    fn a_key_nobody_anticipated_is_still_shown() {
+        let (_t, view) = preview_of(&["---", "banana: yellow", "---", "body"], 60);
+        assert_eq!(view.lines[0].text, "banana yellow");
+    }
+
+    #[test]
+    fn a_note_without_frontmatter_is_untouched() {
+        let (_t, view) = preview_of(&["# Title", "body"], 60);
+        assert_eq!(view.lines.len(), 2);
+        assert_eq!(view.sources, vec![0, 1]);
+    }
+
+    #[test]
+    fn an_unterminated_block_falls_back_to_its_source() {
+        let (_t, view) = preview_of(&["---", "tags: one", "# never closed"], 60);
+        assert_eq!(view.lines[0].text, "---", "shown as written");
+        assert_eq!(view.lines.len(), 3);
+    }
+
+    #[test]
+    fn a_click_on_a_property_lands_at_the_top_of_the_block() {
+        let (_t, view) = preview_of(&FRONTMATTER, 60);
+        assert_eq!(view.source(0), 0);
+        assert_eq!(view.source(1), 0);
+        assert_eq!(view.source(3), 7, "the heading still names its own line");
     }
 
     const SECTIONED: [&str; 9] = [

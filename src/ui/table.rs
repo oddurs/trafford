@@ -235,7 +235,7 @@ fn row_line(
                     len: link.len,
                     target: link.target.clone(),
                     heading: link.heading.clone(),
-                    wiki: link.wiki,
+                    kind: link.kind,
                 });
             }
         }
