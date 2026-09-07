@@ -462,8 +462,10 @@ impl App {
         match std::fs::write(&path, &text) {
             Ok(()) => {
                 self.editor.buf.mark_saved();
-                // Re-index so links, backlinks and tags reflect what was written.
-                if let Err(err) = self.vault.rescan() {
+                // Re-index so links, backlinks and tags reflect what was
+                // written. Only this note changed, so the whole vault does not
+                // need re-reading.
+                if let Err(err) = self.vault.refresh_note(&id) {
                     self.set_status(format!("saved, but reindex failed: {err}"));
                 } else {
                     self.set_status(format!("saved {id}"));
