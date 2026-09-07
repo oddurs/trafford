@@ -1379,17 +1379,25 @@ fn draw_menu(f: &mut Frame, theme: &Theme, menu: &crate::app::Menu, area: Rect) 
         .chain(std::iter::once(menu.title.width() + 6))
         .max()
         .unwrap_or(20)
-        .clamp(16, area.width.saturating_sub(2) as usize) as u16;
+        // Not `clamp`: on a terminal narrower than the minimum, min would
+        // exceed max and clamp panics. The available width always wins.
+        .max(16)
+        .min(area.width.saturating_sub(2).max(1) as usize) as u16;
+    // +2 for the border. Clamped to the area, which is what makes the menu
+    // scroll rather than overflow.
     let height = (menu.items.len() as u16 + 2).min(area.height);
 
     let (cx, cy) = menu.at;
     let x = cx.min(area.right().saturating_sub(width)).max(area.x);
-    // Prefer below the pointer; flip above when there is no room.
+    // Prefer below the pointer; flip above when there is no room below.
     let y = if cy + height <= area.bottom() {
         cy
     } else {
-        cy.saturating_sub(height).max(area.y)
+        cy.saturating_sub(height)
     };
+    // Whatever the pointer said, the menu has to be inside the area: a rect
+    // that leaves it is a panic in the buffer, not a cosmetic problem.
+    let y = y.clamp(area.y, area.bottom().saturating_sub(height).max(area.y));
     let rect = Rect {
         x,
         y,
@@ -1402,10 +1410,17 @@ fn draw_menu(f: &mut Frame, theme: &Theme, menu: &crate::app::Menu, area: Rect) 
     let inner = block.inner(rect);
     f.render_widget(block, rect);
 
+    // A menu can outgrow the terminal, so it scrolls like every other list
+    // here. The offset must be the one the mouse handler recomputes, or a
+    // click lands on a different entry than the one under the pointer.
+    let visible = inner.height as usize;
+    let offset = scroll_offset(menu.cursor, menu.items.len(), visible);
     let lines: Vec<Line> = menu
         .items
         .iter()
         .enumerate()
+        .skip(offset)
+        .take(visible)
         .map(|(i, item)| {
             let selected = i == menu.cursor;
             let mut line = Line::from(vec![
@@ -1573,6 +1588,7 @@ mod tests {
                     kind: ConfirmKind::QuitDirty,
                     message: "unsaved changes, quit anyway?".into(),
                 }),
+                Overlay::Menu(long_menu(40, 30)),
             ]
         };
         app.assistant_visible = true;
@@ -1581,6 +1597,65 @@ mod tests {
             for &(w, h) in SIZES {
                 render_every_focus(&mut app, w, h);
             }
+        }
+    }
+
+    fn long_menu(items: usize, cursor: usize) -> crate::app::Menu {
+        crate::app::Menu {
+            title: "a menu with more entries than fit".into(),
+            items: (0..items)
+                .map(|i| crate::app::MenuItem {
+                    label: format!("entry number {i}"),
+                    action: crate::app::MenuAction::Command("save"),
+                })
+                .collect(),
+            cursor,
+            at: (4, 2),
+        }
+    }
+
+    /// The row the menu's cursor is on, searched only inside the menu — the
+    /// sidebar draws the same marker for the open note, so a search over the
+    /// whole screen finds that one and always succeeds.
+    fn selected_row(backend: &TestBackend, menu: Rect) -> Option<u16> {
+        let buffer = backend.buffer();
+        (menu.y..menu.bottom().min(buffer.area.height)).find(|y| {
+            (menu.x..menu.right().min(buffer.area.width)).any(|x| buffer[(x, *y)].symbol() == "▌")
+        })
+    }
+
+    /// A menu longer than the terminal used to draw its first N entries and
+    /// silently drop the rest, so moving the cursor down walked it off screen.
+    #[test]
+    fn a_menu_taller_than_the_terminal_keeps_its_selection_visible() {
+        let (_dir, mut app) = app_with_every_pane_open();
+        for (rows, cursor) in [(10u16, 0usize), (10, 20), (10, 39), (6, 39), (40, 39)] {
+            app.overlay = Some(Overlay::Menu(long_menu(40, cursor)));
+            let mut terminal = Terminal::new(TestBackend::new(70, rows)).unwrap();
+            terminal.draw(|f| draw(f, &mut app)).unwrap();
+            assert!(
+                selected_row(terminal.backend(), app.panes.overlay).is_some(),
+                "entry {cursor} of 40 was off screen at {rows} rows"
+            );
+        }
+    }
+
+    #[test]
+    fn a_menu_that_fits_is_not_scrolled() {
+        let (_dir, mut app) = app_with_every_pane_open();
+        app.overlay = Some(Overlay::Menu(long_menu(4, 0)));
+        let mut terminal = Terminal::new(TestBackend::new(70, 30)).unwrap();
+        terminal.draw(|f| draw(f, &mut app)).unwrap();
+        let buffer = terminal.backend().buffer();
+        let text: String = (0..buffer.area.height)
+            .flat_map(|y| (0..buffer.area.width).map(move |x| (x, y)))
+            .map(|(x, y)| buffer[(x, y)].symbol())
+            .collect();
+        for i in 0..4 {
+            assert!(
+                text.contains(&format!("entry number {i}")),
+                "entry {i} missing"
+            );
         }
     }
 
