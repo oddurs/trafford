@@ -123,13 +123,18 @@ the wrong place — none of that is visible from inside the process.
 the screen back:
 
 ```sh
-pip install pyte
+python3 -m venv .venv && .venv/bin/pip install pyte   # see below
 cargo build --release
 python3 tools/probe.py screens  /tmp/vault   # what each keystroke draws
 python3 tools/probe.py cursor   /tmp/vault   # where the cursor actually lands
 python3 tools/probe.py sizes    /tmp/vault   # panic-hunt across terminal sizes
 python3 tools/probe.py timings  /tmp/vault   # startup, save, search latency
 ```
+
+Use `.venv/bin/python` to run it. A plain `pip install pyte` is refused on any
+Python installed by Homebrew or a recent distribution — the interpreter is
+marked externally managed, and the error names `--break-system-packages`, which
+is not the answer. The venv is gitignored.
 
 Every non-trivial bug in this project's first week came from there: a panic on
 narrow terminals, CRLF files tearing the layout apart, the cursor drifting on
