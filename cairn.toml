@@ -156,6 +156,7 @@ values = [
   "config",     # config.toml and keybindings
   "perf",
   "docs",
+  "site",      # the docs and landing site: generator, dev server, deploy
   "packaging",
 ]
 column = true
