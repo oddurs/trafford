@@ -2,8 +2,9 @@
 id: 3
 title: Show the keyboard shortcut beside each menu entry
 type: feature
-status: planned
+status: doing
 milestone: v0.2
+assignee: Oddur Sigurdsson
 created: 2026-09-07
 updated: 2026-09-07
 priority: p2

@@ -209,6 +209,33 @@ pub struct MenuItem {
     pub action: MenuAction,
 }
 
+impl MenuItem {
+    /// The key that does the same thing, for the hint beside the entry.
+    ///
+    /// Read from the command table the help screen uses, so the two cannot
+    /// disagree — a menu that teaches the wrong key is worse than one that
+    /// teaches none.
+    pub fn shortcut(&self) -> Option<&'static str> {
+        use MenuAction as A;
+        let key = match &self.action {
+            A::Command(name) => {
+                return crate::keymap::COMMANDS
+                    .iter()
+                    .find(|(k, _, _)| k == name)
+                    .map(|(_, _, shortcut)| *shortcut)
+                    .filter(|s| !s.is_empty())
+            }
+            // These have no command behind them; the key is the one that does
+            // the same thing to the row the menu was opened on.
+            A::OpenNote(_) | A::OpenNoteAt(..) | A::GoToLine(_) | A::CreateNote(_) => "enter",
+            A::ExpandUnder(_) => "E",
+            A::CollapseDir(_) => "h",
+            _ => return None,
+        };
+        Some(key)
+    }
+}
+
 /// A menu anchored to the point that was right-clicked.
 #[derive(Debug, Clone)]
 pub struct Menu {
@@ -1042,5 +1069,68 @@ mod tests {
     fn last_answer_ignores_a_blank_placeholder() {
         let (chat, _tx) = assistant_turn();
         assert_eq!(chat.last_answer(), None);
+    }
+}
+
+#[cfg(test)]
+mod menu_tests {
+    use super::*;
+
+    fn item(action: MenuAction) -> MenuItem {
+        MenuItem {
+            label: "whatever".into(),
+            action,
+        }
+    }
+
+    /// The point of reading the command table rather than repeating it: the
+    /// menu cannot teach a key the help screen disagrees with.
+    #[test]
+    fn a_command_entry_takes_its_shortcut_from_the_command_table() {
+        let save = crate::keymap::COMMANDS
+            .iter()
+            .find(|(k, _, _)| *k == "save")
+            .map(|(_, _, s)| *s)
+            .unwrap();
+        assert_eq!(item(MenuAction::Command("save")).shortcut(), Some(save));
+        assert_eq!(item(MenuAction::Command("save")).shortcut(), Some("ctrl-s"));
+    }
+
+    #[test]
+    fn a_command_with_no_binding_shows_no_hint() {
+        // `rename` is palette-only; an empty string in the table is "no key",
+        // not a key that happens to be blank.
+        assert_eq!(item(MenuAction::Command("rename")).shortcut(), None);
+    }
+
+    #[test]
+    fn an_unknown_command_shows_no_hint_rather_than_guessing() {
+        assert_eq!(
+            item(MenuAction::Command("no-such-command")).shortcut(),
+            None
+        );
+    }
+
+    #[test]
+    fn contextual_entries_name_the_key_that_does_the_same_thing() {
+        assert_eq!(
+            item(MenuAction::OpenNote("a.md".into())).shortcut(),
+            Some("enter")
+        );
+        assert_eq!(
+            item(MenuAction::ExpandUnder("p".into())).shortcut(),
+            Some("E")
+        );
+        assert_eq!(
+            item(MenuAction::CollapseDir("p".into())).shortcut(),
+            Some("h")
+        );
+    }
+
+    #[test]
+    fn entries_with_no_equivalent_key_show_nothing() {
+        assert_eq!(item(MenuAction::DeleteNote("a.md".into())).shortcut(), None);
+        assert_eq!(item(MenuAction::RenameNote("a.md".into())).shortcut(), None);
+        assert_eq!(item(MenuAction::LinkToNote("a.md".into())).shortcut(), None);
     }
 }
