@@ -79,7 +79,8 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         | Some(Overlay::Switcher(p))
         | Some(Overlay::LinkPicker(p))
         | Some(Overlay::Backlinks(p))
-        | Some(Overlay::Themes(p)) => draw_picker(f, &theme, p, area),
+        | Some(Overlay::Themes(p))
+        | Some(Overlay::MoveTo { picker: p, .. }) => draw_picker(f, &theme, p, area),
         Some(Overlay::Search(pane)) => draw_search(f, &theme, pane, area),
         Some(Overlay::Prompt(prompt)) => {
             draw_prompt(f, &theme, prompt, area);

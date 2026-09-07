@@ -434,6 +434,15 @@ impl App {
                 }
                 Err(err) => self.set_status(format!("could not copy: {err}")),
             },
+            A::MoveNote(id) => self.open_move_picker(&id),
+            A::DuplicateNote(id) => match self.vault.duplicate_note(&id) {
+                Ok(copy) => {
+                    self.open_note(&copy, true);
+                    self.set_status(format!("copied to {copy}"));
+                    self.refresh_git();
+                }
+                Err(err) => self.set_status(format!("could not duplicate: {err}")),
+            },
             A::FilterByTag(tag) => {
                 self.tag_filter = Some(tag.clone());
                 self.sidebar_tab = SidebarTab::Notes;
@@ -467,6 +476,76 @@ impl App {
         }
         self.refresh_git();
         self.open_git_pane();
+    }
+
+    /// Ask which folder a note should move to.
+    ///
+    /// A picker rather than a submenu: a real vault has twenty-five folders,
+    /// which a menu cannot hold and a fuzzy-searchable list can.
+    pub fn open_move_picker(&mut self, id: &str) {
+        let current = id
+            .rsplit_once('/')
+            .map(|(d, _)| d.to_string())
+            .unwrap_or_default();
+        let items: Vec<PickItem> = self
+            .vault
+            .folders()
+            .into_iter()
+            .map(|dir| PickItem {
+                label: if dir.is_empty() {
+                    "the vault root".to_string()
+                } else {
+                    dir.clone()
+                },
+                detail: if dir == current {
+                    "where it is now".into()
+                } else {
+                    String::new()
+                },
+                key: dir,
+            })
+            .collect();
+        self.overlay = Some(Overlay::MoveTo {
+            picker: Picker::new("Move to", items),
+            note: id.to_string(),
+        });
+    }
+
+    /// Move `note` into `folder`, keeping its filename. This is a rename into
+    /// another directory, which is why it needs no vault code of its own.
+    pub fn move_note_to(&mut self, note: &str, folder: &str) {
+        let stem = note
+            .rsplit('/')
+            .next()
+            .unwrap_or(note)
+            .trim_end_matches(".md");
+        let target = if folder.is_empty() {
+            stem.to_string()
+        } else {
+            format!("{folder}/{stem}")
+        };
+        if target == note.trim_end_matches(".md") {
+            self.set_status("it is already there");
+            return;
+        }
+        match self.vault.rename_note(note, &target) {
+            Ok((new_id, touched)) => {
+                if self.current.as_deref() == Some(note) {
+                    self.current = Some(new_id.clone());
+                }
+                self.reveal_in_tree(&new_id);
+                self.set_status(format!(
+                    "moved to {new_id}{}",
+                    if touched > 0 {
+                        format!(" — rewrote links in {touched} note(s)")
+                    } else {
+                        String::new()
+                    }
+                ));
+                self.refresh_git();
+            }
+            Err(err) => self.set_status(format!("move failed: {err}")),
+        }
     }
 
     pub fn request_quit(&mut self) {
@@ -742,6 +821,25 @@ impl App {
             Overlay::LinkPicker(picker) => self.picker_key(key, picker, PickerKind::Link),
             Overlay::Backlinks(picker) => self.picker_key(key, picker, PickerKind::Backlink),
             Overlay::Themes(picker) => self.picker_key(key, picker, PickerKind::Theme),
+            Overlay::MoveTo { mut picker, note } => {
+                let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+                match key.code {
+                    KeyCode::Enter => {
+                        if let Some(folder) = picker.selected().map(|i| i.key.clone()) {
+                            self.move_note_to(&note, &folder);
+                        }
+                        return;
+                    }
+                    KeyCode::Up => picker.move_cursor(-1),
+                    KeyCode::Down => picker.move_cursor(1),
+                    KeyCode::Char('p') if ctrl => picker.move_cursor(-1),
+                    KeyCode::Char('n') if ctrl => picker.move_cursor(1),
+                    KeyCode::Backspace => picker.pop(),
+                    KeyCode::Char(c) if !ctrl => picker.push(c),
+                    _ => {}
+                }
+                self.overlay = Some(Overlay::MoveTo { picker, note });
+            }
             Overlay::Search(pane) => self.search_key(key, pane),
             Overlay::Prompt(prompt) => self.prompt_key(key, prompt),
             Overlay::Git(pane) => self.git_key(key, pane),

@@ -105,6 +105,14 @@ the tree, the editor, the context pane, the git panel, the tag list, search
 results, the quick switcher and the assistant. The git panel is the one to
 know — its actions are single letters otherwise.
 
+**Moving** a note is a rename into another folder, so the links pointing at it
+keep working — `Move to…` gives a fuzzy-searchable list of every folder in the
+vault. `Duplicate` copies a note beside itself under a free name.
+
+There is no "new folder": a vault is indexed from its notes, so a folder with
+nothing in it has nowhere to live. Naming `folder/note` in the new-note prompt
+makes both at once.
+
 **Copying** works over ssh. The menu offers a note's `[[link]]`, its path, and
 the selected lines; each goes to the local pasteboard *and* out as an OSC 52
 escape, so it lands on the clipboard of the machine you are sitting at rather
