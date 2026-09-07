@@ -105,6 +105,11 @@ the tree, the editor, the context pane, the git panel, the tag list, search
 results, the quick switcher and the assistant. The git panel is the one to
 know — its actions are single letters otherwise.
 
+**Handing a note elsewhere**: open it in Obsidian (when the vault has an
+`.obsidian/`), in `$EDITOR`, or reveal it in the file manager. `$EDITOR` gets
+the terminal to itself and hands it back; the vault is re-read afterwards, and
+unsaved local changes are kept rather than overwritten.
+
 **With lines selected**, the menu leads with what applies to them: copy, ask
 the assistant, indent, delete — and *make a note from this*, which moves the
 passage into its own note and leaves a `[[link]]` where it was. That last one is
