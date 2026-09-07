@@ -52,14 +52,28 @@ impl App {
     /// The menu is built from what was actually clicked rather than being one
     /// fixed list, so it never offers "rename" over empty space.
     fn right_click(&mut self, c: u16, r: u16) {
-        use crate::app::{Menu, MenuAction as A, MenuItem};
-        let item = MenuItem::new;
-
         // A menu is already open: a second right-click dismisses it.
-        if self.overlay.is_some() {
+        if matches!(self.overlay, Some(Overlay::Menu(_))) {
             self.overlay = None;
             return;
         }
+        // An overlay covers the panes beneath it, so it answers first.
+        let found = if self.overlay.is_some() {
+            self.overlay_menu(c, r)
+        } else {
+            self.menu_for(c, r)
+        };
+        if let Some((title, items)) = found {
+            self.open_menu(title, items, c, r);
+        }
+    }
+
+    /// What a right-click on a pane should offer, or `None` when there is
+    /// nothing there — in which case the click is ignored rather than opening
+    /// an empty menu.
+    fn menu_for(&mut self, c: u16, r: u16) -> Option<(String, Vec<crate::app::MenuItem>)> {
+        use crate::app::{MenuAction as A, MenuItem};
+        let item = |label: &str, action: A| MenuItem::new(label, action);
 
         let (title, items) = if self.panes.sidebar_hit(c, r) {
             self.focus = Focus::Sidebar;
@@ -88,16 +102,52 @@ impl App {
                         item("Collapse", A::CollapseDir(path)),
                     ],
                 ),
-                None => (
-                    "Vault".to_string(),
-                    vec![
-                        item("New note…", A::Command("new-note")),
-                        item("Expand all", A::Command("expand-all")),
-                        item("Collapse all", A::Command("collapse-all")),
-                        item("Change theme…", A::Command("theme")),
-                    ],
-                ),
+                None => match self.sidebar_tab {
+                    // The tags tab: the row under the pointer is a tag.
+                    SidebarTab::Tags => {
+                        let index = self.sidebar_index(r)?;
+                        let tags = self.vault.all_tags();
+                        let (tag, count) = tags.get(index)?.clone();
+                        (
+                            format!("#{tag}"),
+                            vec![
+                                MenuItem::new(
+                                    format!("Show the {count} notes with this tag"),
+                                    A::FilterByTag(tag),
+                                ),
+                                item("Back to the tree", A::Command("collapse-all")),
+                            ],
+                        )
+                    }
+                    SidebarTab::Notes => (
+                        "Vault".to_string(),
+                        vec![
+                            item("New note…", A::Command("new-note")),
+                            item("Expand all", A::Command("expand-all")),
+                            item("Collapse all", A::Command("collapse-all")),
+                            item("Change theme…", A::Command("theme")),
+                            item("Clear the tag filter", A::Command("clear-tag-filter"))
+                                .unless(self.tag_filter.is_none(), "no filter set"),
+                        ],
+                    ),
+                },
             }
+        } else if self.panes.assistant_hit(c, r) {
+            self.focus = Focus::Assistant;
+            let answered = self.chat.last_answer().is_some();
+            (
+                "Assistant".to_string(),
+                vec![
+                    item("Insert the last answer", A::Command("insert-answer"))
+                        .unless(!answered, "nothing answered yet"),
+                    item("Save the answer as a note…", A::Command("save-answer"))
+                        .unless(!answered, "nothing answered yet"),
+                    item("Ask about this note", A::Command("ask-note"))
+                        .unless(self.current.is_none(), "no note open"),
+                    item("Clear the conversation", A::Command("clear-chat"))
+                        .unless(self.chat.messages.is_empty(), "nothing to clear"),
+                ],
+            )
         } else if self.panes.context_hit(c, r) {
             let index = r.saturating_sub(self.panes.context.y) as usize;
             match self.context_targets.get(index).cloned().flatten() {
@@ -122,7 +172,7 @@ impl App {
                     target.clone(),
                     vec![item("Write this note…", A::CreateNote(target))],
                 ),
-                None => return,
+                None => return None,
             }
         } else if self.panes.editor_hit(c, r) {
             self.focus = Focus::Editor;
@@ -165,9 +215,13 @@ impl App {
                 .unwrap_or_else(|| "Editor".into());
             (title, items)
         } else {
-            return;
+            return None;
         };
+        Some((title, items))
+    }
 
+    fn open_menu(&mut self, title: String, items: Vec<crate::app::MenuItem>, c: u16, r: u16) {
+        use crate::app::Menu;
         if items.is_empty() {
             return;
         }
@@ -180,6 +234,78 @@ impl App {
         // Opening onto a greyed entry would make enter do nothing.
         menu.select_first_enabled();
         self.overlay = Some(Overlay::Menu(menu));
+    }
+
+    /// The menu for a right-click inside an open overlay. `None` when the
+    /// overlay has nothing to offer there, so the click is simply ignored
+    /// rather than opening an empty menu.
+    fn overlay_menu(&mut self, c: u16, r: u16) -> Option<(String, Vec<crate::app::MenuItem>)> {
+        use crate::app::{MenuAction as A, MenuItem as I};
+        if !self.panes.overlay_hit(c, r) {
+            return None;
+        }
+        let top = self.panes.overlay.y;
+        let height = self.panes.overlay.height as usize;
+        match self.overlay.as_ref()? {
+            // The git pane's actions are single letters nobody remembers,
+            // which is the case for a menu if ever there was one.
+            Overlay::Git(pane) => {
+                let count = pane.snapshot.changes.len().min(12);
+                let index = list_index(r, top + 2, count, pane.cursor, count)?;
+                let change = pane.snapshot.changes.get(index)?.clone();
+                let path = change.path.clone();
+                let is_note = self.vault.get(&path).is_some();
+                Some((
+                    short_name(&path),
+                    vec![
+                        if change.staged {
+                            I::new("Unstage", A::GitUnstage(path.clone()))
+                        } else {
+                            I::new("Stage", A::GitStage(path.clone()))
+                        },
+                        I::new("Show the diff", A::GitDiff(path.clone())),
+                        I::new("Open the note", A::OpenNote(path.clone()))
+                            .unless(!is_note, "not a note in this vault"),
+                        I::new("Discard changes…", A::GitDiscard(path.clone())).unless(
+                            change.status == crate::git::Status::Untracked,
+                            "never tracked",
+                        ),
+                    ],
+                ))
+            }
+            Overlay::Search(pane) => {
+                let index = list_index(r, top + 1, pane.hits.len(), pane.cursor, height - 1)?;
+                let hit = pane.hits.get(index)?.clone();
+                Some((
+                    short_name(&hit.id),
+                    vec![
+                        I::new("Open at this line", A::OpenNoteAt(hit.id.clone(), hit.line)),
+                        I::new("Open the note", A::OpenNote(hit.id.clone())),
+                        I::new("Insert a link to this", A::LinkToNote(hit.id)),
+                    ],
+                ))
+            }
+            Overlay::Switcher(picker) | Overlay::Backlinks(picker) => {
+                let index =
+                    list_index(r, top + 1, picker.matches.len(), picker.cursor, height - 1)?;
+                let (item_index, _) = picker.matches.get(index)?;
+                let id = picker.items.get(*item_index)?.key.clone();
+                // A backlink's key carries a line; the note id is the head.
+                let note = id
+                    .rsplit_once(':')
+                    .map(|(n, _)| n.to_string())
+                    .unwrap_or(id);
+                Some((
+                    short_name(&note),
+                    vec![
+                        I::new("Open", A::OpenNote(note.clone())),
+                        I::new("Insert a link to this", A::LinkToNote(note.clone())),
+                        I::new("Rename…", A::RenameNote(note)),
+                    ],
+                ))
+            }
+            _ => None,
+        }
     }
 
     /// Dragging in the editor selects. The editor's operators are line-wise,

@@ -25,6 +25,7 @@ pub const COMMANDS: &[(&str, &str, &str)] = &[
     ("theme", "Change theme", ""),
     ("expand-all", "Sidebar: expand every folder", "E"),
     ("collapse-all", "Sidebar: collapse every folder", "C"),
+    ("clear-tag-filter", "Sidebar: clear the tag filter", "c"),
     ("reindex", "Reindex vault from disk", ""),
     ("git-panel", "Git: review changes", "ctrl-g"),
     ("git-commit", "Git: commit all changes", ""),
@@ -183,6 +184,14 @@ impl App {
             "collapse-all" => {
                 self.collapse_all();
                 self.focus = Focus::Sidebar;
+            }
+            "clear-tag-filter" => {
+                self.tag_filter = None;
+                self.sidebar_cursor = 0;
+                if let Some(id) = self.current.clone() {
+                    self.reveal_in_tree(&id);
+                }
+                self.set_status("tag filter cleared");
             }
             "toggle-sidebar" => self.sidebar_visible = !self.sidebar_visible,
             "toggle-context" => self.context_visible = !self.context_visible,
@@ -389,12 +398,65 @@ impl App {
                 self.expanded.extend(under);
                 self.expanded.insert(dir);
             }
+            A::GitStage(path) => self.git_do(&path, |repo, p| repo.stage(p), "staged"),
+            A::GitUnstage(path) => self.git_do(&path, |repo, p| repo.unstage(p), "unstaged"),
+            A::GitDiscard(path) => {
+                // Destructive and unrecoverable, so it asks — the same
+                // confirmation the `X` key goes through.
+                self.overlay = Some(Overlay::Confirm(Confirm {
+                    message: format!("Discard all local changes to {path}?"),
+                    kind: ConfirmKind::DiscardChanges(path),
+                }));
+            }
+            A::GitDiff(path) => match self.repo.clone() {
+                Some(repo) => match repo.diff(Some(&path)) {
+                    Ok(body) if body.trim().is_empty() => {
+                        self.set_status(format!("{path} has no diff against HEAD"))
+                    }
+                    Ok(body) => {
+                        self.overlay = Some(Overlay::Diff {
+                            title: format!("diff · {path}"),
+                            body,
+                            scroll: 0,
+                        })
+                    }
+                    Err(err) => self.set_status(format!("diff failed: {err}")),
+                },
+                None => self.set_status("not a git repository"),
+            },
+            A::FilterByTag(tag) => {
+                self.tag_filter = Some(tag.clone());
+                self.sidebar_tab = SidebarTab::Notes;
+                self.sidebar_cursor = 0;
+                self.expand_all();
+                self.set_status(format!("filtering by #{tag}"));
+            }
             A::CollapseDir(dir) => {
                 let prefix = format!("{dir}/");
                 self.expanded
                     .retain(|d| d != &dir && !d.starts_with(&prefix));
             }
         }
+    }
+
+    /// Run a git command on one path and report what happened, reopening the
+    /// git pane so the result is visible where it was asked for.
+    fn git_do(
+        &mut self,
+        path: &str,
+        f: impl FnOnce(&crate::git::Repo, &str) -> anyhow::Result<()>,
+        past_tense: &str,
+    ) {
+        let Some(repo) = self.repo.clone() else {
+            self.set_status("not a git repository");
+            return;
+        };
+        match f(&repo, path) {
+            Ok(()) => self.set_status(format!("{past_tense} {path}")),
+            Err(err) => self.set_status(format!("git: {err}")),
+        }
+        self.refresh_git();
+        self.open_git_pane();
     }
 
     pub fn request_quit(&mut self) {
