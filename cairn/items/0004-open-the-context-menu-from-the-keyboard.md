@@ -2,7 +2,7 @@
 id: 4
 title: Open the context menu from the keyboard
 type: feature
-status: doing
+status: done
 milestone: v0.2
 assignee: Oddur Sigurdsson
 created: 2026-09-07

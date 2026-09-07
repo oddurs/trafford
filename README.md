@@ -105,6 +105,11 @@ the tree, the editor, the context pane, the git panel, the tag list, search
 results, the quick switcher and the assistant. The git panel is the one to
 know — its actions are single letters otherwise.
 
+**Copying** works over ssh. The menu offers a note's `[[link]]`, its path, and
+the selected lines; each goes to the local pasteboard *and* out as an OSC 52
+escape, so it lands on the clipboard of the machine you are sitting at rather
+than the one trafford happens to run on.
+
 An action that exists but cannot run right now is shown greyed with the reason
 (`Delete… — the only note`), so the menu's shape does not change under you. Keys
 are shown beside the entries that have them.

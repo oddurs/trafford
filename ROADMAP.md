@@ -6,22 +6,19 @@ A terminal knowledge base — an Obsidian-shaped markdown vault with modal editi
 
 ## v0.2 — Usable without the manual
 
-`########··` 80% · 4 of 5 done · due 2026-09-20
+`##########` 100% · 5 of 5 done · due 2026-09-20
 
 The interface explains itself. A file tree instead of a flat list, the mouse
 working everywhere, a right-click menu on every surface that has actions, and
 themes you can see before you choose. The milestone that answers "I do not
 understand how to use this".
 
-### in progress
-
-- [ ] `0004` Open the context menu from the keyboard <sup>feature · p2 · mouse</sup>
-
 ### done
 
 - [x] `0001` Mouse support, and a right-click menu <sup>feature · p1 · mouse</sup>
 - [x] `0002` Right-click every surface that has actions <sup>feature · p1 · mouse</sup>
 - [x] `0003` Show the keyboard shortcut beside each menu entry <sup>feature · p2 · mouse</sup>
+- [x] `0004` Open the context menu from the keyboard <sup>feature · p2 · mouse</sup>
 - [x] `0005` Menus that are taller than the terminal <sup>bug · p2 · mouse</sup>
 
 ## v0.3 — Actions worth reaching for
@@ -34,9 +31,12 @@ demonstration that menus exist.
 
 ### backlog
 
-- [ ] `0007` Copy a note's link, path, or the selection <sup>feature · p2 · mouse</sup>
 - [ ] `0008` Move, duplicate, and make folders from the tree <sup>feature · p1 · tree</sup>
 - [ ] `0009` Act on a selection from the editor's menu <sup>feature · p2 · mouse</sup>
+
+### in progress
+
+- [ ] `0007` Copy a note's link, path, or the selection <sup>feature · p2 · mouse</sup>
 
 ### done
 

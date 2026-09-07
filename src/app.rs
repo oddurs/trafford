@@ -208,6 +208,11 @@ pub enum MenuAction {
     GitDiff(String),
     GitDiscard(String),
     FilterByTag(String),
+    /// Put text on the clipboard. The label says what it is; this carries it.
+    Copy {
+        what: &'static str,
+        text: String,
+    },
 }
 
 #[derive(Debug, Clone)]

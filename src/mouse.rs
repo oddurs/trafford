@@ -136,6 +136,20 @@ impl App {
                             item("Open", A::OpenNote(id.clone())),
                             item("Insert a link to this", A::LinkToNote(id.clone()))
                                 .unless(self.current.is_none(), "no note open"),
+                            item(
+                                "Copy a link to this",
+                                A::Copy {
+                                    what: "link",
+                                    text: wikilink(&id),
+                                },
+                            ),
+                            item(
+                                "Copy the path",
+                                A::Copy {
+                                    what: "path",
+                                    text: id.clone(),
+                                },
+                            ),
                             item("Rename…", A::RenameNote(id.clone())),
                             item("History", A::HistoryOf(id.clone()))
                                 .unless(!tracked, "not a git repository"),
@@ -243,6 +257,26 @@ impl App {
                     }
                     None => items.push(item("Write this note…", A::CreateNote(target))),
                 }
+            }
+            // With lines selected, copying them is the obvious thing to offer.
+            if let Some(selection) = self.editor.selected_text() {
+                let lines = selection.lines().count();
+                items.push(item(
+                    &format!("Copy the {lines} selected line(s)"),
+                    A::Copy {
+                        what: "selection",
+                        text: selection,
+                    },
+                ));
+            }
+            if let Some(id) = self.current.clone() {
+                items.push(item(
+                    "Copy a link to this note",
+                    A::Copy {
+                        what: "link",
+                        text: wikilink(&id),
+                    },
+                ));
             }
             items.push(item("Insert a link…", A::Command("insert-link")));
             items.push(
@@ -690,6 +724,11 @@ impl App {
 enum SidebarTarget {
     Note(String),
     Dir(String),
+}
+
+/// A note id as the link you would paste into another note.
+fn wikilink(id: &str) -> String {
+    format!("[[{}]]", short_name(id))
 }
 
 /// The last path segment, which is what a menu title should say.
