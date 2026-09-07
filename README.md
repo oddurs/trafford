@@ -96,6 +96,8 @@ context_pane = true
 cargo test          # unit tests live beside the code they cover
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all --check
+
+python3 tools/probe.py sizes /tmp/vault   # drive the real TUI in a pty
 ```
 
 Working on this with an agent? Read [CLAUDE.md](CLAUDE.md) for the architecture
