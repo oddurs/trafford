@@ -109,18 +109,26 @@ tells you *what* is wrong, and a test in `src/` keeps it from coming back.
 Prefer asserting invariants over examples: `line.width() <= width` across a
 matrix of widths catches the off-by-one that one hand-picked case does not.
 
-Three things that cost an afternoon each, so they are worth knowing:
+Four things that each cost an afternoon, so they are worth knowing:
 
-- **Assert on every scripted edit.** A `str.replace` that matches nothing
-  fails silently. Two fixes in this project were written, committed, and
-  believed for days without ever having been applied, because `cargo fmt` had
-  rewrapped the target line first.
+- **Assert on every scripted edit, and let the failure stop the run.** A
+  `str.replace` that matches nothing fails silently. Two fixes here were
+  written, committed, and believed for days without ever having been applied,
+  because `cargo fmt` had rewrapped the target line first. Adding the assert
+  is only half of it: if the edit and the build are separate commands in one
+  shell invocation, the build still runs on unchanged source and reports
+  success. Use `set -e`, or chain with `&&`.
 
 - **Send `esc` as its own step.** A terminal delivers ESC glued to the next key
   as `Alt+key`, so `b"\x1bа"` is one keypress, not two.
+
 - **Check that a new regression test fails without the fix.** The first version
   of the narrow-terminal test left focus on the editor, so the branch with the
   panic in it never ran, and the test passed against the bug.
+
+- **Look at colour, do not reason about it.** `tools/probe.py` can render the
+  screen back out as HTML, and a count of which colours reached which cells
+  will tell you a role is off-palette long before your eye does.
 
 ## Style
 
