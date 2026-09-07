@@ -50,14 +50,29 @@ The editor stops showing markdown as plain text. Long lines wrap, links read as
 
 ## v0.5 — Reading is its own posture
 
+<<<<<<< HEAD
 `##########` 92% · 12 of 13 done · due 2026-12-20
+||||||| 35db806
+`##########` 100% · 10 of 10 done · due 2026-12-20
+=======
+`#########·` 85% · 11 of 13 done · due 2026-12-20
+>>>>>>> origin/main
 
 Preview stops being the editor with the syntax hidden. A note's structure folds,
 
+<<<<<<< HEAD
 ### backlog
 
 - [ ] `0045` Watch the vault and keep up with it <sup>feature · p0 · vault</sup>
 
+||||||| 35db806
+=======
+### backlog
+
+- [ ] `0044` Switching notes throws away unsaved changes without asking <sup>bug · p0 · editor</sup>
+- [ ] `0045` Watch the vault and keep up with it <sup>feature · p0 · vault</sup>
+
+>>>>>>> origin/main
 ### done
 
 - [x] `0020` Fold a note's sections in the reading view <sup>feature · p0 · markdown</sup>
@@ -70,8 +85,13 @@ Preview stops being the editor with the syntax hidden. A note's structure folds,
 - [x] `0040` Never land the cursor on a line that is folded away <sup>bug · p1 · chrome</sup>
 - [x] `0041` Say where you are in the note <sup>feature · p1 · chrome</sup>
 - [x] `0042` The reading measure should not truncate tables <sup>bug · p1 · markdown</sup>
+<<<<<<< HEAD
 - [x] `0043` Saving over a note another program changed destroys their work <sup>bug · p0 · vault</sup>
 - [x] `0044` Switching notes throws away unsaved changes without asking <sup>bug · p0 · editor</sup>
+||||||| 35db806
+=======
+- [x] `0043` Saving over a note another program changed destroys their work <sup>bug · p0 · vault</sup>
+>>>>>>> origin/main
 
 ## later — Someday
 

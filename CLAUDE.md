@@ -63,6 +63,7 @@ the UI; `ui` reads `App` but never mutates it except for viewport bookkeeping.
   Match on `haystack`, display from `text`, or you will show mangled case.
 - **Link resolution order** is exact relative path, then case-insensitive path,
   then filename stem. Changing it changes which note a `[[link]]` opens.
+<<<<<<< HEAD
 - **Navigating away holds an unsaved buffer; it does not discard it.**
   `App.unsaved` keeps dirty buffers per note, so switching away and back returns
   what was typed. Following a link is the common case and a prompt on every link
@@ -78,6 +79,17 @@ the UI; `ui` reads `App` but never mutates it except for viewport bookkeeping.
   only overwrite and cancel pushes people towards overwrite, which is the thing
   being prevented. This matters because the vault is meant to be edited by an
   assistant in another window.
+||||||| 35db806
+=======
+- **A save never writes over a change nobody has seen.** `App::save` compares
+  the file's mtime and length against what they were when the note was loaded.
+  If they moved, it compares the *content* — identical bytes are not a
+  disagreement, whoever wrote them — and only then asks. The three answers are
+  keep both, load theirs, overwrite; "keep both" exists because a prompt offering
+  only overwrite and cancel pushes people towards overwrite, which is the thing
+  being prevented. This matters because the vault is meant to be edited by an
+  assistant in another window.
+>>>>>>> origin/main
 - **The editor owns no I/O.** `App::save` writes and then re-indexes; the
   editor never touches the filesystem.
 - **Hit-testing shares the renderer's geometry.** `src/mouse.rs` resolves a
