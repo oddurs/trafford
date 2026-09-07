@@ -113,6 +113,11 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
 - **`#tags` are clickable wherever they are drawn.** `markdown::Target` says
   what a run of text points at — a note, a URL, or a tag — and a tag click sets
   the vault filter, which is what the sidebar's tags tab already did.
+- **The section crumb costs a row, and `panes.editor` has to know.** The heading
+  chain is drawn above the text, so `draw_editor` shrinks the rect and assigns
+  `app.panes.editor` itself — the assignment in `draw` happens *before* the call
+  for that reason. `panes.sticky_y` is checked before any pane claims the row,
+  since the crumb sits outside the editor rect.
 - **A callout is a block that draws one line per source line.** `ui::callout`
   turns `> [!note]` into a barred, labelled block. Unlike a table the mapping
   back to the note is the identity, so nothing has to be tracked. A kind nobody

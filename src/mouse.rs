@@ -33,6 +33,16 @@ impl App {
             self.click_overlay(c, r);
             return;
         }
+        if self.panes.sticky_y == Some(r) {
+            // The section crumb sits just above the text, outside the editor
+            // rect, so it has to be checked before anything claims the row.
+            if let Some((_, _, row)) = self.sticky.iter().find(|(a, b, _)| c >= *a && c < *b) {
+                let row = *row;
+                self.focus = Focus::Editor;
+                self.editor.buf.goto_line(row);
+            }
+            return;
+        }
         if self.panes.sidebar_hit(c, r) {
             self.focus = Focus::Sidebar;
             self.click_sidebar(c, r);

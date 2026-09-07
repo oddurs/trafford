@@ -61,8 +61,10 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     }
     let editor_area = panes[i];
     i += 1;
-    draw_editor(f, app, editor_area);
+    // Set before drawing: the editor may keep a row for the section crumb, and
+    // it is the only thing that knows whether it did.
     app.panes.editor = inner_of(editor_area);
+    draw_editor(f, app, editor_area);
     if right_width > 0 {
         if app.assistant_visible {
             let (body, input) = draw_assistant(f, app, panes[i]);
@@ -520,6 +522,64 @@ impl PreviewView {
     }
 }
 
+/// Where one crumb sits: start column, end column, and the note line it names.
+type Crumb = (usize, usize, usize);
+
+/// The heading chain for the top visible line, and the columns each crumb
+/// occupies so a click can find it.
+///
+/// Returns `None` when the chain is empty, or when its deepest heading is
+/// already on screen — repeating a heading immediately above itself is noise,
+/// and the row is better spent on text.
+fn sticky(
+    heads: &[fold::Heading],
+    total: usize,
+    top_line: usize,
+    visible: &[usize],
+    width: usize,
+) -> Option<(Vec<Crumb>, String)> {
+    let chain = fold::chain(heads, top_line, total);
+    let deepest = chain.last()?;
+    if visible.contains(&deepest.row) {
+        return None;
+    }
+
+    const SEP: &str = "  ›  ";
+    // Drop from the front when it will not fit: the deepest heading is the one
+    // that says where you are, so it is the last thing to go.
+    let mut from = 0;
+    let text = loop {
+        let mut text = String::new();
+        if from > 0 {
+            text.push('…');
+            text.push_str(SEP);
+        }
+        for (n, h) in chain[from..].iter().enumerate() {
+            if n > 0 {
+                text.push_str(SEP);
+            }
+            text.push_str(&h.text);
+        }
+        if text.chars().count() <= width || from + 1 >= chain.len() {
+            break text;
+        }
+        from += 1;
+    };
+
+    // Where each crumb sits, so the mouse can hit it.
+    let mut spots = Vec::new();
+    let mut at = if from > 0 { 1 + SEP.chars().count() } else { 0 };
+    for (n, h) in chain[from..].iter().enumerate() {
+        if n > 0 {
+            at += SEP.chars().count();
+        }
+        let len = h.text.chars().count();
+        spots.push((at, at + len, h.row));
+        at += len;
+    }
+    Some((spots, fit(&text, width)))
+}
+
 /// Frontmatter drawn as properties: the tags a reader clicks, then whatever
 /// else the block held, dimmed.
 ///
@@ -677,6 +737,68 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     };
     app.editor
         .sync_scroll_visual(top_row, total_rows, inner.height as usize);
+
+    // Which note lines are on screen, so the crumb can hide itself when the
+    // heading it names is already visible.
+    let rows = |layout: &crate::layout::Layout, of: &dyn Fn(usize) -> usize| {
+        (app.editor.scroll..layout.len())
+            .take(inner.height as usize)
+            .filter_map(|v| layout.row(v).map(|r| of(r.line)))
+            .collect::<Vec<usize>>()
+    };
+    let visible: Vec<usize> = match &view {
+        Some(v) => rows(&v.layout, &|line| v.source(line)),
+        None => rows(&app.editor.layout, &|line| line),
+    };
+    let heads = fold::headings(&app.editor.buf.lines);
+    let crumbs = visible.first().and_then(|top| {
+        sticky(
+            &heads,
+            app.editor.buf.len(),
+            *top,
+            &visible,
+            inner.width.saturating_sub(gutter) as usize,
+        )
+    });
+    // The crumb costs a row, so the text gets one fewer and the pane it is
+    // hit-tested against has to agree.
+    let inner = match &crumbs {
+        Some(_) if inner.height > 1 => Rect {
+            y: inner.y + 1,
+            height: inner.height - 1,
+            ..inner
+        },
+        _ => inner,
+    };
+    app.editor_height = inner.height as usize;
+    app.panes.editor = inner;
+    app.sticky = Vec::new();
+    if let Some((spots, text)) = &crumbs {
+        let y = inner.y - 1;
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(text.clone(), theme.faded()))),
+            Rect {
+                x: inner.x + gutter,
+                y,
+                width: inner.width.saturating_sub(gutter),
+                height: 1,
+            },
+        );
+        app.sticky = spots
+            .iter()
+            .map(|(a, b, row)| {
+                (
+                    inner.x + gutter + *a as u16,
+                    inner.x + gutter + *b as u16,
+                    *row,
+                )
+            })
+            .collect();
+        app.panes.sticky_y = Some(y);
+    }
+    if crumbs.is_none() {
+        app.panes.sticky_y = None;
+    }
 
     // Nothing runs off the right edge when it folds, so there is nothing to
     // scroll to. Sideways scrolling survives only as what `wrap = false` gets.
@@ -1959,6 +2081,67 @@ mod tests {
         assert_eq!(view.source(0), 0);
         assert_eq!(view.source(1), 0);
         assert_eq!(view.source(3), 7, "the heading still names its own line");
+    }
+
+    fn crumb(lines: &[&str], top: usize, visible: &[usize], width: usize) -> Option<String> {
+        let owned: Vec<String> = lines.iter().map(|s| s.to_string()).collect();
+        let heads = fold::headings(&owned);
+        sticky(&heads, owned.len(), top, visible, width).map(|(_, text)| text)
+    }
+
+    const DOC: [&str; 9] = [
+        "# Title",
+        "intro",
+        "## One",
+        "a",
+        "b",
+        "### One A",
+        "c",
+        "## Two",
+        "d",
+    ];
+
+    #[test]
+    fn the_crumb_names_the_sections_the_top_line_is_inside() {
+        assert_eq!(
+            crumb(&DOC, 6, &[6, 7, 8], 60).as_deref(),
+            Some("Title  ›  One  ›  One A")
+        );
+    }
+
+    #[test]
+    fn the_crumb_hides_when_its_own_heading_is_on_screen() {
+        // Line 5 *is* "### One A", so a crumb ending in it would print the
+        // same words immediately above themselves.
+        assert_eq!(crumb(&DOC, 6, &[5, 6, 7], 60), None);
+    }
+
+    #[test]
+    fn a_line_under_no_heading_gets_no_crumb() {
+        assert_eq!(crumb(&["intro", "# Title"], 0, &[0, 1], 60), None);
+    }
+
+    #[test]
+    fn a_narrow_pane_drops_the_outer_sections_first() {
+        // The deepest heading is the one that says where you are, so it is the
+        // last thing to go.
+        let out = crumb(&DOC, 6, &[6], 20).unwrap();
+        assert!(out.contains("One A"), "{out:?}");
+        assert!(!out.contains("Title"), "{out:?}");
+        assert!(out.starts_with('…'), "{out:?}");
+    }
+
+    #[test]
+    fn the_crumb_records_where_each_section_can_be_clicked() {
+        let owned: Vec<String> = DOC.iter().map(|s| s.to_string()).collect();
+        let heads = fold::headings(&owned);
+        let (spots, text) = sticky(&heads, owned.len(), 6, &[6], 60).unwrap();
+        assert_eq!(spots.len(), 3);
+        for (a, b, row) in &spots {
+            let named: String = text.chars().skip(*a).take(b - a).collect();
+            let heading = heads.iter().find(|h| h.row == *row).unwrap();
+            assert_eq!(named, heading.text, "the columns name the heading");
+        }
     }
 
     #[test]
