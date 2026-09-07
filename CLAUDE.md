@@ -113,6 +113,10 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
 - **`#tags` are clickable wherever they are drawn.** `markdown::Target` says
   what a run of text points at — a note, a URL, or a tag — and a tag click sets
   the vault filter, which is what the sidebar's tags tab already did.
+- **The position rail draws at the pane's edge, not the measure's.** Reading
+  narrows the text to `READING_MEASURE` and centres it; drawing the rail at
+  `inner.right()` put it inside that column, over the last character of a line.
+  It draws against `pane`, and the measure gives up one column for it.
 - **Anything that jumps to a line goes through `App::jump_to`.** It opens the
   folds hiding that line first — a destination the reader cannot see is not a
   destination, and search used to land on the right line inside a collapsed
