@@ -113,6 +113,15 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
 - **`#tags` are clickable wherever they are drawn.** `markdown::Target` says
   what a run of text points at — a note, a URL, or a tag — and a tag click sets
   the vault filter, which is what the sidebar's tags tab already did.
+- **Peek never touches the network.** A `[text](https://…)` link peeks as the URL
+  and nothing else. Fetching a page to summarise it would turn reading a note
+  into an outbound request, which is not something this program starts doing
+  quietly.
+- **`K` peeks, not `space`.** `space` toggles the task on the current line and
+  the vault has 917 of them. `K` is where vim already puts "tell me about this
+  word", and it falls back to the first link on the line — which is what makes
+  it work in preview, where a click leaves the cursor at column zero because
+  concealment has no honest mapping back to a source column.
 - **The section crumb costs a row, and `panes.editor` has to know.** The heading
   chain is drawn above the text, so `draw_editor` shrinks the rect and assigns
   `app.panes.editor` itself — the assignment in `draw` happens *before* the call
