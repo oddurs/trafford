@@ -448,7 +448,11 @@ impl App {
             Overlay::Menu(mut menu) => {
                 let first = self.panes.overlay.y;
                 if r >= first {
-                    let index = (r - first) as usize;
+                    // The same offset the renderer used; a menu long enough to
+                    // scroll would otherwise resolve clicks to the wrong entry.
+                    let visible = self.panes.overlay.height as usize;
+                    let offset = crate::ui::scroll_offset(menu.cursor, menu.items.len(), visible);
+                    let index = offset + (r - first) as usize;
                     if let Some(chosen) = menu.items.get(index).cloned() {
                         menu.cursor = index;
                         self.run_menu_action(chosen.action);

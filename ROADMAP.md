@@ -18,6 +18,9 @@ understand how to use this".
 - [ ] `0002` Right-click every surface that has actions <sup>feature · p1 · mouse</sup>
 - [ ] `0003` Show the keyboard shortcut beside each menu entry <sup>feature · p2 · mouse</sup>
 - [ ] `0004` Open the context menu from the keyboard <sup>feature · p2 · mouse</sup>
+
+### in progress
+
 - [ ] `0005` Menus that are taller than the terminal <sup>bug · p2 · mouse</sup>
 
 ### done
