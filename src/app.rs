@@ -52,11 +52,15 @@ pub fn fuzzy_match(query: &str, text: &str) -> Option<(i64, Vec<usize>)> {
             // across word boundaries.
             score += 20;
         }
-        score -= (idx as i64) / 8; // prefer earlier matches
         indices.push(idx);
         last_match = Some(idx);
         hi = idx + 1;
     }
+    // Prefer earlier matches, but charge for the position once rather than per
+    // matched character. Per-character it compounded, so a long path whose
+    // filename matched the query exactly lost to a shorter path that merely
+    // contained the letters scattered about.
+    score -= (indices[0] as i64) / 4;
     // Shorter haystacks with the same match are tighter matches.
     score -= (hay.len() as i64) / 20;
     Some((score, indices))

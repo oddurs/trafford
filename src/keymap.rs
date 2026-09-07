@@ -930,6 +930,30 @@ mod tests {
         assert!(best > split, "best={best} split={split}");
     }
 
+    /// From a real vault: typing a filename ranked a different note first,
+    /// because the positional penalty compounded per matched character and
+    /// swamped the exact match sitting late in a long path.
+    #[test]
+    fn an_exact_filename_wins_however_deep_the_path() {
+        let query = "01-route-plan";
+        let wanted = "Route Plan: Brooklyn to Palo Alto                       04-archive/01-move-california/01-route-plan.md";
+        let other =
+            "Technical Plan                      01-projects/05-budgeting-app/04-technical-plan.md";
+        let (wanted_score, _) = fuzzy_match(query, wanted).unwrap();
+        let (other_score, _) = fuzzy_match(query, other).unwrap();
+        assert!(
+            wanted_score > other_score,
+            "wanted={wanted_score} other={other_score}"
+        );
+    }
+
+    #[test]
+    fn a_deep_path_does_not_beat_a_shallow_one_on_the_same_match() {
+        let (shallow, _) = fuzzy_match("notes", "notes.md").unwrap();
+        let (deep, _) = fuzzy_match("notes", "a/b/c/d/e/f/notes.md").unwrap();
+        assert!(shallow > deep, "shallow={shallow} deep={deep}");
+    }
+
     #[test]
     fn fuzzy_is_case_insensitive_but_rewards_exact_case() {
         let exact = fuzzy_match("Rust", "Rust").unwrap().0;
