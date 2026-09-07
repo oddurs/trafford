@@ -728,19 +728,25 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     } else {
         gutter_width(app.editor.buf.len())
     };
+    // The whole pane, kept for the things that belong at its edge rather than
+    // at the edge of the text — the position rail draws here, or it would sit
+    // inside the measure and overwrite the last character of a line.
+    let pane = inner;
     let inner = if reading {
         let measure = match app.config.wrap_column {
             0 => READING_MEASURE,
             n => n,
         }
-        .min(inner.width);
+        // One column stays clear for the rail, which is why this is not the
+        // full pane width.
+        .min(pane.width.saturating_sub(1));
         Rect {
-            x: inner.x + (inner.width - measure) / 2,
+            x: pane.x + (pane.width - measure) / 2,
             width: measure,
-            ..inner
+            ..pane
         }
     } else {
-        inner
+        pane
     };
     let pane_width = inner.width.saturating_sub(gutter) as usize;
     let wrap = app.config.wrap;
@@ -1000,6 +1006,24 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     // Both views fold their own text, with a hanging indent ratatui has no
     // idea about, so nothing here may wrap a second time.
     f.render_widget(Paragraph::new(lines), inner);
+
+    // A rail down the right edge while reading, showing how much of the note
+    // is above and below. A long note otherwise gives no sense of its own
+    // size, and the status line's word for it has to be read.
+    if let Some(v) = &view {
+        draw_rail(
+            f,
+            &theme,
+            Rect {
+                x: pane.right().saturating_sub(1),
+                width: 1,
+                ..inner
+            },
+            app.editor.scroll,
+            inner.height as usize,
+            v.layout.len(),
+        );
+    }
 
     // Kept for the mouse: a click in preview lands on drawn characters, and
     // only this knows what they were before they were drawn.
@@ -1501,13 +1525,24 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
         ));
     }
 
-    let right = format!(
-        "{}  {} words  {}:{} ",
-        app.editor.pending_hint(),
-        app.editor.buf.word_count(),
-        app.editor.buf.row + 1,
-        app.editor.buf.col + 1,
-    );
+    // Reading has no column worth reporting — it is always 1, because
+    // concealment has no honest mapping back to a source column — and a line
+    // number is a place in a file rather than a place in what is being read.
+    let right = match &app.preview_view {
+        Some(view) if app.preview => format!(
+            "{}  {} words  {} ",
+            app.editor.pending_hint(),
+            app.editor.buf.word_count(),
+            progress(app.editor.scroll, app.editor_height, view.layout.len()),
+        ),
+        _ => format!(
+            "{}  {} words  {}:{} ",
+            app.editor.pending_hint(),
+            app.editor.buf.word_count(),
+            app.editor.buf.row + 1,
+            app.editor.buf.col + 1,
+        ),
+    };
     let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
     let pad = (area.width as usize).saturating_sub(used + right.chars().count());
     spans.push(Span::styled(
@@ -1525,6 +1560,56 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
 // ---------------------------------------------------------------------------
 // Overlays
 // ---------------------------------------------------------------------------
+
+/// One column showing which part of a document is on screen.
+///
+/// Proportional rather than a scrollbar with a thumb you could grab: nothing
+/// drags it, and its job is to answer "how much more of this is there" at a
+/// glance. The bar is never shorter than one row, so a very long note still
+/// shows something.
+fn draw_rail(f: &mut Frame, theme: &Theme, area: Rect, scroll: usize, height: usize, rows: usize) {
+    if area.height == 0 || rows <= height || height == 0 {
+        return;
+    }
+    let track = area.height as usize;
+    let bar = (track * height).div_ceil(rows).max(1).min(track);
+    let last = rows - height;
+    let top = if last == 0 {
+        0
+    } else {
+        (scroll * (track - bar)).div_ceil(last).min(track - bar)
+    };
+    let lines: Vec<Line> = (0..track)
+        .map(|i| {
+            let on = i >= top && i < top + bar;
+            Span::styled(
+                if on { "▐" } else { " " },
+                Style::default().fg(if on { theme.accent } else { theme.faint }),
+            )
+            .into()
+        })
+        .collect();
+    f.render_widget(Paragraph::new(lines), area);
+}
+
+/// How far through a document the view is, as a reader would say it.
+///
+/// "Top" and "end" rather than 0% and 100%, because a percentage that never
+/// quite reaches either is worse than a word. A document that fits on screen is
+/// "all" — there is no progress to report through something you can see all of.
+fn progress(scroll: usize, height: usize, rows: usize) -> String {
+    if rows == 0 || height == 0 || rows <= height {
+        return "all".into();
+    }
+    let last = rows - height;
+    if scroll == 0 {
+        return "top".into();
+    }
+    if scroll >= last {
+        return "end".into();
+    }
+    format!("{}%", (scroll * 100).div_ceil(last).min(99))
+}
 
 fn centred(area: Rect, width_pct: u16, height: u16) -> Rect {
     let w = (area.width * width_pct / 100).min(area.width.saturating_sub(4));
@@ -2623,6 +2708,71 @@ mod tests {
                 .map(|f| f.is_empty())
                 .unwrap_or(true),
             "nothing was folded, so nothing needed opening"
+        );
+    }
+
+    #[test]
+    fn progress_says_where_you_are_in_words_a_reader_uses() {
+        // A document that fits needs no progress reported through it.
+        assert_eq!(progress(0, 20, 12), "all");
+        assert_eq!(progress(0, 20, 20), "all");
+        // The ends are named rather than left as 0% and 100%, which never
+        // quite arrive.
+        assert_eq!(progress(0, 10, 100), "top");
+        assert_eq!(progress(90, 10, 100), "end");
+        assert_eq!(
+            progress(200, 10, 100),
+            "end",
+            "past the end is still the end"
+        );
+        // And in between, a number that is never a misleading 0 or 100.
+        for scroll in 1..90 {
+            let p = progress(scroll, 10, 100);
+            assert!(p.ends_with('%'), "{scroll} gave {p}");
+            let n: usize = p.trim_end_matches('%').parse().unwrap();
+            assert!((1..=99).contains(&n), "{scroll} gave {p}");
+        }
+    }
+
+    #[test]
+    fn the_rail_shows_a_bar_whose_size_is_the_share_on_screen() {
+        let (_dir, mut app) = reading_a_long_note();
+        let rows = app.preview_view.as_ref().unwrap().layout.len();
+        assert!(rows > 40);
+
+        let bar_rows = |app: &mut App| {
+            screen(app, 90, 14)
+                .iter()
+                .filter(|l| l.contains('▐'))
+                .count()
+        };
+        app.preview_to_end(false);
+        let at_top = bar_rows(&mut app);
+        assert!(at_top > 0, "the rail should be drawn on a long note");
+        assert!(at_top < 12, "and be a fraction of the track, not all of it");
+    }
+
+    #[test]
+    fn the_rail_moves_from_one_end_to_the_other() {
+        let (_dir, mut app) = reading_a_long_note();
+        let first_bar_row =
+            |app: &mut App| screen(app, 90, 14).iter().position(|l| l.contains('▐'));
+        app.preview_to_end(false);
+        let top = first_bar_row(&mut app).expect("a bar at the top");
+        app.preview_to_end(true);
+        let end = first_bar_row(&mut app).expect("a bar at the end");
+        assert!(end > top, "the bar moved down: {top} -> {end}");
+    }
+
+    #[test]
+    fn a_note_that_fits_gets_no_rail() {
+        let (_dir, mut app) = app_with_every_pane_open();
+        app.open_note("Welcome.md", false);
+        app.run_command("toggle-preview");
+        let drawn = screen(&mut app, 90, 24).join("\n");
+        assert!(
+            !drawn.contains('▐'),
+            "there is nothing off screen to point at"
         );
     }
 
