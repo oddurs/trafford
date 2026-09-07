@@ -38,7 +38,7 @@ demonstration that menus exist.
 
 ## v0.4 — What you wrote, as you wrote it
 
-`··········` 0% · 0 of 8 done · due 2026-11-15
+`###·······` 25% · 2 of 8 done · due 2026-11-15
 
 The editor stops showing markdown as plain text. Long lines wrap, links read as
 links, headings in a table of contents go somewhere, and a table looks like a
@@ -54,10 +54,10 @@ a line of screen — so the model underneath them comes first.
 - [ ] `0018` Draw markdown tables as tables <sup>feature · p2 · markdown</sup>
 - [ ] `0019` Retire the character-preserving invariant <sup>docs · p2 · docs</sup>
 
-### planned
+### done
 
-- [ ] `0012` How much of the source should the editor render? <sup>spike · p0 · chrome</sup>
-- [ ] `0017` How does a rendered table get edited? <sup>spike · p1 · chrome</sup>
+- [x] `0012` How much of the source should the editor render? <sup>spike · p0 · chrome</sup>
+- [x] `0017` How does a rendered table get edited? <sup>spike · p1 · chrome</sup>
 
 ## later — Someday
 

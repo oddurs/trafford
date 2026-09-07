@@ -2,7 +2,7 @@
 id: 17
 title: How does a rendered table get edited?
 type: spike
-status: planned
+status: done
 milestone: v0.4
 created: 2026-09-07
 updated: 2026-09-07
@@ -64,4 +64,38 @@ or B, and B only if D turns out to be too coarse.
 
 ## Answer
 
-<!-- Filled in when this closes. -->
+**D — drawn in preview, pipes in the editor.** Settled by #0012, which put every
+feature that changes the drawn characters into the preview pane.
+
+The question "what does interacting with a rendered table do?" dissolves once
+tables are only rendered where nothing is edited. There is no reveal, no toggle,
+no per-block state, and nothing to learn: the editor shows the file, and `ctrl-e`
+shows the table. You already know which one you are looking at, because you
+chose it.
+
+### Why the others lose
+
+**A, cursor reveals the block.** The failure is specific: a nine-row table
+collapsing to six source lines as the caret crosses its edge shifts everything
+below by three rows, mid-keystroke. Obsidian does this and it is the part people
+complain about. Buying that with a position-mapping layer, to solve a problem
+created by the same feature, is a poor trade.
+
+**B, a key toggles it.** Better than A, and the state is per-block and not in the
+file, so it is lost on reopen and cannot be explained by anything the user can
+see. A mode you can enter and not notice.
+
+**C, click a cell to edit it.** The nicest to use. It needs cell-level position
+mapping, a tab order, and an answer for a cell that grows past its column —
+against a vault where tables are read far more than edited. Worth revisiting if
+that ever stops being true; it is not a first version.
+
+### The evidence
+
+In this vault tables appear in the roadmap, the reading lists and the dashboard.
+All three are consulted, not filled in. The editing that does happen is adding a
+row, which is easier against pipes than against any of A, B or C.
+
+**Reopen this** if tables start being written here rather than read, which would
+show up as time spent in a table with the pipes visible. Nothing about D
+forecloses C later — a rendered table in preview is the same parse either way.

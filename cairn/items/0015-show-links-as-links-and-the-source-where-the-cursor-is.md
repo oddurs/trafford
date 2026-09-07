@@ -46,6 +46,20 @@ land inside.
       because it is
 - [ ] A broken link is still visibly broken when rendered, not just when raw
 
+## Revised by #0012
+
+This lives in **preview**, not the editor. Concealment is what makes drawn width
+differ from source width, and #0012 put that where there is no caret to keep
+honest — which removes the hard half.
+
+So: no reveal-on-cursor-line rule, because there is no cursor. The editor shows
+the file; `ctrl-e` shows it rendered. The acceptance criteria about the caret on
+a concealed line no longer apply, and the criterion about editing inside a
+rendered line is gone with them.
+
+What remains is rendering, plus enough of a map to know which link a click
+landed on.
+
 ## Notes
 
 Blocked on #0013.

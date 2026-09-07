@@ -54,6 +54,12 @@ are for.
       source rather than guessing
 - [ ] The interaction #0017 chose is what ships
 
+## Revised by #0017
+
+Preview only. The editor shows pipes, `ctrl-e` shows the table, and there is no
+reveal, toggle or per-block state — the criterion about "the interaction #0017
+chose" is that there is none.
+
 ## Notes
 
 Blocked on #0013 and #0017. Do not start this before the spike closes: the
