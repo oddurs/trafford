@@ -9,9 +9,6 @@ A terminal knowledge base — an Obsidian-shaped markdown vault with modal editi
 `##########` 100% · 5 of 5 done · due 2026-09-20
 
 The interface explains itself. A file tree instead of a flat list, the mouse
-working everywhere, a right-click menu on every surface that has actions, and
-themes you can see before you choose. The milestone that answers "I do not
-understand how to use this".
 
 ### done
 
@@ -26,8 +23,6 @@ understand how to use this".
 `##########` 100% · 4 of 4 done · due 2026-10-15
 
 The things you go to a menu *for*: moving and duplicating notes, folders,
-clipboard, acting on a selection. Enough that the menu is a tool rather than a
-demonstration that menus exist.
 
 ### done
 
@@ -41,9 +36,6 @@ demonstration that menus exist.
 `##########` 100% · 8 of 8 done · due 2026-11-15
 
 The editor stops showing markdown as plain text. Long lines wrap, links read as
-links, headings in a table of contents go somewhere, and a table looks like a
-table. Every one of these breaks the same assumption — that a line of source is
-a line of screen — so the model underneath them comes first.
 
 ### done
 
@@ -61,10 +53,6 @@ a line of screen — so the model underneath them comes first.
 `##########` 100% · 6 of 6 done · due 2026-12-20
 
 Preview stops being the editor with the syntax hidden. A note's structure folds,
-its properties stop being seven lines of YAML, its callouts look like callouts,
-and you can look at a link without leaving the page. Measured against the vault
-rather than guessed at: a heading every six lines of body means these notes are
-reference material, and reference material is navigated, not read through.
 
 ### done
 
