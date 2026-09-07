@@ -145,6 +145,27 @@ fn is_placeholder(text: &str) -> bool {
     (t.contains("<%") && t.contains("%>")) || (t.contains("{{") && t.contains("}}"))
 }
 
+/// Whether a file is instructions for a coding agent rather than a note.
+///
+/// `CLAUDE.md` and its relatives live in the vault and are indexed like any
+/// other markdown, but they are not the reader's writing — they are addressed
+/// to a machine. In a sidebar that shows only titles this matters more than it
+/// sounds: the `CLAUDE.md` in the vault this was built for opens
+/// `# Notesnake - Obsidian Vault`, which is the most note-looking title there
+/// is.
+///
+/// Matched on the filename at any depth, because a nested `CLAUDE.md` applies
+/// to its own directory and is just as much instructions as the one at the top.
+/// The list is the conventions that exist today rather than a guess at the
+/// ones that might.
+pub fn is_agent_instructions(id: &str) -> bool {
+    let name = id.rsplit('/').next().unwrap_or(id).to_ascii_uppercase();
+    matches!(
+        name.as_str(),
+        "CLAUDE.MD" | "AGENTS.MD" | "AGENT.MD" | "GEMINI.MD" | "COPILOT-INSTRUCTIONS.MD"
+    )
+}
+
 /// A heading turned into the anchor a link would name it by.
 ///
 /// GitHub's rule, because that is what people's notes are already written
@@ -382,6 +403,34 @@ mod tests {
         let links = parse_wikilinks("xx [[A]]", 0);
         assert_eq!(links[0].col, 3);
         assert_eq!(links[0].len, "[[A]]".chars().count());
+    }
+
+    #[test]
+    fn agent_instructions_are_recognised_whatever_the_case() {
+        for id in [
+            "CLAUDE.md",
+            "claude.md",
+            "AGENTS.md",
+            "agents.md",
+            "AGENT.md",
+            "GEMINI.md",
+            "notes/deep/CLAUDE.md",
+        ] {
+            assert!(is_agent_instructions(id), "{id} is instructions");
+        }
+    }
+
+    #[test]
+    fn ordinary_notes_are_not_mistaken_for_them() {
+        for id in [
+            "Welcome.md",
+            "projects/Claude and me.md",
+            "agents/Reading list.md",
+            "My CLAUDE.md notes.md",
+            "claudia.md",
+        ] {
+            assert!(!is_agent_instructions(id), "{id} is a note");
+        }
     }
 
     #[test]

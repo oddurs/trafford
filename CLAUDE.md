@@ -127,6 +127,14 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
   `.trash/` stays out of the index without a special case.
 - **Frontmatter** `title:` and `tags:` are read, including the `- item` list
   form. Nested tags like `type/reference` are ordinary tags.
+- **`CLAUDE.md` and `AGENTS.md` are instructions, not notes.** They live in the
+  vault and index like any markdown, but they are addressed to a machine. The
+  tree names them by their *file* and dims them — the same rule a template
+  already gets, and for the same reason: their H1 does not name them. The
+  `CLAUDE.md` in the vault this was built for opens
+  `# Notesnake - Obsidian Vault`, so by heading it is indistinguishable from a
+  note, and from an `AGENTS.md` beside it. Matched on the filename at any depth,
+  since a nested `CLAUDE.md` is just as much instructions.
 - **There is one heading scanner.** `ui::fold::headings` is it — the outline in
   the context pane, the fold state, and the reading view all read it. A second
   idea of the document's structure diverges exactly the way a second idea of the
