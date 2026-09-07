@@ -382,28 +382,18 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
 // Context pane: outline, outgoing links, backlinks
 // ---------------------------------------------------------------------------
 
-fn draw_context(f: &mut Frame, app: &App, area: Rect) {
-    let theme = app.theme;
-    let block = pane_block(&theme, "context", false);
-    let inner = block.inner(area);
-    f.render_widget(block, area);
-    if inner.height == 0 {
-        return;
-    }
-    let width = inner.width as usize;
-    let mut lines: Vec<Line> = Vec::new();
+/// A heading picked out of the open buffer, for the outline.
+struct OutlineEntry {
+    text: String,
+    level: usize,
+    row: usize,
+}
 
-    let Some(id) = app.current.clone() else {
-        lines.push(Line::from(Span::styled("no note open", theme.faded())));
-        f.render_widget(Paragraph::new(lines), inner);
-        return;
-    };
-
-    // Outline comes from the live buffer, so it updates as you type.
-    lines.push(section(&theme, "outline"));
+/// Headings in the live buffer, so the outline updates as you type.
+fn outline_of(buf: &crate::editor::Buffer) -> Vec<OutlineEntry> {
+    let mut out = Vec::new();
     let mut in_code = false;
-    let mut any_heading = false;
-    for (row, raw) in app.editor.buf.lines.iter().enumerate() {
+    for (row, raw) in buf.lines.iter().enumerate() {
         if markdown::is_fence(raw) {
             in_code = !in_code;
             continue;
@@ -419,37 +409,125 @@ fn draw_context(f: &mut Frame, app: &App, area: Rect) {
         if level > 6 || trimmed.chars().nth(level) != Some(' ') {
             continue;
         }
-        any_heading = true;
-        let text = trimmed[level..].trim();
-        let indent = "  ".repeat(level.saturating_sub(1));
-        let here = row == app.editor.buf.row;
-        lines.push(Line::from(vec![
-            Span::styled(indent.clone(), theme.faded()),
-            Span::styled(
-                fit(text, width.saturating_sub(indent.len())),
-                if here {
-                    Style::default()
-                        .fg(theme.accent)
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    theme
-                        .heading_style(level as u8)
-                        .remove_modifier(Modifier::BOLD)
-                },
-            ),
-        ]));
+        out.push(OutlineEntry {
+            text: trimmed[level..].trim().to_string(),
+            level,
+            row,
+        });
     }
-    if !any_heading {
-        lines.push(Line::from(Span::styled("  no headings", theme.faded())));
+    out
+}
+
+/// How many rows the outline may use, given the pane height and how much the
+/// sections below it need.
+///
+/// A long note would otherwise fill the pane with its own headings and push
+/// the backlinks — the part you cannot get any other way — off the bottom.
+/// Real notes have forty headings; the toy vaults this was built against had
+/// four, which is why it looked fine.
+fn outline_budget(pane_height: usize, below: usize) -> usize {
+    if pane_height <= 1 {
+        return 0;
     }
+    // One row for the OUTLINE label, and leave room for what follows.
+    let available = pane_height.saturating_sub(1);
+    let for_outline = available.saturating_sub(below);
+    // Always show a few headings, even when the sections below are hungry.
+    for_outline.max(3).min(available)
+}
+
+fn draw_context(f: &mut Frame, app: &App, area: Rect) {
+    let theme = app.theme;
+    let block = pane_block(&theme, "context", false);
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+    if inner.height == 0 {
+        return;
+    }
+    let width = inner.width as usize;
+    let height = inner.height as usize;
+    let mut lines: Vec<Line> = Vec::new();
+
+    let Some(id) = app.current.clone() else {
+        lines.push(Line::from(Span::styled("no note open", theme.faded())));
+        f.render_widget(Paragraph::new(lines), inner);
+        return;
+    };
 
     let outgoing = app.vault.outgoing(&id);
+    let backlinks = app.vault.backlinks_for(&id);
+    let orphans: Vec<&String> = app
+        .vault
+        .unresolved
+        .iter()
+        .filter(|(_, refs)| refs.iter().any(|r| r.from == id))
+        .map(|(target, _)| target)
+        .collect();
+
+    // Work out what the lower sections want before deciding the outline's share.
+    let out_shown = outgoing.len().min(6);
+    let back_shown = backlinks.len().min(6);
+    let orphan_shown = if orphans.is_empty() {
+        0
+    } else {
+        orphans.len().min(4)
+    };
+    let below = 2 + out_shown.max(1)          // blank + heading + rows
+        + 2 + back_shown.max(1) * 2           // backlinks carry a context line
+        + if orphan_shown > 0 { 2 + orphan_shown } else { 0 };
+
+    let entries = outline_of(&app.editor.buf);
+    let budget = outline_budget(height, below);
+
+    lines.push(section(&theme, "outline"));
+    if entries.is_empty() {
+        lines.push(Line::from(Span::styled("  no headings", theme.faded())));
+    } else {
+        // Keep the heading the cursor is under in view, the way the sidebar
+        // keeps its selection in view.
+        let current = entries
+            .iter()
+            .rposition(|e| e.row <= app.editor.buf.row)
+            .unwrap_or(0);
+        let offset = scroll_offset(current, entries.len(), budget);
+        let shown = entries.iter().skip(offset).take(budget);
+        for entry in shown {
+            let indent = "  ".repeat(entry.level.saturating_sub(1));
+            let here = entries
+                .get(current)
+                .map(|c| c.row == entry.row)
+                .unwrap_or(false);
+            lines.push(Line::from(vec![
+                Span::styled(indent.clone(), theme.faded()),
+                Span::styled(
+                    fit(&entry.text, width.saturating_sub(indent.len())),
+                    if here {
+                        Style::default()
+                            .fg(theme.accent)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        theme
+                            .heading_style(entry.level as u8)
+                            .remove_modifier(Modifier::BOLD)
+                    },
+                ),
+            ]));
+        }
+        let hidden = entries.len().saturating_sub(budget);
+        if hidden > 0 {
+            lines.push(Line::from(Span::styled(
+                fit(&format!("  … {hidden} more"), width),
+                theme.faded(),
+            )));
+        }
+    }
+
     lines.push(Line::from(""));
     lines.push(section(&theme, &format!("links out · {}", outgoing.len())));
     if outgoing.is_empty() {
         lines.push(Line::from(Span::styled("  none", theme.faded())));
     }
-    for target in outgoing.iter().take(8) {
+    for target in outgoing.iter().take(out_shown) {
         let title = app
             .vault
             .get(target)
@@ -464,13 +542,12 @@ fn draw_context(f: &mut Frame, app: &App, area: Rect) {
         ]));
     }
 
-    let backlinks = app.vault.backlinks_for(&id);
     lines.push(Line::from(""));
     lines.push(section(&theme, &format!("backlinks · {}", backlinks.len())));
     if backlinks.is_empty() {
         lines.push(Line::from(Span::styled("  none yet", theme.faded())));
     }
-    for bl in backlinks.iter().take(10) {
+    for bl in backlinks.iter().take(back_shown) {
         let title = app
             .vault
             .get(&bl.from)
@@ -492,17 +569,10 @@ fn draw_context(f: &mut Frame, app: &App, area: Rect) {
     }
 
     // Unresolved links are the vault's growing edge — worth surfacing.
-    let orphans: Vec<&String> = app
-        .vault
-        .unresolved
-        .iter()
-        .filter(|(_, refs)| refs.iter().any(|r| r.from == id))
-        .map(|(target, _)| target)
-        .collect();
     if !orphans.is_empty() {
         lines.push(Line::from(""));
         lines.push(section(&theme, &format!("unwritten · {}", orphans.len())));
-        for target in orphans.iter().take(6) {
+        for target in orphans.iter().take(orphan_shown) {
             lines.push(Line::from(vec![
                 Span::styled("  ○ ", theme.faded()),
                 Span::styled(
@@ -1270,6 +1340,49 @@ mod tests {
         assert_eq!(plural(1, "tag"), "1 tag");
         assert_eq!(plural(0, "tag"), "0 tags");
         assert_eq!(plural(2, "note"), "2 notes");
+    }
+
+    #[test]
+    fn outline_budget_always_leaves_room_for_a_few_headings() {
+        // Even when the sections below want the whole pane.
+        assert_eq!(outline_budget(20, 100), 3);
+        assert_eq!(outline_budget(6, 100), 3);
+    }
+
+    #[test]
+    fn outline_budget_yields_to_the_sections_below_it() {
+        // 30 rows, one for the label, 20 wanted below: 9 left for the outline.
+        assert_eq!(outline_budget(30, 20), 9);
+    }
+
+    #[test]
+    fn outline_budget_never_exceeds_the_pane() {
+        for height in 0..40 {
+            for below in 0..40 {
+                let budget = outline_budget(height, below);
+                assert!(
+                    budget < height.max(1) || height <= 1,
+                    "height={height} below={below} budget={budget}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn outline_budget_handles_a_pane_with_no_room() {
+        assert_eq!(outline_budget(0, 5), 0);
+        assert_eq!(outline_budget(1, 5), 0);
+    }
+
+    #[test]
+    fn outline_collects_headings_and_skips_code_fences() {
+        let buf = crate::editor::Buffer::from_str(
+            "# One\n\ntext\n## Two\n```\n# not a heading\n```\n### Three\n#no-space\n",
+        );
+        let entries = outline_of(&buf);
+        let got: Vec<(&str, usize)> = entries.iter().map(|e| (e.text.as_str(), e.level)).collect();
+        assert_eq!(got, vec![("One", 1), ("Two", 2), ("Three", 3)]);
+        assert_eq!(entries[0].row, 0);
     }
 
     #[test]
