@@ -404,13 +404,8 @@ pub fn rewrite_links(text: &str, old_stem: &str, new_stem: &str) -> String {
 mod tests {
     use super::*;
 
-    fn scratch(files: &[(&str, &str)]) -> (tempdir::TempDir, Vault) {
-        let dir = tempdir::TempDir::new();
-        for (name, body) in files {
-            let path = dir.path().join(name);
-            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::write(path, body).unwrap();
-        }
+    fn scratch(files: &[(&str, &str)]) -> (crate::testing::TempDir, Vault) {
+        let dir = crate::testing::TempDir::with_files(files);
         let vault = Vault::open(dir.path()).unwrap();
         (dir, vault)
     }
@@ -499,39 +494,5 @@ mod tests {
         ]);
         let top = vault.relevant("how is gardening going", 2);
         assert_eq!(top[0].id, "gardening.md");
-    }
-}
-
-/// A very small temp-directory helper so the tests do not need a dev-dependency.
-#[cfg(test)]
-mod tempdir {
-    use std::path::{Path, PathBuf};
-
-    pub struct TempDir(PathBuf);
-
-    impl TempDir {
-        pub fn new() -> TempDir {
-            let mut base = std::env::temp_dir();
-            let unique = format!(
-                "trafford-test-{}-{:?}",
-                std::process::id(),
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_nanos()
-            );
-            base.push(unique);
-            std::fs::create_dir_all(&base).unwrap();
-            TempDir(base)
-        }
-        pub fn path(&self) -> &Path {
-            &self.0
-        }
-    }
-
-    impl Drop for TempDir {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
     }
 }

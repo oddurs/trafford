@@ -4,6 +4,8 @@ mod editor;
 mod git;
 mod keymap;
 mod llm;
+#[cfg(test)]
+mod testing;
 mod ui;
 mod vault;
 
