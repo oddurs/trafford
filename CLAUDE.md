@@ -31,6 +31,7 @@ first, or run `cargo +<version> clippy` with the version CI reports. Two
 | `src/app.rs` | Application state, note navigation, assistant plumbing |
 | `src/keymap.rs` | Key routing, the command palette, the help table |
 | `src/ui/` | Theme, markdown-to-spans renderer, tables, and all drawing |
+| `src/watch.rs` | Watching the vault: debounced filesystem events |
 | `src/main.rs` | CLI, terminal setup, event loop |
 
 The dependency direction is one-way: `vault` and `editor` know nothing about
@@ -63,6 +64,22 @@ the UI; `ui` reads `App` but never mutates it except for viewport bookkeeping.
   Match on `haystack`, display from `text`, or you will show mangled case.
 - **Link resolution order** is exact relative path, then case-insensitive path,
   then filename stem. Changing it changes which note a `[[link]]` opens.
+- **The vault is watched, and the watcher reacts to content, not to events.**
+  `src/watch.rs` debounces filesystem events for 120ms and sends
+  batches; `App::absorb_disk_changes` drains them each tick. trafford's own
+  saves make the watcher fire too, and suppressing "paths we just wrote" is a
+  race — another program may write the same file a moment later — so the open
+  note is compared with what is on disk instead. Identical bytes mean nothing
+  happened, whoever wrote them.
+- **A watcher event never replaces unsaved typing.** It says so and leaves the
+  buffer alone; #0043 asks at save time, which is when the reader can choose.
+  A reload drops that note's folds, because they are keyed by line and the lines
+  just moved.
+- **Structural changes rescan; edits patch.** Measured on the vault this is
+  built for: a full rescan is 9.8ms, one note is 92µs. Creating, deleting or
+  renaming cannot be expressed as a patch, so it rebuilds; an edit to a known
+  note refreshes just that note. Dot-directories and editor scratch files are
+  ignored, or `.git` during a commit would rescan continuously.
 - **Navigating away holds an unsaved buffer; it does not discard it.**
   `App.unsaved` keeps dirty buffers per note, so switching away and back returns
   what was typed. Following a link is the common case and a prompt on every link
