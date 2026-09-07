@@ -20,6 +20,7 @@ pub const COMMANDS: &[(&str, &str, &str)] = &[
     ("rename", "Rename note and rewrite links", ""),
     ("delete", "Delete note", ""),
     ("toggle-preview", "Toggle rendered preview", "ctrl-e"),
+    ("peek", "Peek at the link on this line", "K"),
     ("toggle-sidebar", "Toggle sidebar", "ctrl-b"),
     ("toggle-context", "Toggle context pane", ""),
     ("theme", "Change theme", ""),
@@ -176,6 +177,7 @@ impl App {
                 }
                 None => self.set_status("no note open"),
             },
+            "peek" => self.peek(),
             "toggle-preview" => {
                 self.preview = !self.preview;
                 self.set_status(if self.preview { "preview" } else { "source" });
@@ -681,6 +683,16 @@ impl App {
         if self.preview && self.fold_key(key) {
             return;
         }
+        // `K` is where vim already puts "tell me about this word". `space` was
+        // the obvious choice and is taken: it toggles the task on this line,
+        // and the vault has 917 task lines.
+        if !self.editor.mode.is_insert()
+            && key.code == KeyCode::Char('K')
+            && !key.modifiers.contains(KeyModifiers::CONTROL)
+        {
+            self.peek();
+            return;
+        }
         self.last_edit = std::time::Instant::now();
         match self.editor.on_key(key) {
             EditorAction::Save => self.save(),
@@ -916,6 +928,22 @@ impl App {
                 }
                 self.overlay = Some(Overlay::MoveTo { picker, note });
             }
+            // Peek answers one question, so it takes one key: enter goes
+            // there, and esc — handled above — leaves the note where it was.
+            Overlay::Peek(peek) => match key.code {
+                KeyCode::Enter => match (&peek.open, &peek.create) {
+                    (Some(id), _) => {
+                        let id = id.clone();
+                        self.open_note(&id, true);
+                    }
+                    (None, Some(name)) => {
+                        let name = name.clone();
+                        self.prompt_new_note_from_link(&name);
+                    }
+                    _ => {}
+                },
+                _ => self.overlay = Some(Overlay::Peek(peek)),
+            },
             Overlay::Search(pane) => self.search_key(key, pane),
             Overlay::Prompt(prompt) => self.prompt_key(key, prompt),
             Overlay::Git(pane) => self.git_key(key, pane),
@@ -1314,6 +1342,7 @@ pub const HELP: &[(&str, &str)] = &[
     ("space", "toggle the task on this line"),
     ("gm", "the context menu for this line"),
     ("enter", "follow the [[link]] under the cursor"),
+    ("K", "peek at that link without leaving"),
     ("ctrl-o", "back to the previous note"),
     ("", ""),
     ("", "MOUSE — everything is clickable"),

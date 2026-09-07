@@ -280,8 +280,12 @@ impl App {
                     Some(idx) => {
                         let id = self.vault.notes[idx].id.clone();
                         items.push(item("Follow this link", A::OpenNote(id)));
+                        items.push(item("Peek at it", A::Command("peek")));
                     }
-                    None => items.push(item("Write this note…", A::CreateNote(target))),
+                    None => {
+                        items.push(item("Write this note…", A::CreateNote(target)));
+                        items.push(item("Peek at it", A::Command("peek")));
+                    }
                 }
             }
             // The one moment the interface knows exactly what you mean is

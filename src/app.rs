@@ -380,7 +380,105 @@ pub enum Overlay {
         scroll: u16,
     },
     Confirm(Confirm),
+    /// A link's destination, without going there.
+    Peek(Peek),
     Help,
+}
+
+/// What a link points at, shown beside it.
+///
+/// Deciding whether to follow a link is most of what browsing a vault is, and
+/// the alternative is commit-then-undo: open it, find it was not what you
+/// wanted, press `ctrl-o`.
+#[derive(Debug, Clone)]
+pub struct Peek {
+    pub title: String,
+    /// Tags and backlink count, or why there is nothing to show.
+    pub detail: String,
+    /// The first paragraph of prose, as written.
+    pub body: String,
+    /// The note to open on `enter`, when there is one.
+    pub open: Option<String>,
+    /// The name to write on `enter`, when the link goes nowhere.
+    pub create: Option<String>,
+}
+
+/// The first paragraph of prose in a note.
+///
+/// Skips the frontmatter, the title, and a leading callout — all three are
+/// things the reader can already see or does not need in a two-line summary.
+/// What is wanted is the sentence that says what the note is about.
+fn first_paragraph(text: &str) -> String {
+    let lines: Vec<String> = text.lines().map(str::to_string).collect();
+    let start = crate::vault::note::frontmatter_block(&lines)
+        .map(|(_, body)| body)
+        .unwrap_or(0);
+    let mut out = String::new();
+    let mut in_code = false;
+    for line in lines.iter().skip(start) {
+        let t = line.trim();
+        if crate::ui::markdown::is_fence(t) {
+            in_code = !in_code;
+            continue;
+        }
+        if in_code {
+            continue;
+        }
+        let skip = t.is_empty()
+            || t.starts_with('#')
+            || t.starts_with('>')
+            || t.starts_with("---")
+            || t.starts_with('|');
+        if skip {
+            if out.is_empty() {
+                continue;
+            }
+            break;
+        }
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(t);
+    }
+    out
+}
+
+#[cfg(test)]
+mod peek_tests {
+    use super::first_paragraph;
+
+    #[test]
+    fn the_first_paragraph_skips_what_the_reader_can_already_see() {
+        let note = "---\ntags:\n  - one\n---\n\n# Title\n\n> [!note]\n> An aside.\n\nThe sentence that says what this is about.\nStill the same paragraph.\n\nA second paragraph.\n";
+        assert_eq!(
+            first_paragraph(note),
+            "The sentence that says what this is about. Still the same paragraph."
+        );
+    }
+
+    #[test]
+    fn a_note_that_is_only_a_heading_has_no_paragraph() {
+        assert_eq!(first_paragraph("# Title\n\n## Section\n"), "");
+    }
+
+    #[test]
+    fn a_fenced_block_is_not_the_summary() {
+        let note = "# T\n\n```sh\nls -la\n```\n\nActual prose.\n";
+        assert_eq!(first_paragraph(note), "Actual prose.");
+    }
+
+    #[test]
+    fn a_note_that_opens_with_prose_still_works() {
+        assert_eq!(first_paragraph("Straight in.\n\nMore.\n"), "Straight in.");
+    }
+
+    #[test]
+    fn a_table_is_not_prose() {
+        assert_eq!(
+            first_paragraph("| a | b |\n| - | - |\n\nProse.\n"),
+            "Prose."
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -956,6 +1054,65 @@ impl App {
         };
         self.folded.unfold_all(&id);
         self.set_status("opened everything");
+    }
+
+    /// The link `K` would act on: the one under the cursor, or failing that the
+    /// first on this line.
+    ///
+    /// The fallback is what makes this work in preview, where a click leaves
+    /// the cursor at column zero because concealment has no honest mapping back
+    /// to a source column. "Tell me about the link on this line" is a rule a
+    /// reader can hold, and it is right whenever there is only one.
+    fn link_to_peek(&self) -> Option<crate::vault::WikiLink> {
+        self.editor.link_under_cursor().or_else(|| {
+            let line = self.editor.buf.line(self.editor.buf.row);
+            crate::vault::note::parse_wikilinks(line, self.editor.buf.row)
+                .into_iter()
+                .next()
+        })
+    }
+
+    /// Show what a link points at without going there.
+    pub fn peek(&mut self) {
+        let Some(link) = self.link_to_peek() else {
+            self.set_status("no link on this line");
+            return;
+        };
+        let peek = match self.vault.resolve_target(&link.target) {
+            Some(idx) => {
+                let note = &self.vault.notes[idx];
+                let id = note.id.clone();
+                let mut detail = note
+                    .tags
+                    .iter()
+                    .map(|t| format!("#{t}"))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let backlinks = self.vault.backlinks_for(&id).len();
+                if !detail.is_empty() {
+                    detail.push_str("  ·  ");
+                }
+                detail.push_str(&match backlinks {
+                    1 => "1 backlink".to_string(),
+                    n => format!("{n} backlinks"),
+                });
+                Peek {
+                    title: note.title.clone(),
+                    detail,
+                    body: first_paragraph(&note.text),
+                    open: Some(id),
+                    create: None,
+                }
+            }
+            None => Peek {
+                title: link.target.clone(),
+                detail: "no note by that name".into(),
+                body: String::new(),
+                open: None,
+                create: Some(link.target.clone()),
+            },
+        };
+        self.overlay = Some(Overlay::Peek(peek));
     }
 
     /// Open what a wikilink names, jumping to its heading if it named one.

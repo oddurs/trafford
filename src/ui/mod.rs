@@ -103,6 +103,10 @@ pub fn draw(f: &mut Frame, app: &mut App) {
             scroll,
         }) => draw_diff(f, &theme, title, body, *scroll, area),
         Some(Overlay::Menu(menu)) => draw_menu(f, &theme, menu, area),
+        Some(Overlay::Peek(peek)) => {
+            draw_peek(f, &theme, peek, area);
+            Rect::default()
+        }
         Some(Overlay::Help) => {
             draw_help(f, &theme, area);
             Rect::default()
@@ -1889,6 +1893,61 @@ fn draw_menu(f: &mut Frame, theme: &Theme, menu: &crate::app::Menu, area: Rect) 
         .collect();
     f.render_widget(Paragraph::new(lines), inner);
     inner
+}
+
+/// What a link points at, drawn over the note rather than instead of it.
+///
+/// Centred rather than beside the link: a popover that follows the cursor has
+/// to decide what to do when the cursor is at the bottom of the screen, and a
+/// reader who pressed a key already knows where they pressed it.
+fn draw_peek(f: &mut Frame, theme: &Theme, peek: &crate::app::Peek, area: Rect) {
+    // A measure rather than a percentage: a summary is prose, and prose is
+    // unreadable stretched across a wide terminal.
+    let width = area.width.saturating_sub(8).clamp(0, 64).max(20);
+    let text_width = width.saturating_sub(4) as usize;
+
+    let mut lines: Vec<Line> = vec![Line::from(Span::styled(
+        fit(&peek.title, text_width),
+        Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
+    ))];
+    if !peek.detail.is_empty() {
+        lines.push(Line::from(Span::styled(
+            fit(&peek.detail, text_width),
+            theme.faded(),
+        )));
+    }
+    if !peek.body.is_empty() {
+        lines.push(Line::from(""));
+        for row in wrap_text(&peek.body, text_width).into_iter().take(5) {
+            lines.push(Line::from(Span::styled(
+                row,
+                Style::default().fg(theme.muted),
+            )));
+        }
+    }
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        match (&peek.open, &peek.create) {
+            (Some(_), _) => "enter opens · esc dismisses",
+            (None, Some(_)) => "enter writes it · esc dismisses",
+            _ => "esc dismisses",
+        },
+        theme.faded(),
+    )));
+
+    let height = (lines.len() as u16 + 2).min(area.height);
+    let pct = ((width as u32 * 100) / area.width.max(1) as u32).min(100) as u16;
+    let rect = centred(area, pct, height);
+    f.render_widget(Clear, rect);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(theme.border_focus))
+        .style(Style::default().bg(theme.surface))
+        .title(Span::styled(" peek ", Style::default().fg(theme.accent)));
+    let inner = block.inner(rect);
+    f.render_widget(block, rect);
+    f.render_widget(Paragraph::new(lines), inner);
 }
 
 fn draw_help(f: &mut Frame, theme: &Theme, area: Rect) {
