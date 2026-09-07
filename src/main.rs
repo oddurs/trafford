@@ -15,7 +15,7 @@ use anyhow::{Context, Result};
 use app::App;
 use config::Config;
 use crossterm::cursor::SetCursorStyle;
-use crossterm::event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyEventKind};
+use crossterm::event::{self, Event, KeyEventKind};
 use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -23,7 +23,18 @@ use crossterm::terminal::{
 use editor::Mode;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
-use std::io::{self, Stdout};
+use std::io::{self, Stdout, Write};
+
+/// Ask the terminal for button presses (1000), motion *while a button is
+/// held* (1002), and SGR coordinates (1006), which lift the 223-column limit
+/// of the original encoding.
+///
+/// Deliberately not crossterm's `EnableMouseCapture`: that also sends 1003,
+/// which reports every pointer movement whether a button is down or not. This
+/// loop redraws on each event, so all-motion tracking would burn CPU merely
+/// for waving the mouse over the window — and nothing here reacts to a hover.
+const MOUSE_ON: &str = "\x1b[?1000h\x1b[?1002h\x1b[?1006h";
+const MOUSE_OFF: &str = "\x1b[?1006l\x1b[?1002l\x1b[?1000l";
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use vault::Vault;
@@ -171,18 +182,19 @@ type Term = Terminal<CrosstermBackend<Stdout>>;
 fn setup_terminal() -> Result<Term> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    // Mouse capture takes the terminal's own selection away; holding shift
-    // gives it back in every terminal worth using, which the help says.
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    execute!(stdout, EnterAlternateScreen)?;
+    write!(stdout, "{MOUSE_ON}")?;
+    stdout.flush()?;
     let terminal = Terminal::new(CrosstermBackend::new(stdout))?;
     Ok(terminal)
 }
 
 fn restore_terminal() -> Result<()> {
     disable_raw_mode()?;
+    let mut stdout = io::stdout();
+    write!(stdout, "{MOUSE_OFF}")?;
     execute!(
-        io::stdout(),
-        DisableMouseCapture,
+        stdout,
         LeaveAlternateScreen,
         SetCursorStyle::DefaultUserShape
     )?;
