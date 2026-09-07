@@ -2,7 +2,7 @@
 id: 3
 title: Show the keyboard shortcut beside each menu entry
 type: feature
-status: doing
+status: done
 milestone: v0.2
 assignee: Oddur Sigurdsson
 created: 2026-09-07

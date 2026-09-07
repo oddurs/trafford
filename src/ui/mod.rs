@@ -1378,7 +1378,12 @@ fn draw_menu(f: &mut Frame, theme: &Theme, menu: &crate::app::Menu, area: Rect) 
         .items
         .iter()
         .map(|i| {
-            let hint = i.shortcut().map(|s| s.width() + 2).unwrap_or(0);
+            let hint = i
+                .disabled
+                .as_deref()
+                .or(i.shortcut())
+                .map(|s| s.width() + 2)
+                .unwrap_or(0);
             i.label.width() + 4 + hint
         })
         .chain(std::iter::once(menu.title.width() + 6))
@@ -1428,7 +1433,9 @@ fn draw_menu(f: &mut Frame, theme: &Theme, menu: &crate::app::Menu, area: Rect) 
         .take(visible)
         .map(|(i, item)| {
             let selected = i == menu.cursor;
-            let hint = item.shortcut().unwrap_or("");
+            // A greyed entry shows why instead of its key: the reason is the
+            // useful thing, and it cannot be run anyway.
+            let hint = item.disabled.as_deref().or(item.shortcut()).unwrap_or("");
             let room = (inner.width as usize).saturating_sub(2 + hint.width());
             let label = fit(&item.label, room);
             // The hint sits against the right edge, so the eye can run down
@@ -1441,10 +1448,10 @@ fn draw_menu(f: &mut Frame, theme: &Theme, menu: &crate::app::Menu, area: Rect) 
                 ),
                 Span::styled(
                     label,
-                    if selected {
-                        theme.selected()
-                    } else {
-                        Style::default().fg(theme.fg)
+                    match (selected, item.is_enabled()) {
+                        (_, false) => Style::default().fg(theme.faint),
+                        (true, _) => theme.selected(),
+                        (false, _) => Style::default().fg(theme.fg),
                     },
                 ),
                 Span::styled(" ".repeat(gap), Style::default()),
@@ -1617,9 +1624,11 @@ mod tests {
         crate::app::Menu {
             title: "a menu with more entries than fit".into(),
             items: (0..items)
-                .map(|i| crate::app::MenuItem {
-                    label: format!("entry number {i}"),
-                    action: crate::app::MenuAction::Command("save"),
+                .map(|i| {
+                    crate::app::MenuItem::new(
+                        format!("entry number {i}"),
+                        crate::app::MenuAction::Command("save"),
+                    )
                 })
                 .collect(),
             cursor,
@@ -1660,14 +1669,8 @@ mod tests {
         app.overlay = Some(Overlay::Menu(crate::app::Menu {
             title: "a note".into(),
             items: vec![
-                crate::app::MenuItem {
-                    label: "Save".into(),
-                    action: crate::app::MenuAction::Command("save"),
-                },
-                crate::app::MenuItem {
-                    label: "Rename…".into(),
-                    action: crate::app::MenuAction::Command("rename"),
-                },
+                crate::app::MenuItem::new("Save", crate::app::MenuAction::Command("save")),
+                crate::app::MenuItem::new("Rename…", crate::app::MenuAction::Command("rename")),
             ],
             cursor: 0,
             at: (2, 2),

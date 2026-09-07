@@ -53,10 +53,7 @@ impl App {
     /// fixed list, so it never offers "rename" over empty space.
     fn right_click(&mut self, c: u16, r: u16) {
         use crate::app::{Menu, MenuAction as A, MenuItem};
-        let item = |label: &str, action: A| MenuItem {
-            label: label.to_string(),
-            action,
-        };
+        let item = MenuItem::new;
 
         // A menu is already open: a second right-click dismisses it.
         if self.overlay.is_some() {
@@ -67,16 +64,22 @@ impl App {
         let (title, items) = if self.panes.sidebar_hit(c, r) {
             self.focus = Focus::Sidebar;
             match self.sidebar_target(r) {
-                Some(SidebarTarget::Note(id)) => (
-                    short_name(&id),
-                    vec![
-                        item("Open", A::OpenNote(id.clone())),
-                        item("Insert a link to this", A::LinkToNote(id.clone())),
-                        item("Rename…", A::RenameNote(id.clone())),
-                        item("History", A::HistoryOf(id.clone())),
-                        item("Delete…", A::DeleteNote(id)),
-                    ],
-                ),
+                Some(SidebarTarget::Note(id)) => {
+                    let only_note = self.vault.notes.len() <= 1;
+                    let tracked = self.repo.is_some();
+                    (
+                        short_name(&id),
+                        vec![
+                            item("Open", A::OpenNote(id.clone())),
+                            item("Insert a link to this", A::LinkToNote(id.clone()))
+                                .unless(self.current.is_none(), "no note open"),
+                            item("Rename…", A::RenameNote(id.clone())),
+                            item("History", A::HistoryOf(id.clone()))
+                                .unless(!tracked, "not a git repository"),
+                            item("Delete…", A::DeleteNote(id)).unless(only_note, "the only note"),
+                        ],
+                    )
+                }
                 Some(SidebarTarget::Dir(path)) => (
                     short_name(&path),
                     vec![
@@ -143,10 +146,16 @@ impl App {
                 }
             }
             items.push(item("Insert a link…", A::Command("insert-link")));
-            items.push(item("Save", A::Command("save")));
+            items.push(
+                item("Save", A::Command("save"))
+                    .unless(!self.editor.buf.dirty, "no unsaved changes"),
+            );
             items.push(item("Toggle preview", A::Command("toggle-preview")));
             if self.current.is_some() {
-                items.push(item("History of this note", A::Command("git-history")));
+                items.push(
+                    item("History of this note", A::Command("git-history"))
+                        .unless(self.repo.is_none(), "not a git repository"),
+                );
                 items.push(item("Rename…", A::Command("rename")));
             }
             let title = self
@@ -162,12 +171,15 @@ impl App {
         if items.is_empty() {
             return;
         }
-        self.overlay = Some(Overlay::Menu(Menu {
+        let mut menu = Menu {
             title,
             items,
             cursor: 0,
             at: (c, r),
-        }));
+        };
+        // Opening onto a greyed entry would make enter do nothing.
+        menu.select_first_enabled();
+        self.overlay = Some(Overlay::Menu(menu));
     }
 
     /// Dragging in the editor selects. The editor's operators are line-wise,
@@ -453,10 +465,16 @@ impl App {
                     let visible = self.panes.overlay.height as usize;
                     let offset = crate::ui::scroll_offset(menu.cursor, menu.items.len(), visible);
                     let index = offset + (r - first) as usize;
-                    if let Some(chosen) = menu.items.get(index).cloned() {
-                        menu.cursor = index;
-                        self.run_menu_action(chosen.action);
-                        return;
+                    match menu.items.get(index) {
+                        // A greyed entry takes the click and does nothing, so
+                        // it cannot be run by aiming badly.
+                        Some(entry) if entry.is_enabled() => {
+                            let action = entry.action.clone();
+                            menu.cursor = index;
+                            self.run_menu_action(action);
+                            return;
+                        }
+                        _ => {}
                     }
                 }
                 self.overlay = Some(Overlay::Menu(menu));
