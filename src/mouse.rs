@@ -564,7 +564,8 @@ impl App {
         if let Some(view) = self.preview_view.take() {
             let column = c.saturating_sub(text_x) as usize;
             let (line, col) = view.layout.source_of(&view.texts(), visual, column);
-            self.editor.buf.row = line.min(self.editor.buf.len().saturating_sub(1));
+            let source = view.source(line);
+            self.editor.buf.row = source.min(self.editor.buf.len().saturating_sub(1));
             self.editor.buf.col = 0;
             self.editor.buf.goal_col = 0;
             let hit = (c >= text_x)
