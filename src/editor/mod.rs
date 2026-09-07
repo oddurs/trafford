@@ -36,6 +36,8 @@ pub enum EditorAction {
     FollowLink,
     /// Jump back in the navigation history.
     Back,
+    /// Open the context menu for the cursor's line.
+    Menu,
     Status(String),
 }
 
@@ -359,6 +361,7 @@ impl Editor {
                 self.buf.goto_line(row);
             }
             ('g', 'd') => return EditorAction::FollowLink,
+            ('g', 'm') => return EditorAction::Menu,
             ('d', 'd') => {
                 self.buf.checkpoint();
                 self.register = self.buf.yank_lines(self.buf.row, count);
@@ -548,6 +551,14 @@ mod tests {
         let mut ed = editor("alpha beta");
         press(&mut ed, "dw");
         assert_eq!(ed.buf.text(), "beta");
+    }
+
+    #[test]
+    fn gm_asks_for_the_context_menu() {
+        let mut ed = editor("a line");
+        press(&mut ed, "g");
+        let action = ed.on_key(key('m'));
+        assert_eq!(action, EditorAction::Menu);
     }
 
     #[test]

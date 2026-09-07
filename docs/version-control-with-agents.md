@@ -33,6 +33,16 @@ gh pr create --fill                     # 6. CI gates the merge
 fixing, finish the first, then branch again — a branch that does two things
 takes more than twice as long to review.
 
+**Branch from `main`, not from another branch.** Chaining work off an unmerged
+branch looks efficient and is not: a rebase-merge rewrites those commits, so
+every branch built on them is left holding the old hashes and becomes
+unmergeable. GitHub then **skips CI on an unmergeable pull request**, so what
+you see is not a red build but no build at all — a pull request that looks like
+it is still waiting. Rebase onto `main` and force-with-lease your own unmerged
+branch to fix it.
+
+If the next piece of work genuinely needs the last one, wait for the merge.
+
 ### Commits
 
 A commit is a unit of review, not a save point. Each one should build, pass

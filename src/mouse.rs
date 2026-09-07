@@ -48,6 +48,55 @@ impl App {
         }
     }
 
+    /// Open the menu for whatever the focused pane has selected, without a
+    /// mouse.
+    ///
+    /// The point is computed from the selection and then handed to the same
+    /// `menu_for` a click uses. Building a second path for the keyboard is how
+    /// the two drift into offering different things.
+    pub fn open_menu_at_selection(&mut self) {
+        let Some((c, r)) = self.selection_point() else {
+            self.set_status("nothing to act on here");
+            return;
+        };
+        match self.menu_for(c, r) {
+            Some((title, items)) => self.open_menu(title, items, c, r),
+            None => self.set_status("nothing to act on here"),
+        }
+    }
+
+    /// Where on screen the focused pane's selection is drawn.
+    fn selection_point(&self) -> Option<(u16, u16)> {
+        match self.focus {
+            Focus::Sidebar => {
+                let inner = self.panes.sidebar;
+                if inner.height == 0 {
+                    return None;
+                }
+                let visible = (inner.height as usize).saturating_sub(1);
+                let offset =
+                    crate::ui::scroll_offset(self.sidebar_cursor, self.sidebar_len(), visible);
+                let row = self.sidebar_cursor.checked_sub(offset)?;
+                let y = inner.y + 1 + u16::try_from(row).ok()?;
+                (y < inner.bottom()).then_some((inner.x + 2, y))
+            }
+            Focus::Editor => {
+                let inner = self.panes.editor;
+                if inner.height == 0 {
+                    return None;
+                }
+                let row = self.editor.buf.row.checked_sub(self.editor.scroll)?;
+                let y = inner.y + u16::try_from(row).ok()?;
+                let gutter = crate::ui::gutter_width(self.editor.buf.len());
+                (y < inner.bottom()).then_some((inner.x + gutter, y))
+            }
+            Focus::Assistant => {
+                let inner = self.panes.assistant;
+                (inner.height > 0).then_some((inner.x + 1, inner.y + 1))
+            }
+        }
+    }
+
     /// Right-click offers what can be done to the thing under the pointer.
     /// The menu is built from what was actually clicked rather than being one
     /// fixed list, so it never offers "rename" over empty space.
