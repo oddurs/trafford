@@ -595,9 +595,6 @@ pub struct App {
     pub editor_height: usize,
     /// Where the panes were drawn, for hit-testing the mouse.
     pub panes: Panes,
-    /// How the open note folds onto the screen, rebuilt on every draw and read
-    /// by the caret, the mouse and scrolling — so all three agree.
-    pub layout: crate::layout::Layout,
     /// A program to hand the terminal to, performed by the event loop —
     /// `App` does not own the terminal and must not try to.
     pub pending_suspend: Option<(String, Vec<String>)>,
@@ -643,7 +640,6 @@ impl App {
             should_quit: false,
             editor_height: 20,
             panes: Panes::default(),
-            layout: crate::layout::Layout::default(),
             pending_suspend: None,
             context_targets: Vec::new(),
             tag_filter: None,

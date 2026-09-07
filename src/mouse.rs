@@ -447,11 +447,12 @@ impl App {
             // Scrolling moves by screen rows, so a folded line scrolls by
             // what is visible rather than by whole paragraphs.
             let height = self.editor_height.max(1);
-            let max = self.layout.len().saturating_sub(1);
+            let max = self.editor.layout.len().saturating_sub(1);
             self.editor.scroll = step(self.editor.scroll, delta, max + 1).min(max);
             let top = self.editor.scroll;
             let bottom = (top + height).saturating_sub(1).min(max);
             let cursor = self
+                .editor
                 .layout
                 .visual_of(
                     &self.editor.buf.lines,
@@ -461,7 +462,7 @@ impl App {
                 .0;
             if cursor < top || cursor > bottom {
                 let target = cursor.clamp(top, bottom);
-                if let Some(vrow) = self.layout.row(target) {
+                if let Some(vrow) = self.editor.layout.row(target) {
                     self.editor.buf.row = vrow.line;
                 }
             }
@@ -550,14 +551,14 @@ impl App {
         let inner = self.panes.editor;
         let gutter = crate::ui::gutter_width(self.editor.buf.len());
         let visual = self.editor.scroll + (r.saturating_sub(inner.y)) as usize;
-        if visual >= self.layout.len() {
+        if visual >= self.editor.layout.len() {
             return;
         }
 
         let text_x = inner.x + gutter;
         if c < text_x {
             // The gutter: the start of the line this row belongs to.
-            let line = self.layout.row(visual).map(|v| v.line).unwrap_or(0);
+            let line = self.editor.layout.row(visual).map(|v| v.line).unwrap_or(0);
             self.editor.buf.row = line;
             self.editor.buf.col = 0;
             self.editor.buf.goal_col = 0;
@@ -565,9 +566,16 @@ impl App {
         }
         // Read the same layout the renderer wrote, rather than recomputing a
         // second idea of where things are.
-        let hscroll = crate::ui::editor_hscroll(&self.editor, inner.width, gutter, self.preview);
+        // Wrapped text never scrolls sideways, so a click lands where the
+        // pointer is; unwrapped, the pane may be showing a slice of the line.
+        let hscroll = if self.config.wrap {
+            0
+        } else {
+            crate::ui::editor_hscroll(&self.editor, inner.width, gutter, self.preview)
+        };
         let column = (c - text_x) as usize + hscroll;
         let (row, col) = self
+            .editor
             .layout
             .source_of(&self.editor.buf.lines, visual, column);
         self.editor.buf.row = row;

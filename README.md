@@ -202,6 +202,8 @@ daily_note_format = "%Y-%m-%d"
 model = "claude-sonnet-5"
 context_notes = 6        # notes retrieved per question
 autocommit_secs = 0      # commit after N seconds idle; 0 disables
+wrap = true              # fold long lines instead of scrolling sideways
+wrap_column = 0          # where to fold; 0 is the pane width
 sidebar = true
 context_pane = true
 ```
