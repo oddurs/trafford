@@ -78,6 +78,24 @@ lint that does not exist in your version cannot warn you about itself. When a
 run fails, read the log before changing anything: `gh run view <id>
 --log-failed`.
 
+### Resolving a merge without losing anything
+
+Every branch in a chain needs merging with `main` as the ones before it land,
+and a rebase-merge rewrites the hashes so `--merged` cannot tell you what is
+already in. Two habits make it safe.
+
+**Check the superset claim, do not assert it.** When a branch came off the one
+before it, its side of a conflict usually *is* a superset — but usually is not
+always, and the two times it was not here, taking it wholesale would have
+dropped work silently. Compare: no function and no substantive line that `main`
+has should be missing afterwards.
+
+**Grep for markers before committing.** `CLAUDE.md` carried seven conflict
+markers on `main` for three commits. `cargo fmt`, `clippy` and the tests all
+passed, because none of them read markdown. The whole gate is blind to any file
+it does not compile. `git-guard.test.sh` now greps the tree, and it is the only
+thing that would have caught it.
+
 ### Slicing
 
 The single highest-leverage habit: commit in slices a human can hold in their
