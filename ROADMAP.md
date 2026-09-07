@@ -50,9 +50,12 @@ a line of screen — so the model underneath them comes first.
 - [ ] `0013` A model that maps source positions to screen positions <sup>feature · p0 · chrome</sup>
 - [ ] `0014` Soft-wrap long lines instead of scrolling sideways <sup>feature · p1 · editor</sup>
 - [ ] `0015` Show links as links, and the source where the cursor is <sup>feature · p1 · markdown</sup>
-- [ ] `0016` Follow a table-of-contents link to its heading <sup>feature · p2 · markdown</sup>
 - [ ] `0018` Draw markdown tables as tables <sup>feature · p2 · markdown</sup>
 - [ ] `0019` Retire the character-preserving invariant <sup>docs · p2 · docs</sup>
+
+### in progress
+
+- [ ] `0016` Follow a table-of-contents link to its heading <sup>feature · p2 · markdown</sup>
 
 ### done
 

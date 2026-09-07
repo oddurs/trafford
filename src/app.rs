@@ -816,6 +816,39 @@ impl App {
         }
     }
 
+    /// The line an anchor names in the note that is open.
+    ///
+    /// Reads the live buffer rather than the index: the heading may have been
+    /// typed a moment ago and not saved, and a link that works only after a
+    /// save would be a puzzle.
+    fn heading_line_here(&self, anchor: &str) -> Option<usize> {
+        let wanted = crate::vault::note::slug(anchor);
+        let mut in_code = false;
+        for (row, raw) in self.editor.buf.lines.iter().enumerate() {
+            if crate::ui::markdown::is_fence(raw) {
+                in_code = !in_code;
+                continue;
+            }
+            if in_code {
+                continue;
+            }
+            let trimmed = raw.trim_start();
+            if !trimmed.starts_with('#') {
+                continue;
+            }
+            let level = trimmed.chars().take_while(|c| *c == '#').count();
+            if level > 6 || trimmed.chars().nth(level) != Some(' ') {
+                continue;
+            }
+            let text = trimmed[level..].trim();
+            if text.eq_ignore_ascii_case(anchor.trim()) || crate::vault::note::slug(text) == wanted
+            {
+                return Some(row);
+            }
+        }
+        None
+    }
+
     /// Offer to create a note for a link that resolves to nothing.
     pub fn prompt_new_note_from_link(&mut self, target: &str) {
         self.overlay = Some(Overlay::Prompt(Prompt {
@@ -828,6 +861,18 @@ impl App {
 
     /// Follow the `[[link]]` under the cursor, offering to create it if missing.
     pub fn follow_link(&mut self) {
+        // An anchor into this note is checked first: it is cheaper, and a
+        // contents list is exactly where enter gets pressed most.
+        if let Some(anchor) = self.editor.anchor_under_cursor() {
+            match self.heading_line_here(&anchor) {
+                Some(row) => {
+                    self.editor.buf.goto_line(row);
+                    self.focus = Focus::Editor;
+                }
+                None => self.set_status(format!("no heading called \"{anchor}\" in this note")),
+            }
+            return;
+        }
         let Some(link) = self.editor.link_under_cursor() else {
             self.set_status("no link under cursor");
             return;
@@ -839,15 +884,12 @@ impl App {
                 self.open_note(&id, true);
                 // Jump to the heading when the link named one.
                 if let Some(h) = heading {
-                    if let Some(note) = self.vault.get(&id) {
-                        if let Some(row) = note
-                            .headings
-                            .iter()
-                            .find(|x| x.text.eq_ignore_ascii_case(&h))
-                            .map(|x| x.line)
-                        {
-                            self.editor.buf.goto_line(row);
-                        }
+                    // By slug or by text: a link may be written either way.
+                    match self.vault.get(&id).and_then(|n| n.heading_line(&h)) {
+                        Some(row) => self.editor.buf.goto_line(row),
+                        None => self.set_status(format!(
+                            "opened {id}, but it has no heading called \"{h}\""
+                        )),
                     }
                 }
             }
