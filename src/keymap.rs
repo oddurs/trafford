@@ -424,6 +424,16 @@ impl App {
                 },
                 None => self.set_status("not a git repository"),
             },
+            A::Copy { what, text } => match crate::clipboard::copy(&text) {
+                Ok(crate::clipboard::Copied::Local) => {
+                    self.set_status(format!("copied the {what}"))
+                }
+                // The terminal never answers, so this cannot claim more.
+                Ok(crate::clipboard::Copied::TerminalAsked) => {
+                    self.set_status(format!("asked the terminal to copy the {what}"))
+                }
+                Err(err) => self.set_status(format!("could not copy: {err}")),
+            },
             A::FilterByTag(tag) => {
                 self.tag_filter = Some(tag.clone());
                 self.sidebar_tab = SidebarTab::Notes;

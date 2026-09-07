@@ -2,8 +2,9 @@
 id: 7
 title: Copy a note's link, path, or the selection
 type: feature
-status: backlog
+status: doing
 milestone: v0.3
+assignee: Oddur Sigurdsson
 created: 2026-09-07
 updated: 2026-09-07
 priority: p2
