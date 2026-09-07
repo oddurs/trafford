@@ -709,6 +709,17 @@ pub struct App {
     /// and the note line it names — recorded at draw time so a click can find
     /// it without a second idea of the geometry.
     pub sticky: Vec<(u16, u16, usize)>,
+    /// Notes with unsaved edits, kept while you are elsewhere.
+    ///
+    /// Navigating away used to throw the buffer out — silently, and without the
+    /// prompt that quitting has had all along. Following a link is the common
+    /// case and a prompt on every link would be intolerable, so the answer is
+    /// not to ask but to keep: switch away, switch back, your typing is there.
+    ///
+    /// Only dirty buffers are held. A clean one is exactly what is on disk and
+    /// re-reading it is both cheaper and more correct, since something else may
+    /// have written to it.
+    pub unsaved: std::collections::HashMap<String, (Buffer, Option<(std::time::SystemTime, u64)>)>,
     /// What the open note looked like on disk when it was loaded — its
     /// modification time and its length.
     ///
@@ -798,6 +809,7 @@ impl App {
             editor_height: 20,
             panes: Panes::default(),
             folded: crate::ui::fold::Folds::default(),
+            unsaved: std::collections::HashMap::new(),
             loaded_from_disk: None,
             preview_row: 0,
             preview_anchor: None,
@@ -934,6 +946,21 @@ impl App {
                 }
             }
         }
+        // Put the note being left somewhere safe if it has unsaved work in it.
+        self.park_current();
+
+        // Typing that was parked earlier comes back rather than the file, which
+        // would be the older of the two.
+        if let Some((buf, stamp)) = self.unsaved.remove(id) {
+            self.loaded_from_disk = stamp;
+            self.editor.load(buf);
+            self.current = Some(id.to_string());
+            self.focus = Focus::Editor;
+            self.reveal_in_tree(id);
+            self.preview_row = 0;
+            return;
+        }
+
         let path = self.vault.path_for(id);
         match std::fs::read_to_string(&path) {
             Ok(text) => {
@@ -980,6 +1007,35 @@ impl App {
         }
 
         self.write_note(&id);
+    }
+
+    /// Hold on to the open note's buffer if it has unsaved work in it.
+    ///
+    /// Clean buffers are dropped on purpose: they are what is on disk, and
+    /// re-reading is both cheaper and more correct when something else may have
+    /// written to the file in the meantime.
+    fn park_current(&mut self) {
+        let Some(id) = self.current.clone() else {
+            return;
+        };
+        if !self.editor.buf.dirty {
+            self.unsaved.remove(&id);
+            return;
+        }
+        let buf = std::mem::replace(&mut self.editor.buf, Buffer::from_str(""));
+        self.unsaved.insert(id, (buf, self.loaded_from_disk));
+    }
+
+    /// Every note with typing in it that has not reached the disk.
+    pub fn unsaved_notes(&self) -> Vec<String> {
+        let mut out: Vec<String> = self.unsaved.keys().cloned().collect();
+        if self.editor.buf.dirty {
+            if let Some(id) = &self.current {
+                out.push(id.clone());
+            }
+        }
+        out.sort();
+        out
     }
 
     /// Whether the file has moved on since it was read into the buffer.
@@ -1710,6 +1766,88 @@ mod tests {
     fn write_behind_its_back(dir: &crate::testing::TempDir, body: &str) {
         std::thread::sleep(std::time::Duration::from_millis(1100));
         std::fs::write(dir.path().join("Note.md"), body).unwrap();
+    }
+
+    fn two_note_app() -> (crate::testing::TempDir, App) {
+        let dir = crate::testing::TempDir::with_files(&[
+            ("One.md", "# One\n\nfirst\n"),
+            ("Two.md", "# Two\n\nsecond\n"),
+        ]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.open_note("One.md", false);
+        (dir, app)
+    }
+
+    #[test]
+    fn unsaved_typing_survives_going_somewhere_else() {
+        let (_dir, mut app) = two_note_app();
+        app.editor.buf.lines.push("typed but not saved".into());
+        app.editor.buf.dirty = true;
+
+        app.open_note("Two.md", true);
+        assert!(!app.editor.buf.text().contains("typed but not saved"));
+        app.open_note("One.md", true);
+        assert!(
+            app.editor.buf.text().contains("typed but not saved"),
+            "the typing came back"
+        );
+        assert!(app.editor.buf.dirty, "and is still unsaved");
+    }
+
+    #[test]
+    fn a_clean_note_is_re_read_rather_than_remembered() {
+        // Nothing is held for a clean buffer, so a change made elsewhere while
+        // you were away is picked up instead of a stale copy being restored.
+        let (dir, mut app) = two_note_app();
+        app.open_note("Two.md", true);
+        std::fs::write(dir.path().join("One.md"), "# One\n\nrewritten elsewhere\n").unwrap();
+        app.open_note("One.md", true);
+        assert!(app.editor.buf.text().contains("rewritten elsewhere"));
+    }
+
+    #[test]
+    fn saving_a_note_stops_holding_it() {
+        let (_dir, mut app) = two_note_app();
+        app.editor.buf.lines.push("typed".into());
+        app.editor.buf.dirty = true;
+        app.save();
+        assert!(app.unsaved_notes().is_empty(), "saved is not unsaved");
+        app.open_note("Two.md", true);
+        app.open_note("One.md", true);
+        assert!(app.editor.buf.text().contains("typed"));
+        assert!(!app.editor.buf.dirty);
+    }
+
+    #[test]
+    fn every_held_note_is_reported_not_only_the_open_one() {
+        let (_dir, mut app) = two_note_app();
+        app.editor.buf.lines.push("one".into());
+        app.editor.buf.dirty = true;
+        app.open_note("Two.md", true);
+        app.editor.buf.lines.push("two".into());
+        app.editor.buf.dirty = true;
+        assert_eq!(app.unsaved_notes(), vec!["One.md", "Two.md"]);
+    }
+
+    #[test]
+    fn the_conflict_stamp_travels_with_a_held_buffer() {
+        // A note parked before someone else wrote to it must still notice on
+        // the way back, or holding buffers would quietly disarm #0043.
+        let (dir, mut app) = two_note_app();
+        app.editor.buf.lines.push("mine".into());
+        app.editor.buf.dirty = true;
+        app.open_note("Two.md", true);
+
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        std::fs::write(dir.path().join("One.md"), "# One\n\ntheirs\n").unwrap();
+
+        app.open_note("One.md", true);
+        app.save();
+        assert!(
+            matches!(app.overlay, Some(Overlay::Menu(_))),
+            "a parked buffer still knows what the file looked like"
+        );
     }
 
     #[test]

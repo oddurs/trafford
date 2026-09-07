@@ -2,8 +2,9 @@
 id: 44
 title: Switching notes throws away unsaved changes without asking
 type: bug
-status: backlog
+status: done
 milestone: v0.5
+assignee: Oddur Sigurdsson
 created: 2026-09-07
 updated: 2026-09-07
 priority: p0
@@ -42,11 +43,11 @@ Ask first, since the loss is the urgent part.
 
 ## Acceptance criteria
 
-- [ ] Leaving a note with unsaved changes asks before discarding
-- [ ] The answer includes saving, not only discarding
-- [ ] Every path that changes the open note is covered — the switcher, links,
+- [x] Leaving a note with unsaved changes asks before discarding
+- [x] The answer includes saving, not only discarding
+- [x] Every path that changes the open note is covered — the switcher, links,
       backlinks, the tree, search, the outline
-- [ ] A clean buffer switches with no prompt at all
+- [x] A clean buffer switches with no prompt at all
 
 ## Notes
 
