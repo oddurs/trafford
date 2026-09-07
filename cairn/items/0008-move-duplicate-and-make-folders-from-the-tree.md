@@ -2,7 +2,7 @@
 id: 8
 title: Move, duplicate, and make folders from the tree
 type: feature
-status: doing
+status: done
 milestone: v0.3
 assignee: Oddur Sigurdsson
 created: 2026-09-07

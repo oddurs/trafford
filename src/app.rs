@@ -162,6 +162,9 @@ pub enum PromptKind {
     Rename,
     Commit,
     SaveAnswerAs,
+    /// Naming the note that selected lines are being moved into. Carries the
+    /// text, since the selection is gone by the time the name is confirmed.
+    ExtractNote(String),
 }
 
 #[derive(Debug, Clone)]
@@ -215,6 +218,8 @@ pub enum MenuAction {
     },
     MoveNote(String),
     DuplicateNote(String),
+    /// Turn the selected lines into their own note, leaving a link behind.
+    ExtractSelection,
 }
 
 #[derive(Debug, Clone)]
@@ -447,6 +452,39 @@ impl Chat {
         self.streaming = false;
         self.rx = None;
     }
+}
+
+/// A note name guessed from the first line of a passage.
+///
+/// The first line usually says what the passage is about, but it says it in
+/// markdown: emphasis, list markers, headings. Those have to come off, and so
+/// does anything that would change where the note lands — a `/` in a guessed
+/// name would silently create a folder.
+pub fn suggest_note_name(text: &str) -> String {
+    let first = text.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
+    let stripped = first
+        .trim()
+        .trim_start_matches(['#', '-', '*', '+', '>', ' ']);
+    let cleaned: String = stripped
+        .chars()
+        .filter(|c| !matches!(c, '*' | '_' | '`' | '[' | ']' | '#' | '|'))
+        // Path separators and the characters filesystems dislike become
+        // spaces rather than being dropped, so words do not run together.
+        .map(|c| {
+            if matches!(c, '/' | '\\' | ':' | '?' | '"' | '<' | '>') {
+                ' '
+            } else {
+                c
+            }
+        })
+        .collect();
+    let words: String = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
+    words
+        .chars()
+        .take(60)
+        .collect::<String>()
+        .trim()
+        .to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -1016,6 +1054,52 @@ impl App {
         drained.changed
     }
 
+    /// Replace the selected lines with a link to a new note holding them.
+    ///
+    /// The gesture a vault is for: a passage that has outgrown its note
+    /// becomes a note, and the place it came from still points at it.
+    pub fn extract_selection(&mut self, name: &str, text: &str) {
+        let Some((start, end)) = self.editor.selection_rows() else {
+            self.set_status("nothing selected");
+            return;
+        };
+        let stem = name
+            .trim()
+            .rsplit('/')
+            .next()
+            .unwrap_or(name)
+            .trim_end_matches(".md")
+            .to_string();
+        if stem.is_empty() {
+            self.set_status("the note needs a name");
+            return;
+        }
+        let rel = self.new_note_path(name.trim());
+        // Refuse before touching the buffer: half of this operation is worse
+        // than none of it.
+        if self.vault.resolve_target(&rel).is_some() {
+            self.set_status(format!("{stem} already exists"));
+            return;
+        }
+        let body = if text.trim_start().starts_with('#') {
+            text.to_string()
+        } else {
+            format!("# {stem}\n\n{text}")
+        };
+        match self.vault.create_note(&rel, &body) {
+            Ok(id) => {
+                self.editor.buf.checkpoint();
+                self.editor.buf.delete_lines(start, end - start + 1);
+                self.editor.buf.lines.insert(start, format!("[[{stem}]]"));
+                self.editor.buf.goto_line(start);
+                self.editor.mode = crate::editor::Mode::Normal;
+                self.editor.buf.dirty = true;
+                self.set_status(format!("moved {} line(s) into {id}", end - start + 1));
+            }
+            Err(err) => self.set_status(format!("could not create the note: {err}")),
+        }
+    }
+
     pub fn insert_last_answer(&mut self) {
         let Some(answer) = self.chat.last_answer().map(|s| s.to_string()) else {
             self.set_status("no answer to insert");
@@ -1210,6 +1294,127 @@ mod menu_tests {
         assert_eq!(item(MenuAction::DeleteNote("a.md".into())).shortcut(), None);
         assert_eq!(item(MenuAction::RenameNote("a.md".into())).shortcut(), None);
         assert_eq!(item(MenuAction::LinkToNote("a.md".into())).shortcut(), None);
+    }
+
+    /// Extraction touches the buffer *and* the vault, so the two must not be
+    /// able to disagree: a refused note must leave the text alone.
+    #[test]
+    fn extracting_onto_an_existing_name_leaves_the_buffer_untouched() {
+        let dir = crate::testing::TempDir::with_files(&[
+            ("source.md", "# Source\n\nkeep\ntake one\ntake two\n"),
+            ("taken.md", "# Taken\n"),
+        ]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.open_note("source.md", false);
+        app.editor.mode = crate::editor::Mode::VisualLine;
+        app.editor.anchor = (3, 0);
+        app.editor.buf.goto_line(4);
+
+        let before = app.editor.buf.text();
+        app.extract_selection("taken", "take one\ntake two\n");
+
+        assert_eq!(
+            app.editor.buf.text(),
+            before,
+            "the buffer was edited anyway"
+        );
+        assert!(app.status_text().unwrap().contains("already exists"));
+        assert_eq!(app.vault.notes.len(), 2, "no third note should exist");
+    }
+
+    #[test]
+    fn a_suggested_name_strips_markdown_and_keeps_the_words() {
+        assert_eq!(suggest_note_name("## Route Plan\nrest"), "Route Plan");
+        assert_eq!(
+            suggest_note_name("- **Depart:** Saturday"),
+            "Depart Saturday"
+        );
+        assert_eq!(suggest_note_name("> a quote"), "a quote");
+        assert_eq!(suggest_note_name("`code` and _more_"), "code and more");
+    }
+
+    /// A guessed name containing a path separator would silently create a
+    /// folder, which is not what "make a note from this" means.
+    #[test]
+    fn a_suggested_name_cannot_contain_a_path_separator() {
+        for text in ["I-80 / I-70 corridor", "a\\b", "notes/thing"] {
+            let name = suggest_note_name(text);
+            assert!(!name.contains('/'), "{text:?} gave {name:?}");
+            assert!(!name.contains('\\'), "{text:?} gave {name:?}");
+        }
+        assert_eq!(
+            suggest_note_name("I-80 / I-70 corridor"),
+            "I-80 I-70 corridor"
+        );
+    }
+
+    #[test]
+    fn a_suggested_name_skips_leading_blank_lines_and_is_bounded() {
+        assert_eq!(suggest_note_name("\n\n  real content\n"), "real content");
+        assert!(suggest_note_name(&"word ".repeat(50)).chars().count() <= 60);
+        assert_eq!(suggest_note_name(""), "");
+    }
+
+    #[test]
+    fn extracting_replaces_the_lines_with_a_link_to_the_new_note() {
+        let dir = crate::testing::TempDir::with_files(&[(
+            "source.md",
+            "# Source\n\nkeep this\ntake one\ntake two\n",
+        )]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.open_note("source.md", false);
+        app.editor.mode = crate::editor::Mode::VisualLine;
+        app.editor.anchor = (3, 0);
+        app.editor.buf.goto_line(4);
+
+        app.extract_selection("Extracted", "take one\ntake two");
+
+        assert_eq!(
+            app.editor.buf.text(),
+            "# Source\n\nkeep this\n[[Extracted]]\n",
+            "the lines should be gone and a link left in their place"
+        );
+        let made = app
+            .vault
+            .get("Extracted.md")
+            .expect("the note was not created");
+        assert!(made.text.contains("take one"), "{}", made.text);
+        // A body with no heading of its own gets one, so the note has a title.
+        assert!(made.text.starts_with("# Extracted"), "{}", made.text);
+        assert_eq!(app.editor.mode, crate::editor::Mode::Normal);
+    }
+
+    #[test]
+    fn extracting_a_passage_that_already_has_a_heading_does_not_add_another() {
+        let dir = crate::testing::TempDir::with_files(&[("source.md", "a\nb\n")]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.open_note("source.md", false);
+        app.editor.mode = crate::editor::Mode::VisualLine;
+        app.editor.anchor = (0, 0);
+        app.editor.buf.goto_line(1);
+
+        app.extract_selection("Thing", "## Already titled\n\nbody\n");
+        let made = app.vault.get("Thing.md").unwrap();
+        assert!(made.text.starts_with("## Already titled"), "{}", made.text);
+    }
+
+    #[test]
+    fn extracting_with_no_name_is_refused() {
+        let dir = crate::testing::TempDir::with_files(&[("source.md", "a\nb\n")]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.open_note("source.md", false);
+        app.editor.mode = crate::editor::Mode::VisualLine;
+        app.editor.anchor = (0, 0);
+        app.editor.buf.goto_line(1);
+        let before = app.editor.buf.text();
+
+        app.extract_selection("   ", "a\nb");
+        assert_eq!(app.editor.buf.text(), before);
+        assert_eq!(app.vault.notes.len(), 1);
     }
 
     #[test]

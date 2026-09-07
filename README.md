@@ -105,6 +105,11 @@ the tree, the editor, the context pane, the git panel, the tag list, search
 results, the quick switcher and the assistant. The git panel is the one to
 know — its actions are single letters otherwise.
 
+**With lines selected**, the menu leads with what applies to them: copy, ask
+the assistant, indent, delete — and *make a note from this*, which moves the
+passage into its own note and leaves a `[[link]]` where it was. That last one is
+the gesture a vault is for.
+
 **Moving** a note is a rename into another folder, so the links pointing at it
 keep working — `Move to…` gives a fuzzy-searchable list of every folder in the
 vault. `Duplicate` copies a note beside itself under a free name.
