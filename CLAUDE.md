@@ -51,6 +51,28 @@ the UI; `ui` reads `App` but never mutates it except for viewport bookkeeping.
 - **The editor owns no I/O.** `App::save` writes and then re-indexes; the
   editor never touches the filesystem.
 
+## Obsidian compatibility
+
+A vault is someone's real notes, and the rules below are what a real one turned
+out to need. Each was found by opening a 127-note vault, not by reading docs.
+
+- **Link resolution order**: exact relative path, then case-insensitive path,
+  then filename stem. Changing it changes which note a `[[link]]` opens.
+- **Attachments count as link targets.** `![[photo.jpg]]` points at a real
+  file. Non-markdown files are indexed by filename and relative path so an
+  embed resolves; otherwise a vault with images lists its own pictures as
+  notes nobody has written.
+- **A tag needs a non-numeric character.** Without that rule `#1` in "their #1
+  barrier" and `#333` in "Lex Fridman #333" become tags, and a real vault's
+  tag list is a third prose.
+- **A template's H1 is not a title.** Templater files carry
+  `<% tp.file.title %>` there. Fall back to the filename, which is what
+  Obsidian displays.
+- **`.gitignore` is respected** by the walker, which is why Obsidian's
+  `.trash/` stays out of the index without a special case.
+- **Frontmatter** `title:` and `tags:` are read, including the `- item` list
+  form. Nested tags like `type/reference` are ordinary tags.
+
 ## Testing a TUI
 
 Unit tests cover the parts that are pure. They cannot tell you that a pane got
