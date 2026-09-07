@@ -12,6 +12,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap};
 use ratatui::Frame;
 use theme::Theme;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 const SIDEBAR_WIDTH: u16 = 30;
 const CONTEXT_WIDTH: u16 = 32;
@@ -118,18 +119,35 @@ fn section(theme: &Theme, label: &str) -> Line<'static> {
     ))
 }
 
-/// Truncate to `width` display columns, adding an ellipsis when it does not fit.
+/// Truncate to `width` display columns, adding an ellipsis when it does not
+/// fit. Measured in columns rather than characters, because CJK and emoji
+/// occupy two columns each and would otherwise overflow the pane.
 fn fit(text: &str, width: usize) -> String {
     if width == 0 {
         return String::new();
     }
-    let chars: Vec<char> = text.chars().collect();
-    if chars.len() <= width {
+    if text.width() <= width {
         return text.to_string();
     }
-    let mut s: String = chars[..width.saturating_sub(1)].iter().collect();
-    s.push('…');
-    s
+    // Leave one column for the ellipsis.
+    let budget = width.saturating_sub(1);
+    let mut out = String::new();
+    let mut used = 0usize;
+    for c in text.chars() {
+        let w = c.width().unwrap_or(0);
+        if used + w > budget {
+            break;
+        }
+        out.push(c);
+        used += w;
+    }
+    out.push('…');
+    out
+}
+
+/// Display columns taken by the first `cols` characters of `text`.
+fn width_of_prefix(text: &str, chars: usize) -> usize {
+    text.chars().take(chars).filter_map(|c| c.width()).sum()
 }
 
 // ---------------------------------------------------------------------------
@@ -346,8 +364,13 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     f.render_widget(paragraph, inner);
 
     // Place the real terminal cursor so the terminal's own caret is used.
+    // The offset is in display columns: a line of CJK is twice as wide as it
+    // is long, and a character-indexed cursor drifts left of its glyph.
     if focused && !app.preview && app.overlay.is_none() {
-        let cx = inner.x + gutter + (app.editor.buf.col.saturating_sub(hscroll)) as u16;
+        let line = app.editor.buf.line(app.editor.buf.row);
+        let visible: String = line.chars().skip(hscroll).collect();
+        let offset = width_of_prefix(&visible, app.editor.buf.col.saturating_sub(hscroll));
+        let cx = inner.x + gutter + offset as u16;
         let cy = inner.y + (app.editor.buf.row.saturating_sub(app.editor.scroll)) as u16;
         if cx < inner.right() && cy < inner.bottom() {
             f.set_cursor_position((cx, cy));
@@ -630,23 +653,25 @@ fn wrap_text(text: &str, width: usize) -> Vec<String> {
     }
     let mut out = Vec::new();
     for raw in text.split('\n') {
-        if raw.chars().count() <= width {
+        if raw.width() <= width {
             out.push(raw.to_string());
             continue;
         }
         let mut current = String::new();
         for word in raw.split_inclusive(' ') {
-            if current.chars().count() + word.chars().count() > width && !current.is_empty() {
+            if current.width() + word.width() > width && !current.is_empty() {
                 out.push(std::mem::take(&mut current));
             }
-            // A single word longer than the pane is hard-split.
-            if word.chars().count() > width {
+            // A single word wider than the pane is hard-split.
+            if word.width() > width {
                 let mut chunk = String::new();
                 for c in word.chars() {
-                    chunk.push(c);
-                    if chunk.chars().count() == width {
+                    // A wide character that would straddle the edge starts the
+                    // next line instead of being cut in half.
+                    if chunk.width() + c.width().unwrap_or(0) > width {
                         out.push(std::mem::take(&mut chunk));
                     }
+                    chunk.push(c);
                 }
                 current = chunk;
             } else {
@@ -1259,6 +1284,68 @@ mod tests {
         assert_eq!(fit("hello", 10), "hello");
         assert_eq!(fit("hello world", 8), "hello w…");
         assert_eq!(fit("hello", 0), "");
+    }
+
+    #[test]
+    fn fit_measures_wide_characters_as_two_columns() {
+        // Five characters, ten columns: it fits in ten but not in nine.
+        assert_eq!(fit("日本語のノ", 10), "日本語のノ");
+        let cut = fit("日本語のノ", 9);
+        assert!(cut.width() <= 9, "{cut:?} is {} columns", cut.width());
+        assert!(cut.ends_with('…'));
+    }
+
+    #[test]
+    fn fit_never_exceeds_its_column_budget() {
+        for text in [
+            "ascii text here",
+            "日本語のノートです。",
+            "mixed 日本 text",
+            "✨🌱✨🌱",
+        ] {
+            for width in 1..20 {
+                let out = fit(text, width);
+                assert!(
+                    out.width() <= width,
+                    "fit({text:?}, {width}) = {out:?} is {} columns",
+                    out.width()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn prefix_width_counts_columns_not_characters() {
+        assert_eq!(width_of_prefix("abc", 2), 2);
+        assert_eq!(width_of_prefix("日本語", 2), 4);
+        assert_eq!(width_of_prefix("a日b", 2), 3);
+    }
+
+    #[test]
+    fn wrapping_never_exceeds_the_pane_width() {
+        for text in [
+            "the quick brown fox jumps over the lazy dog",
+            "日本語のノートです。日本語のノートです。",
+            "a very long unbroken token aaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "ながいながいながいながいながいながいことば",
+        ] {
+            for width in 2..24 {
+                for line in wrap_text(text, width) {
+                    assert!(
+                        line.width() <= width,
+                        "wrap_text({text:?}, {width}) produced {line:?} at {} columns",
+                        line.width()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn wrapping_preserves_the_text() {
+        let text = "日本語のノートです。and some ascii";
+        let joined: String = wrap_text(text, 12).concat();
+        assert_eq!(joined.replace(' ', ""), text.replace(' ', ""));
     }
 
     #[test]
