@@ -7,3 +7,7 @@
 
 # Personal overrides, not shared
 .claude/settings.local.json
+
+# Python bytecode from tools/probe.py
+__pycache__/
+*.pyc

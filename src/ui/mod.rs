@@ -342,6 +342,19 @@ pub fn gutter_width(line_count: usize) -> u16 {
 
 /// How far the editor is scrolled sideways. Source mode follows the cursor;
 /// preview soft-wraps and never scrolls.
+/// How wide text may be before it folds.
+///
+/// `wrap_column` of 0 means the pane, which is the default and what most
+/// terminals want. A number holds prose to a readable measure on a wide
+/// screen — but never wider than the pane, or the fold would put text where
+/// there is none to draw it.
+pub fn wrap_width(pane_width: usize, wrap_column: u16) -> usize {
+    match wrap_column {
+        0 => pane_width,
+        n => (n as usize).min(pane_width),
+    }
+}
+
 pub fn editor_hscroll(
     editor: &crate::editor::Editor,
     inner_width: u16,
@@ -387,20 +400,24 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
 
     app.editor_height = inner.height as usize;
 
-    // One layout, read by the drawing below, by the caret, and by the mouse.
-    // Wrapping is off for now, so this produces exactly the rows the editor
-    // drew before: the model replaces the inline arithmetic rather than
-    // changing what appears.
+    // One layout, read by the drawing below, by the caret, by `j`/`k`, and by
+    // the mouse. Everything that has an opinion about where a line is on
+    // screen reads this and nothing else.
     let gutter = gutter_width(app.editor.buf.len());
-    let text_width = inner.width.saturating_sub(gutter) as usize;
-    app.layout = crate::layout::Layout::new(&app.editor.buf.lines, text_width, false);
-    let cursor_visual = app.layout.visual_of(
+    let pane_width = inner.width.saturating_sub(gutter) as usize;
+    let wrap = app.config.wrap;
+    let text_width = wrap_width(pane_width, app.config.wrap_column);
+    app.editor.relayout(text_width, wrap);
+    let cursor_visual = app.editor.layout.visual_of(
         &app.editor.buf.lines,
         app.editor.buf.row,
         app.editor.buf.col,
     );
-    app.editor
-        .sync_scroll_visual(cursor_visual.0, app.layout.len(), inner.height as usize);
+    app.editor.sync_scroll_visual(
+        cursor_visual.0,
+        app.editor.layout.len(),
+        inner.height as usize,
+    );
 
     let vault = &app.vault;
     let resolves = |target: &str| vault.resolves(target);
@@ -409,10 +426,17 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
         resolves: &resolves,
     };
 
-    let hscroll = editor_hscroll(&app.editor, inner.width, gutter, app.preview);
+    // Nothing runs off the right edge when it folds, so there is nothing to
+    // scroll to. Sideways scrolling survives only as what `wrap = false` gets.
+    let hscroll = if wrap {
+        0
+    } else {
+        editor_hscroll(&app.editor, inner.width, gutter, app.preview)
+    };
 
     // A fence opened before the viewport must still colour the visible lines.
     let first_line = app
+        .editor
         .layout
         .row(app.editor.scroll)
         .map(|r| r.line)
@@ -431,11 +455,11 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     let selection = app.editor.selection_rows();
     let mut lines: Vec<Line> = Vec::new();
 
-    for visual in app.editor.scroll..app.layout.len() {
+    for visual in app.editor.scroll..app.editor.layout.len() {
         if lines.len() >= inner.height as usize {
             break;
         }
-        let Some(vrow) = app.layout.row(visual) else {
+        let Some(vrow) = app.editor.layout.row(visual) else {
             break;
         };
         let row = vrow.line;
@@ -1514,6 +1538,20 @@ mod tests {
     use crate::vault::Vault;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
+
+    #[test]
+    fn wrap_column_is_a_measure_not_a_promise() {
+        assert_eq!(wrap_width(80, 0), 80, "0 means the pane");
+        assert_eq!(
+            wrap_width(200, 72),
+            72,
+            "a measure holds prose in on a wide screen"
+        );
+        // Never wider than the pane: the fold would put characters where there
+        // is no room to draw them, and the caret would follow them off-screen.
+        assert_eq!(wrap_width(40, 72), 40);
+        assert_eq!(wrap_width(0, 72), 0);
+    }
 
     fn app_with_every_pane_open() -> (TempDir, App) {
         let dir = TempDir::with_files(&[

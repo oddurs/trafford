@@ -21,7 +21,10 @@ pub struct Config {
     pub context_notes: usize,
     /// Auto-commit the vault after this many seconds of inactivity. 0 disables.
     pub autocommit_secs: u64,
-    /// Soft-wrap column for the editor. 0 means wrap to the pane width.
+    /// Soft-wrap long lines in the editor rather than scrolling sideways.
+    pub wrap: bool,
+    /// Where to wrap. 0 means the pane width; a number holds prose to a
+    /// readable measure on a wide terminal. Ignored when `wrap` is false.
     pub wrap_column: u16,
     /// Show the sidebar on startup.
     pub sidebar: bool,
@@ -41,6 +44,10 @@ impl Default for Config {
             model: "claude-sonnet-5".into(),
             context_notes: 6,
             autocommit_secs: 0,
+            // On by default. A hard-wrapped vault has short lines already and
+            // sees no difference; a soft-wrapped one is unreadable without it,
+            // and prose is what this is for.
+            wrap: true,
             wrap_column: 0,
             sidebar: true,
             sidebar_width: 32,
