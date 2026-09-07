@@ -113,6 +113,7 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
 - **`#tags` are clickable wherever they are drawn.** `markdown::Target` says
   what a run of text points at — a note, a URL, or a tag — and a tag click sets
   the vault filter, which is what the sidebar's tags tab already did.
+<<<<<<< HEAD
 - **The position rail draws at the pane's edge, not the measure's.** Reading
   narrows the text to `READING_MEASURE` and centres it; drawing the rail at
   `inner.right()` put it inside that column, over the last character of a line.
@@ -123,6 +124,15 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
   section and leave them looking at nothing. Only the folds in the way open;
   ones closed elsewhere stay closed. Ordinary motion does *not* use it, or `za`
   would be undone by the next keystroke.
+||||||| 28fc557
+=======
+- **Anything that jumps to a line goes through `App::jump_to`.** It opens the
+  folds hiding that line first — a destination the reader cannot see is not a
+  destination, and search used to land on the right line inside a collapsed
+  section and leave them looking at nothing. Only the folds in the way open;
+  ones closed elsewhere stay closed. Ordinary motion does *not* use it, or `za`
+  would be undone by the next keystroke.
+>>>>>>> origin/main
 - **Preview has its own cursor, and it is authoritative.** `app.preview_row` is
   a row of `PreviewView.layout` — not a buffer line. Preview draws a different
   document from the one the buffer holds (concealment shortens lines,
