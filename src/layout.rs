@@ -58,10 +58,21 @@ impl Layout {
     /// off. A width of zero, or `wrap` false, gives one row per line — the
     /// behaviour the editor had before this existed.
     pub fn new(lines: &[String], width: usize, wrap: bool) -> Layout {
+        Layout::with_widths(lines, &|_| width, wrap)
+    }
+
+    /// The same, with a width chosen per line.
+    ///
+    /// The reading view needs this: prose is held to a measure because prose is
+    /// unreadable stretched wide, and a table is not prose. Folding a table at
+    /// the measure does not wrap it, it *truncates* it — the cells are already
+    /// sized — so the same rule that helps a paragraph destroys a table.
+    pub fn with_widths(lines: &[String], width_of: &dyn Fn(usize) -> usize, wrap: bool) -> Layout {
         let mut rows = Vec::with_capacity(lines.len());
         let mut first = Vec::with_capacity(lines.len());
         for (line, text) in lines.iter().enumerate() {
             first.push(rows.len());
+            let width = width_of(line);
             if !wrap || width == 0 {
                 rows.push(VisualRow {
                     line,
