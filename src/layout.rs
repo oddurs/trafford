@@ -174,7 +174,10 @@ fn continuation_indent(line: &str) -> usize {
         .map(|c| if c == '\t' { 4 } else { 1 })
         .sum();
     let rest = line.trim_start();
-    for marker in ["- [ ] ", "- [x] ", "- ", "* ", "+ ", "> "] {
+    // `▎ ` is the bar preview draws down the left of a callout. It behaves
+    // like `> ` for this purpose: the text after it is the content, and a
+    // wrapped line should line up under that rather than under the bar.
+    for marker in ["- [ ] ", "- [x] ", "- ", "* ", "+ ", "> ", "▎ "] {
         if rest.starts_with(marker) {
             return leading + marker.chars().count();
         }

@@ -262,6 +262,7 @@ fn rule(widths: &[usize], edges: (&str, &str, &str), style: Style) -> Rendered {
     text.push_str(right);
     Rendered {
         spans: vec![Span::styled(text.clone(), style)],
+        rail: None,
         text,
         links: Vec::new(),
     }
