@@ -111,6 +111,12 @@ matrix of widths catches the off-by-one that one hand-picked case does not.
 
 Four things that each cost an afternoon, so they are worth knowing:
 
+- **One edit per script.** A script that makes several edits and asserts on
+  each writes the file only at the end, so a later assertion failing throws
+  away the earlier edits that did match — silently, and with the run's other
+  commands carrying on around it. Three fixes were lost that way here. Write
+  each edit as its own script that saves immediately.
+
 - **Assert on every scripted edit, and let the failure stop the run.** A
   `str.replace` that matches nothing fails silently. Two fixes here were
   written, committed, and believed for days without ever having been applied,

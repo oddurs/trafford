@@ -494,6 +494,11 @@ impl App {
             self.overlay = Some(Overlay::Help);
             return true;
         }
+        // The dedicated context-menu key, for keyboards that have one.
+        if key.code == KeyCode::Menu {
+            self.open_menu_at_selection();
+            return true;
+        }
         if !ctrl {
             // Tab cycles panes, but only when the editor is not taking text.
             if key.code == KeyCode::Tab && !self.editor.mode.is_insert() {
@@ -545,6 +550,7 @@ impl App {
             EditorAction::Save => self.save(),
             EditorAction::FollowLink => self.follow_link(),
             EditorAction::Back => self.go_back(),
+            EditorAction::Menu => self.open_menu_at_selection(),
             EditorAction::Status(msg) => self.set_status(msg),
             EditorAction::None => {}
         }
@@ -627,6 +633,7 @@ impl App {
                             self.reveal_in_tree(&id);
                         }
                     }
+                    KeyCode::Char('m') => self.open_menu_at_selection(),
                     KeyCode::Char('t') => {
                         self.sidebar_tab = SidebarTab::Tags;
                         self.sidebar_cursor = 0;
@@ -1097,6 +1104,7 @@ pub const HELP: &[(&str, &str)] = &[
     ("ctrl-n", "new note"),
     ("ctrl-l", "insert a link to a note"),
     ("ctrl-t", "jump to a note that links here"),
+    ("menu key", "the context menu, without a mouse"),
     ("ctrl-s", "save"),
     ("ctrl-e", "toggle rendered preview"),
     ("ctrl-b", "toggle sidebar"),
@@ -1118,6 +1126,7 @@ pub const HELP: &[(&str, &str)] = &[
     (">> <<", "indent and outdent"),
     ("u ctrl-r", "undo and redo"),
     ("space", "toggle the task on this line"),
+    ("gm", "the context menu for this line"),
     ("enter", "follow the [[link]] under the cursor"),
     ("ctrl-o", "back to the previous note"),
     ("", ""),
@@ -1162,6 +1171,7 @@ pub const HELP: &[(&str, &str)] = &[
     ("g G", "first and last row"),
     ("E C", "expand all, collapse all"),
     (".", "jump to the note that is open"),
+    ("m", "the context menu for this row"),
     ("t", "switch between the tree and tags"),
     ("c", "clear the tag filter"),
     ("/", "quick switcher"),
