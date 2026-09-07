@@ -2,7 +2,7 @@
 id: 6
 title: Entries that cannot apply should be shown, not hidden
 type: feature
-status: doing
+status: done
 milestone: v0.3
 assignee: Oddur Sigurdsson
 created: 2026-09-07
