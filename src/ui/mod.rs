@@ -176,11 +176,6 @@ fn fit(text: &str, width: usize) -> String {
     out
 }
 
-/// Display columns taken by the first `cols` characters of `text`.
-fn width_of_prefix(text: &str, chars: usize) -> usize {
-    text.chars().take(chars).filter_map(|c| c.width()).sum()
-}
-
 // ---------------------------------------------------------------------------
 // Sidebar
 // ---------------------------------------------------------------------------
@@ -363,23 +358,6 @@ pub fn editor_hscroll(
         .saturating_sub(text_width.saturating_sub(4).max(1))
 }
 
-/// The character index in `line` drawn at display column `target`, counting
-/// from `hscroll`. The inverse of [`width_of_prefix`], and wide characters
-/// mean the two are not the same number.
-pub fn column_at(line: &str, hscroll: usize, target: usize) -> usize {
-    let mut col = hscroll;
-    let mut used = 0usize;
-    for c in line.chars().skip(hscroll) {
-        let w = c.width().unwrap_or(0);
-        if used + w > target {
-            break;
-        }
-        used += w;
-        col += 1;
-    }
-    col
-}
-
 /// Keep `cursor` visible inside a window `height` tall over `len` items.
 pub fn scroll_offset(cursor: usize, len: usize, height: usize) -> usize {
     if height == 0 || len <= height {
@@ -408,7 +386,21 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     }
 
     app.editor_height = inner.height as usize;
-    app.editor.sync_scroll(inner.height as usize);
+
+    // One layout, read by the drawing below, by the caret, and by the mouse.
+    // Wrapping is off for now, so this produces exactly the rows the editor
+    // drew before: the model replaces the inline arithmetic rather than
+    // changing what appears.
+    let gutter = gutter_width(app.editor.buf.len());
+    let text_width = inner.width.saturating_sub(gutter) as usize;
+    app.layout = crate::layout::Layout::new(&app.editor.buf.lines, text_width, false);
+    let cursor_visual = app.layout.visual_of(
+        &app.editor.buf.lines,
+        app.editor.buf.row,
+        app.editor.buf.col,
+    );
+    app.editor
+        .sync_scroll_visual(cursor_visual.0, app.layout.len(), inner.height as usize);
 
     let vault = &app.vault;
     let resolves = |target: &str| vault.resolves(target);
@@ -417,17 +409,20 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
         resolves: &resolves,
     };
 
-    // Gutter width scales with the line count so wide files stay aligned.
-    let gutter = gutter_width(app.editor.buf.len());
     let hscroll = editor_hscroll(&app.editor, inner.width, gutter, app.preview);
 
     // A fence opened before the viewport must still colour the visible lines.
+    let first_line = app
+        .layout
+        .row(app.editor.scroll)
+        .map(|r| r.line)
+        .unwrap_or(0);
     let mut in_code = app
         .editor
         .buf
         .lines
         .iter()
-        .take(app.editor.scroll)
+        .take(first_line)
         .filter(|l| markdown::is_fence(l))
         .count()
         % 2
@@ -436,10 +431,14 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     let selection = app.editor.selection_rows();
     let mut lines: Vec<Line> = Vec::new();
 
-    for row in app.editor.scroll..app.editor.buf.len() {
+    for visual in app.editor.scroll..app.layout.len() {
         if lines.len() >= inner.height as usize {
             break;
         }
+        let Some(vrow) = app.layout.row(visual) else {
+            break;
+        };
+        let row = vrow.line;
         let raw = app.editor.buf.line(row);
         let opens_fence = markdown::is_fence(raw);
         let render_as_code = in_code;
@@ -452,8 +451,14 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
             .map(|(a, b)| row >= a && row <= b)
             .unwrap_or(false);
 
+        // A continuation row leaves the gutter blank: the number belongs to
+        // the line, not to each row it folds onto.
         let number = Span::styled(
-            format!("{:>width$} ", row + 1, width = gutter as usize - 1),
+            if vrow.is_first() {
+                format!("{:>width$} ", row + 1, width = gutter as usize - 1)
+            } else {
+                " ".repeat(gutter as usize)
+            },
             if is_cursor_row {
                 Style::default().fg(theme.accent)
             } else {
@@ -461,7 +466,12 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
             },
         );
 
-        let visible: String = raw.chars().skip(hscroll).collect();
+        let visible: String = raw
+            .chars()
+            .skip(vrow.start + hscroll)
+            .take(vrow.len.saturating_sub(hscroll))
+            .collect();
+        let visible = format!("{}{visible}", " ".repeat(vrow.indent));
         let mut spans = vec![number];
         spans.extend(renderer.line(&visible, render_as_code || opens_fence));
 
@@ -485,11 +495,11 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     // The offset is in display columns: a line of CJK is twice as wide as it
     // is long, and a character-indexed cursor drifts left of its glyph.
     if focused && !app.preview && app.overlay.is_none() {
-        let line = app.editor.buf.line(app.editor.buf.row);
-        let visible: String = line.chars().skip(hscroll).collect();
-        let offset = width_of_prefix(&visible, app.editor.buf.col.saturating_sub(hscroll));
-        let cx = inner.x + gutter + offset as u16;
-        let cy = inner.y + (app.editor.buf.row.saturating_sub(app.editor.scroll)) as u16;
+        // The same layout the rows above were drawn from, so the caret cannot
+        // land somewhere the text is not.
+        let (visual, column) = cursor_visual;
+        let cx = inner.x + gutter + column.saturating_sub(hscroll) as u16;
+        let cy = inner.y + (visual.saturating_sub(app.editor.scroll)) as u16;
         if cx < inner.right() && cy < inner.bottom() {
             f.set_cursor_position((cx, cy));
         }
@@ -1811,13 +1821,6 @@ mod tests {
                 );
             }
         }
-    }
-
-    #[test]
-    fn prefix_width_counts_columns_not_characters() {
-        assert_eq!(width_of_prefix("abc", 2), 2);
-        assert_eq!(width_of_prefix("日本語", 2), 4);
-        assert_eq!(width_of_prefix("a日b", 2), 3);
     }
 
     #[test]

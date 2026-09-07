@@ -4,6 +4,7 @@ mod config;
 mod editor;
 mod git;
 mod keymap;
+mod layout;
 mod llm;
 mod mouse;
 #[cfg(test)]

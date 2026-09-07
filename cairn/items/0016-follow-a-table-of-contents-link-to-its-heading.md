@@ -2,7 +2,7 @@
 id: 16
 title: Follow a table-of-contents link to its heading
 type: feature
-status: doing
+status: done
 milestone: v0.4
 assignee: Oddur Sigurdsson
 created: 2026-09-07

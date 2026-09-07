@@ -444,12 +444,27 @@ impl App {
         } else if self.panes.editor_hit(c, r) {
             // Move the view; the cursor follows only as far as it must to stay
             // on screen, which is how a wheel behaves everywhere else.
+            // Scrolling moves by screen rows, so a folded line scrolls by
+            // what is visible rather than by whole paragraphs.
             let height = self.editor_height.max(1);
-            let max = self.editor.buf.len().saturating_sub(1);
+            let max = self.layout.len().saturating_sub(1);
             self.editor.scroll = step(self.editor.scroll, delta, max + 1).min(max);
             let top = self.editor.scroll;
-            let bottom = (top + height).saturating_sub(1);
-            self.editor.buf.row = self.editor.buf.row.clamp(top, bottom.min(max));
+            let bottom = (top + height).saturating_sub(1).min(max);
+            let cursor = self
+                .layout
+                .visual_of(
+                    &self.editor.buf.lines,
+                    self.editor.buf.row,
+                    self.editor.buf.col,
+                )
+                .0;
+            if cursor < top || cursor > bottom {
+                let target = cursor.clamp(top, bottom);
+                if let Some(vrow) = self.layout.row(target) {
+                    self.editor.buf.row = vrow.line;
+                }
+            }
             self.editor.buf.clamp(self.editor.mode.is_insert());
         } else if self.panes.assistant_hit(c, r) {
             self.chat.scroll = if delta < 0 {
@@ -534,24 +549,30 @@ impl App {
     fn click_editor(&mut self, c: u16, r: u16, event: MouseEvent) {
         let inner = self.panes.editor;
         let gutter = crate::ui::gutter_width(self.editor.buf.len());
-        let row = self.editor.scroll + (r.saturating_sub(inner.y)) as usize;
-        if row >= self.editor.buf.len() {
+        let visual = self.editor.scroll + (r.saturating_sub(inner.y)) as usize;
+        if visual >= self.layout.len() {
             return;
         }
-        self.editor.buf.row = row;
 
         let text_x = inner.x + gutter;
         if c < text_x {
-            // The gutter: put the cursor at the start of the line.
+            // The gutter: the start of the line this row belongs to.
+            let line = self.layout.row(visual).map(|v| v.line).unwrap_or(0);
+            self.editor.buf.row = line;
             self.editor.buf.col = 0;
             self.editor.buf.goal_col = 0;
             return;
         }
+        // Read the same layout the renderer wrote, rather than recomputing a
+        // second idea of where things are.
         let hscroll = crate::ui::editor_hscroll(&self.editor, inner.width, gutter, self.preview);
-        let target = (c - text_x) as usize;
-        let line = self.editor.buf.line(row).to_string();
-        self.editor.buf.col = crate::ui::column_at(&line, hscroll, target);
-        self.editor.buf.goal_col = self.editor.buf.col;
+        let column = (c - text_x) as usize + hscroll;
+        let (row, col) = self
+            .layout
+            .source_of(&self.editor.buf.lines, visual, column);
+        self.editor.buf.row = row;
+        self.editor.buf.col = col;
+        self.editor.buf.goal_col = col;
         self.editor.buf.clamp(self.editor.mode.is_insert());
 
         // Following a link on a plain click would make it impossible to put
