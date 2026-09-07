@@ -30,7 +30,7 @@ first, or run `cargo +<version> clippy` with the version CI reports. Two
 | `src/llm.rs` | Anthropic streaming client; runs on a worker thread |
 | `src/app.rs` | Application state, note navigation, assistant plumbing |
 | `src/keymap.rs` | Key routing, the command palette, the help table |
-| `src/ui/` | Theme, markdown-to-spans renderer, and all drawing |
+| `src/ui/` | Theme, markdown-to-spans renderer, tables, and all drawing |
 | `src/main.rs` | CLI, terminal setup, event loop |
 
 The dependency direction is one-way: `vault` and `editor` know nothing about
@@ -95,6 +95,16 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
   `.trash/` stays out of the index without a special case.
 - **Frontmatter** `title:` and `tags:` are read, including the `- item` list
   form. Nested tags like `type/reference` are ordinary tags.
+- **A table is a block, not a line.** `ui::table` parses a header, a separator
+  and its rows together, and draws two more lines than the block occupies — so
+  preview cannot assume one drawn line per source line. `PreviewView.sources`
+  maps each drawn line back, which is what puts a click on the right note line
+  and the gutter number beside content rather than beside a rule. Measuring is
+  in display columns; a table of CJK is what catches a character count, and it
+  catches it silently, by drawing rules that do not line up.
+- **`\|` inside a table cell is an escaped pipe.** Obsidian writes
+  `[[Note\|alias]]` in tables. Split on it and the row gains a cell, the table
+  is ragged, and the whole block falls back for no reason.
 - **What preview renders, and what it leaves alone.** Concealed: wikilink and
   markdown-link syntax, `**bold**`, `*italic*`, `==highlight==`, `` `code` ``
   and heading hashes. Kept: `#tags` (the hash is part of the tag, not wrapping

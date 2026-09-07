@@ -2,8 +2,9 @@
 id: 18
 title: Draw markdown tables as tables
 type: feature
-status: backlog
+status: done
 milestone: v0.4
+assignee: Oddur Sigurdsson
 depends_on:
 - 13
 - 17

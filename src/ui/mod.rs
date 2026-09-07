@@ -1,4 +1,5 @@
 pub mod markdown;
+pub mod table;
 pub mod theme;
 
 use crate::app::{App, ContextTarget, Focus, Overlay, Picker, SidebarTab};
@@ -350,6 +351,14 @@ pub fn gutter_width(line_count: usize) -> u16 {
 /// against — the same one-model rule as the editor, applied to the other view.
 pub struct PreviewView {
     pub lines: Vec<markdown::Rendered>,
+    /// The source line each drawn line came from.
+    ///
+    /// Not the identity, and that is the whole reason it exists: a table draws
+    /// two more lines than it occupies, so a click on row three of a drawn
+    /// table has to land on the note's row three and not on a rule.
+    pub sources: Vec<usize>,
+    /// Whether each drawn line carries the gutter number for its source line.
+    pub numbered: Vec<bool>,
     pub layout: crate::layout::Layout,
 }
 
@@ -366,17 +375,72 @@ impl PreviewView {
         width: usize,
     ) -> PreviewView {
         let mut lines = Vec::with_capacity(source.len());
+        let mut sources = Vec::with_capacity(source.len());
+        let mut numbered = Vec::with_capacity(source.len());
         let mut in_code = false;
-        for raw in source {
+        let mut i = 0;
+        while i < source.len() {
+            let raw = &source[i];
             let opens = markdown::is_fence(raw);
+
+            // A table is a block, not a line. Inside a fence it is text like
+            // anything else — pipes in a code sample are not a table.
+            if !in_code && !opens {
+                if let Some(table) = table::parse(source, i) {
+                    if let Some(drawn) = table::render(&table, renderer, width) {
+                        for line in drawn {
+                            lines.push(line.rendered);
+                            sources.push(i + line.source);
+                            numbered.push(line.numbered);
+                        }
+                        i += table.height;
+                        continue;
+                    }
+                    // Too narrow to draw: fall through and show the pipes,
+                    // which is still the table, just not a pretty one.
+                }
+            }
+
             lines.push(renderer.render(raw, in_code || opens));
+            sources.push(i);
+            numbered.push(true);
             if opens {
                 in_code = !in_code;
             }
+            i += 1;
         }
         let texts: Vec<String> = lines.iter().map(|r| r.text.clone()).collect();
         let layout = crate::layout::Layout::new(&texts, width, true);
-        PreviewView { lines, layout }
+        PreviewView {
+            lines,
+            sources,
+            numbered,
+            layout,
+        }
+    }
+
+    /// The note line a drawn line belongs to.
+    pub fn source(&self, line: usize) -> usize {
+        self.sources.get(line).copied().unwrap_or(0)
+    }
+
+    /// The first screen row showing a note line, for scrolling to it.
+    pub fn row_of_source(&self, source: usize) -> usize {
+        let drawn = self
+            .sources
+            .iter()
+            .position(|s| *s >= source)
+            .unwrap_or(self.lines.len().saturating_sub(1));
+        self.layout.first_of(drawn)
+    }
+
+    /// Whether this drawn line should show its line number.
+    ///
+    /// A table's rules belong to note lines but are not those lines: the
+    /// number goes on the header and the rows, so it sits beside content
+    /// rather than beside a border.
+    pub fn starts_source(&self, line: usize) -> bool {
+        self.numbered.get(line).copied().unwrap_or(true)
     }
 
     /// The link under a drawn position, if there is one.
@@ -482,7 +546,7 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     // the rendered fold, so the top of the cursor's line is the anchor — there
     // is no caret there to keep any finer promise to.
     let (top_row, total_rows) = match &view {
-        Some(v) => (v.layout.first_of(app.editor.buf.row), v.layout.len()),
+        Some(v) => (v.row_of_source(app.editor.buf.row), v.layout.len()),
         None => (cursor_visual.0, app.editor.layout.len()),
     };
     app.editor
@@ -542,16 +606,17 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
             let Some(rendered) = view.lines.get(vrow.line) else {
                 break;
             };
+            let source = view.source(vrow.line);
             let mut spans = vec![gutter_span(
-                vrow.line,
-                vrow.is_first(),
-                vrow.line == app.editor.buf.row,
+                source,
+                vrow.is_first() && view.starts_source(vrow.line),
+                source == app.editor.buf.row,
             )];
             if vrow.indent > 0 {
                 spans.push(Span::raw(" ".repeat(vrow.indent)));
             }
             spans.extend(rendered.slice(vrow.start, vrow.len));
-            lines.push(highlight(Line::from(spans), vrow.line));
+            lines.push(highlight(Line::from(spans), source));
         }
     } else {
         // A fence opened before the viewport must still colour the visible lines.
@@ -1705,6 +1770,71 @@ mod tests {
         let (_t, view) = preview_of(&["```", "**not bold**", "```", "**bold**"], 40);
         assert_eq!(view.lines[1].text, "**not bold**", "inside the fence");
         assert_eq!(view.lines[3].text, "bold", "after it");
+    }
+
+    #[test]
+    fn a_table_draws_more_lines_than_it_occupies_and_still_maps_back() {
+        let (_t, view) = preview_of(
+            &[
+                "before",
+                "| a | b |",
+                "| --- | --- |",
+                "| 1 | 2 |",
+                "| 3 | 4 |",
+                "after",
+            ],
+            40,
+        );
+        // Six source lines; the table's four become six drawn ones.
+        assert_eq!(view.lines.len(), 8);
+        assert_eq!(
+            view.sources,
+            vec![0, 1, 1, 2, 3, 4, 4, 5],
+            "each drawn line names the note line it belongs to"
+        );
+        // Rules carry no number; the header and rows do.
+        assert_eq!(
+            view.numbered,
+            vec![true, false, true, false, true, true, false, true]
+        );
+        assert!(view.lines[1].text.starts_with('┌'));
+        assert!(view.lines[7].text == "after");
+    }
+
+    #[test]
+    fn a_table_too_wide_for_the_pane_falls_back_to_its_pipes() {
+        let (_t, view) = preview_of(
+            &[
+                "| a | b | c | d | e |",
+                "| - | - | - | - | - |",
+                "| 1 | 2 | 3 | 4 | 5 |",
+            ],
+            14,
+        );
+        assert_eq!(view.lines.len(), 3, "one drawn line per source line again");
+        assert!(
+            view.lines[0].text.contains('|'),
+            "the pipes are still the table"
+        );
+        assert_eq!(view.sources, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn pipes_inside_a_fence_are_not_a_table() {
+        let (_t, view) = preview_of(
+            &["```", "| a | b |", "| --- | --- |", "| 1 | 2 |", "```"],
+            40,
+        );
+        assert_eq!(view.lines.len(), 5, "nothing was drawn as a grid");
+        assert_eq!(view.lines[1].text, "| a | b |");
+    }
+
+    #[test]
+    fn scrolling_to_a_note_line_finds_the_row_that_shows_it() {
+        let (_t, view) = preview_of(&["before", "| a |", "| --- |", "| 1 |", "after"], 40);
+        // Note line 3 is the table's only data row, drawn fourth overall.
+        assert_eq!(view.row_of_source(3), 4);
+        assert_eq!(view.source(4), 3);
     }
 
     #[test]
