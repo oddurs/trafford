@@ -61,6 +61,25 @@ icon = "~"
 color = "gray"
 
 [[type]]
+name = "spike"
+icon = "?"
+color = "magenta"
+template = """
+## Question
+
+## Why it has to be answered before the work
+
+## Options
+
+## What would settle it
+
+## Answer
+
+<!-- Filled in when the spike closes. A spike that closes with no answer
+     recorded was a waste of the time it took. -->
+"""
+
+[[type]]
 name = "docs"
 icon = "*"
 color = "blue"
@@ -172,6 +191,16 @@ description = """
 The things you go to a menu *for*: moving and duplicating notes, folders,
 clipboard, acting on a selection. Enough that the menu is a tool rather than a
 demonstration that menus exist."""
+
+[[milestone]]
+name = "v0.4"
+title = "What you wrote, as you wrote it"
+due = "2026-11-15"
+description = """
+The editor stops showing markdown as plain text. Long lines wrap, links read as
+links, headings in a table of contents go somewhere, and a table looks like a
+table. Every one of these breaks the same assumption — that a line of source is
+a line of screen — so the model underneath them comes first."""
 
 [[milestone]]
 name = "v1.0"
