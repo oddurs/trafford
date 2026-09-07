@@ -2,7 +2,7 @@
 id: 5
 title: Menus that are taller than the terminal
 type: bug
-status: doing
+status: done
 milestone: v0.2
 assignee: Oddur Sigurdsson
 created: 2026-09-07

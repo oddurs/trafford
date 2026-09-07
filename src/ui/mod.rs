@@ -1372,10 +1372,15 @@ fn draw_confirm(f: &mut Frame, theme: &Theme, confirm: &crate::app::Confirm, are
 /// A context menu, drawn at the point that was right-clicked and nudged back
 /// on screen when that point is near an edge.
 fn draw_menu(f: &mut Frame, theme: &Theme, menu: &crate::app::Menu, area: Rect) -> Rect {
+    // Wide enough for the longest label *and* its shortcut, so a hint never
+    // pushes the label it belongs to out of the menu.
     let width = menu
         .items
         .iter()
-        .map(|i| i.label.width() + 4)
+        .map(|i| {
+            let hint = i.shortcut().map(|s| s.width() + 2).unwrap_or(0);
+            i.label.width() + 4 + hint
+        })
         .chain(std::iter::once(menu.title.width() + 6))
         .max()
         .unwrap_or(20)
@@ -1423,19 +1428,27 @@ fn draw_menu(f: &mut Frame, theme: &Theme, menu: &crate::app::Menu, area: Rect) 
         .take(visible)
         .map(|(i, item)| {
             let selected = i == menu.cursor;
+            let hint = item.shortcut().unwrap_or("");
+            let room = (inner.width as usize).saturating_sub(2 + hint.width());
+            let label = fit(&item.label, room);
+            // The hint sits against the right edge, so the eye can run down
+            // the keys without reading the labels.
+            let gap = room.saturating_sub(label.width());
             let mut line = Line::from(vec![
                 Span::styled(
                     if selected { "▌ " } else { "  " },
                     Style::default().fg(theme.accent),
                 ),
                 Span::styled(
-                    fit(&item.label, inner.width.saturating_sub(2) as usize),
+                    label,
                     if selected {
                         theme.selected()
                     } else {
                         Style::default().fg(theme.fg)
                     },
                 ),
+                Span::styled(" ".repeat(gap), Style::default()),
+                Span::styled(hint.to_string(), theme.faded()),
             ]);
             if selected {
                 line = line.style(Style::default().bg(theme.selection));
@@ -1638,6 +1651,40 @@ mod tests {
                 "entry {cursor} of 40 was off screen at {rows} rows"
             );
         }
+    }
+
+    /// The hint has to be drawn, and it has to not eat the label.
+    #[test]
+    fn a_menu_draws_its_shortcuts_without_truncating_labels() {
+        let (_dir, mut app) = app_with_every_pane_open();
+        app.overlay = Some(Overlay::Menu(crate::app::Menu {
+            title: "a note".into(),
+            items: vec![
+                crate::app::MenuItem {
+                    label: "Save".into(),
+                    action: crate::app::MenuAction::Command("save"),
+                },
+                crate::app::MenuItem {
+                    label: "Rename…".into(),
+                    action: crate::app::MenuAction::Command("rename"),
+                },
+            ],
+            cursor: 0,
+            at: (2, 2),
+        }));
+        let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
+        terminal.draw(|f| draw(f, &mut app)).unwrap();
+        let buffer = terminal.backend().buffer();
+        let text: String = (0..buffer.area.height)
+            .flat_map(|y| (0..buffer.area.width).map(move |x| (x, y)))
+            .map(|(x, y)| buffer[(x, y)].symbol())
+            .collect();
+        assert!(text.contains("Save"), "the label was lost");
+        assert!(text.contains("ctrl-s"), "the shortcut was not drawn");
+        assert!(
+            text.contains("Rename…"),
+            "an entry with no key lost its label"
+        );
     }
 
     #[test]
