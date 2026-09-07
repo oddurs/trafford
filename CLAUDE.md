@@ -114,10 +114,29 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
   what a run of text points at — a note, a URL, or a tag — and a tag click sets
   the vault filter, which is what the sidebar's tags tab already did.
 <<<<<<< HEAD
+<<<<<<< HEAD
+- **A measure is a rule about prose, and a table is not prose.** Reading holds
+  paragraphs to `READING_MEASURE` because prose stretched wide is unreadable.
+  Applying that to a table does not wrap it — the cells are already sized — it
+  *cuts* them, losing data the editor showed fine. `Rendered.rigid` marks a line
+  whose width is already decided; rigid lines get the pane, prose gets the
+  measure, via `Layout::with_widths`.
+- **Prose shares a left edge; a rigid block centres on the same axis.**
+  `Rendered.offset` carries it, so `mouse.rs` subtracts it before asking the
+  layout anything. Centring every line individually turns a paragraph into a
+  poem; centring none of them puts a wide table off to one side.
 - **The position rail draws at the pane's edge, not the measure's.** Reading
   narrows the text to `READING_MEASURE` and centres it; drawing the rail at
   `inner.right()` put it inside that column, over the last character of a line.
   It draws against `pane`, and the measure gives up one column for it.
+||||||| fa26704
+=======
+<<<<<<< HEAD
+- **The position rail draws at the pane's edge, not the measure's.** Reading
+  narrows the text to `READING_MEASURE` and centres it; drawing the rail at
+  `inner.right()` put it inside that column, over the last character of a line.
+  It draws against `pane`, and the measure gives up one column for it.
+>>>>>>> origin/main
 - **Anything that jumps to a line goes through `App::jump_to`.** It opens the
   folds hiding that line first — a destination the reader cannot see is not a
   destination, and search used to land on the right line inside a collapsed

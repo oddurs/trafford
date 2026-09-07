@@ -383,6 +383,21 @@ impl PreviewView {
         width: usize,
         folded: Option<&std::collections::HashSet<usize>>,
     ) -> PreviewView {
+        PreviewView::build_within(source, renderer, width, width, folded)
+    }
+
+    /// Build with prose held to `measure` and blocks allowed up to `pane`.
+    ///
+    /// A measure is a rule about prose. Applying it to a table does not wrap
+    /// the table, it truncates it — the cells are already sized — so a note
+    /// read at seventy-two columns lost data the editor showed fine.
+    pub fn build_within(
+        source: &[String],
+        renderer: &markdown::Renderer<'_>,
+        measure: usize,
+        pane: usize,
+        folded: Option<&std::collections::HashSet<usize>>,
+    ) -> PreviewView {
         let mut lines = Vec::with_capacity(source.len());
         let mut sources = Vec::with_capacity(source.len());
         let mut numbered = Vec::with_capacity(source.len());
@@ -458,7 +473,7 @@ impl PreviewView {
             // anything else — pipes in a code sample are not a table.
             if !in_code && !opens {
                 if let Some(table) = table::parse(source, i) {
-                    if let Some(drawn) = table::render(&table, renderer, width) {
+                    if let Some(drawn) = table::render(&table, renderer, pane) {
                         for line in drawn {
                             lines.push(line.rendered);
                             sources.push(i + line.source);
@@ -480,8 +495,33 @@ impl PreviewView {
             }
             i += 1;
         }
+        // Prose shares one left edge — the measure's — because a paragraph
+        // centred line by line is not a paragraph. Only a block too wide for
+        // the measure centres itself, on the same axis, so it grows into the
+        // margins evenly rather than off to one side.
+        // Prose shares one left edge — the measure's — because a paragraph
+        // centred line by line is not a paragraph. A rigid block, one whose
+        // width was already decided when it was drawn, centres on the same
+        // axis so it grows into both margins rather than off to one side.
+        let margin = (pane.saturating_sub(measure)) / 2;
+        // Centring is a property of reading at a measure. Without one — the
+        // editor's preview, or a pane no wider than the measure — everything
+        // starts at the left, which is where it always did.
+        if margin > 0 {
+            for line in &mut lines {
+                line.offset = if line.rigid {
+                    (pane.saturating_sub(line.text.width())) / 2
+                } else {
+                    margin
+                };
+            }
+        }
         let texts: Vec<String> = lines.iter().map(|r| r.text.clone()).collect();
-        let layout = crate::layout::Layout::new(&texts, width, true);
+        let widths: Vec<usize> = lines
+            .iter()
+            .map(|r| if r.rigid { pane } else { measure })
+            .collect();
+        let layout = crate::layout::Layout::with_widths(&texts, &|line| widths[line], true);
         PreviewView {
             lines,
             sources,
@@ -732,17 +772,18 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     // at the edge of the text — the position rail draws here, or it would sit
     // inside the measure and overwrite the last character of a line.
     let pane = inner;
+    // Reading draws into the whole pane and centres each line itself, so a
+    // table wider than the prose measure keeps its cells instead of being
+    // truncated to a rule that is about paragraphs.
+    let reading_width = pane.width.saturating_sub(1) as usize;
+    let measure = match app.config.wrap_column {
+        0 => READING_MEASURE,
+        n => n,
+    }
+    .min(pane.width.saturating_sub(1)) as usize;
     let inner = if reading {
-        let measure = match app.config.wrap_column {
-            0 => READING_MEASURE,
-            n => n,
-        }
-        // One column stays clear for the rail, which is why this is not the
-        // full pane width.
-        .min(pane.width.saturating_sub(1));
         Rect {
-            x: pane.x + (pane.width - measure) / 2,
-            width: measure,
+            width: pane.width.saturating_sub(1),
             ..pane
         }
     } else {
@@ -775,12 +816,22 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
         .and_then(|id| app.folded.of(id))
         .cloned();
     let view = app.preview.then(|| {
-        PreviewView::build(
-            &app.editor.buf.lines,
-            &renderer,
-            text_width,
-            folded.as_ref(),
-        )
+        if reading {
+            PreviewView::build_within(
+                &app.editor.buf.lines,
+                &renderer,
+                measure,
+                reading_width,
+                folded.as_ref(),
+            )
+        } else {
+            PreviewView::build(
+                &app.editor.buf.lines,
+                &renderer,
+                text_width,
+                folded.as_ref(),
+            )
+        }
     });
 
     // Scroll against whichever rows are actually on screen. In preview that is
@@ -943,6 +994,11 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
                 vrow.is_first() && view.starts_source(vrow.line),
                 source == app.editor.buf.row,
             )];
+            // Each line centres itself, so a table and a paragraph share a
+            // centre line even when they are different widths.
+            if rendered.offset > 0 {
+                spans.push(Span::raw(" ".repeat(rendered.offset)));
+            }
             match (&rendered.rail, vrow.is_first(), vrow.indent) {
                 // A continuation row of a railed line redraws the rail, then
                 // pads to where the text was.
@@ -2774,6 +2830,87 @@ mod tests {
             !drawn.contains('▐'),
             "there is nothing off screen to point at"
         );
+    }
+
+    fn reading_within(lines: &[&str], measure: usize, pane: usize) -> PreviewView {
+        let theme = Theme::default();
+        let owned: Vec<String> = lines.iter().map(|s| s.to_string()).collect();
+        let resolves = |_: &str| true;
+        let renderer = Renderer {
+            theme: &theme,
+            resolves: &resolves,
+            conceal: true,
+        };
+        PreviewView::build_within(&owned, &renderer, measure, pane, None)
+    }
+
+    const WIDE_TABLE: [&str; 4] = [
+        "Some prose that is comfortably longer than the measure it will be held to.",
+        "| Constraint | Detail |",
+        "| --- | --- |",
+        "| Hardware | Personal laptop for phases one and two, then a cloud GPU |",
+    ];
+
+    #[test]
+    fn a_measure_holds_prose_without_truncating_a_table() {
+        // The bug: reading held everything to seventy-two columns, and a table
+        // does not wrap at a measure — it gets cut, losing cells the editor
+        // showed fine.
+        let view = reading_within(&WIDE_TABLE, 40, 100);
+        let table: Vec<&markdown::Rendered> = view.lines.iter().filter(|r| r.rigid).collect();
+        assert!(!table.is_empty(), "the table was drawn");
+        assert!(
+            table.iter().all(|r| !r.text.contains('…')),
+            "no cell was cut: {:?}",
+            table.iter().map(|r| r.text.as_str()).collect::<Vec<_>>()
+        );
+        assert!(
+            table.iter().any(|r| r.text.width() > 40),
+            "and it used the room beyond the measure"
+        );
+    }
+
+    #[test]
+    fn prose_still_folds_at_the_measure() {
+        let view = reading_within(&WIDE_TABLE, 40, 100);
+        let prose = &view.lines[0];
+        assert!(!prose.rigid);
+        let rows: Vec<usize> = (0..view.layout.len())
+            .filter(|v| view.layout.row(*v).unwrap().line == 0)
+            .collect();
+        assert!(
+            rows.len() > 1,
+            "the paragraph folded rather than running on"
+        );
+        for v in rows {
+            let r = view.layout.row(v).unwrap();
+            let text: String = prose.text.chars().skip(r.start).take(r.len).collect();
+            assert!(text.width() <= 40, "{text:?} is wider than the measure");
+        }
+    }
+
+    #[test]
+    fn prose_shares_a_left_edge_and_a_wide_block_centres_on_it() {
+        let view = reading_within(&WIDE_TABLE, 40, 100);
+        let margin = (100 - 40) / 2;
+        assert_eq!(view.lines[0].offset, margin, "prose sits at the measure");
+        let table: Vec<&markdown::Rendered> = view.lines.iter().filter(|r| r.rigid).collect();
+        let widest = table.iter().map(|r| r.text.width()).max().unwrap();
+        let expected = (100 - widest) / 2;
+        assert!(
+            table.iter().all(|r| r.offset == expected),
+            "every row of the table shares one offset"
+        );
+        assert!(
+            expected < margin,
+            "and it reaches into both margins rather than one"
+        );
+    }
+
+    #[test]
+    fn without_a_measure_nothing_is_offset() {
+        let view = reading_within(&WIDE_TABLE, 100, 100);
+        assert!(view.lines.iter().all(|r| r.offset == 0));
     }
 
     #[test]
