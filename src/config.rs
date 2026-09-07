@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
-    /// Theme name: "night", "paper", or "mono".
+    /// A built-in theme, a theme file, or a Ghostty theme by name or path.
     pub theme: String,
     /// Directory (relative to vault root) new notes are created in.
     pub new_note_dir: String,
@@ -34,7 +34,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            theme: "night".into(),
+            theme: crate::ui::theme::DEFAULT.into(),
             new_note_dir: String::new(),
             daily_note_format: "%Y-%m-%d".into(),
             daily_note_dir: "journal".into(),

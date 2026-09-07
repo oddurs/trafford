@@ -1,0 +1,34 @@
+# Paper — for daylight, and for terminals with a pale ground.
+name = "Paper"
+dark = false
+
+background   = "#f6f2e9"
+surface      = "#ede8dc"
+overlay      = "#f2eee3"
+
+text         = "#2e2a24"
+muted        = "#6e675c"
+faint        = "#a8a093"
+
+border       = "#d2caba"
+border_focus = "#9a8f7c"
+
+selection    = "#ddd6c6"
+cursorline   = "#ece6d8"
+
+accent       = "#a8621b"
+secondary    = "#6b4fa8"
+
+heading      = "#181511"
+link         = "#6b4fa8"
+broken       = "#b03d53"
+code         = "#2f6f63"
+tag          = "#2b5f82"
+
+added        = "#3f7a33"
+removed      = "#a83545"
+modified     = "#a8621b"
+
+mode_normal  = "#a8621b"
+mode_insert  = "#3f7a33"
+mode_visual  = "#6b4fa8"

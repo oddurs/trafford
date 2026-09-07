@@ -99,6 +99,10 @@ open that note at the line mentioning this one. The wheel scrolls whatever is
 under the pointer, dragging in the editor selects lines for `y`, `d` and
 `c`, and clicking outside an overlay dismisses it.
 
+**Right-click** gives you a menu of what can be done to whatever is under the
+pointer — open, rename, delete or link to a note; create a folder's first note;
+follow or write an unresolved link — rather than one fixed list.
+
 Links follow Obsidian: in source mode a click puts the cursor in the link and
 `ctrl-click` follows it, so a link is still editable; in preview a plain click
 follows.
@@ -111,12 +115,53 @@ get it back, which every terminal worth using supports.
 `ctrl-p` open · `ctrl-k` palette · `ctrl-f` search · `ctrl-n` new · `ctrl-l` insert link ·
 `ctrl-t` backlinks · `ctrl-e` preview · `ctrl-g` git · `ctrl-j` assistant · `f1` all of them.
 
+## Themes
+
+Ships with **Gotham** (the default), Night, Paper, and Mono. A theme is a set
+of roles rather than a list of colours, so it can be swapped without touching
+anything else:
+
+```toml
+theme = "gotham"
+```
+
+Three other things work in that field, in this order:
+
+```toml
+theme = "my-theme"                            # <vault>/.trafford/themes/my-theme.toml
+theme = "~/.config/ghostty/themes/gotham"     # a file, anywhere
+theme = "Catppuccin Mocha"                    # a Ghostty theme, by name
+```
+
+That last one is the useful one: **trafford reads Ghostty theme files
+directly**, so whatever your terminal is already wearing, trafford can wear
+too — no transcribing, and every theme Ghostty ships works. Names match
+loosely, so `catppuccin-mocha` finds `Catppuccin Mocha`.
+
+`ctrl-k` → *Change theme* lists everything it can find and previews each one
+as you move through the list; `esc` puts back the one you had.
+
+A theme file states as little as it likes. Anything left out is derived by
+mixing the background and the text, so five lines is a coherent theme:
+
+```toml
+name = "Squid"
+background = "#0d1117"
+text       = "#c9d1d9"
+accent     = "#d29922"
+link       = "#58a6ff"
+```
+
+The full set of roles is in `themes/gotham.toml`, which is an ordinary theme
+file — the built-ins are compiled in and parsed by the same code you would use,
+so they cannot drift from the format.
+
 ## Config
 
 `<vault>/.trafford/config.toml`, so it travels with the notes:
 
 ```toml
-theme = "night"          # night | paper | mono
+theme = "gotham"         # a built-in, a theme file, or a Ghostty theme
 new_note_dir = ""        # where ctrl-n puts notes
 sidebar_width = 32       # columns; a deep vault wants more
 daily_note_dir = "journal"

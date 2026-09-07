@@ -185,6 +185,49 @@ pub struct Confirm {
     pub message: String,
 }
 
+/// What a context-menu entry does. Most defer to an existing palette command;
+/// the rest need the thing that was clicked, which a command name cannot carry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MenuAction {
+    Command(&'static str),
+    OpenNote(String),
+    OpenNoteAt(String, usize),
+    RenameNote(String),
+    DeleteNote(String),
+    LinkToNote(String),
+    HistoryOf(String),
+    NewNoteIn(String),
+    ExpandUnder(String),
+    CollapseDir(String),
+    GoToLine(usize),
+    CreateNote(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct MenuItem {
+    pub label: String,
+    pub action: MenuAction,
+}
+
+/// A menu anchored to the point that was right-clicked.
+#[derive(Debug, Clone)]
+pub struct Menu {
+    pub title: String,
+    pub items: Vec<MenuItem>,
+    pub cursor: usize,
+    pub at: (u16, u16),
+}
+
+impl Menu {
+    pub fn move_cursor(&mut self, delta: isize) {
+        if self.items.is_empty() {
+            return;
+        }
+        let len = self.items.len() as isize;
+        self.cursor = (((self.cursor as isize + delta) % len + len) % len) as usize;
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct SearchPane {
     pub query: String,
@@ -206,6 +249,10 @@ pub enum Overlay {
     LinkPicker(Picker),
     /// Notes linking to the open note; selecting one jumps to the exact line.
     Backlinks(Picker),
+    /// Every theme trafford can find, previewed by applying it live.
+    Themes(Picker),
+    /// A right-click menu, drawn where the click landed.
+    Menu(Menu),
     Search(SearchPane),
     Prompt(Prompt),
     Git(GitPane),
@@ -403,6 +450,10 @@ pub struct App {
     pub context_targets: Vec<Option<ContextTarget>>,
     /// Tag currently filtering the note list, if any.
     pub tag_filter: Option<String>,
+    /// Where the current theme came from, for the status line and the picker.
+    pub theme_source: String,
+    /// The theme in use before the picker started previewing, so esc restores.
+    pub theme_before_preview: Option<String>,
 }
 
 impl App {
@@ -412,7 +463,7 @@ impl App {
             .as_ref()
             .and_then(|r| r.snapshot().ok())
             .unwrap_or_default();
-        let theme = Theme::named(&config.theme);
+        let (theme, theme_source) = Theme::resolve(&config.theme, &vault.root);
         let mut app = App {
             vault,
             repo,
@@ -439,8 +490,16 @@ impl App {
             panes: Panes::default(),
             context_targets: Vec::new(),
             tag_filter: None,
+            theme_source,
+            theme_before_preview: None,
             config,
         };
+        // A theme that could not be found has to say so; silently using a
+        // different one looks like the config was ignored.
+        if app.theme_source.contains("using") {
+            app.set_status(format!("theme {}", app.theme_source.clone()));
+        }
+
         // Open the most recently modified note so the app never starts blank.
         if let Some(id) = app
             .vault
@@ -459,6 +518,14 @@ impl App {
     }
 
     // ---- status -------------------------------------------------------
+
+    /// Switch themes, remembering the choice so a later save keeps it.
+    pub fn apply_theme(&mut self, spec: &str) {
+        let (theme, source) = Theme::resolve(spec, &self.vault.root);
+        self.theme = theme;
+        self.theme_source = source;
+        self.config.theme = spec.to_string();
+    }
 
     pub fn set_status(&mut self, msg: impl Into<String>) {
         self.status = Some((msg.into(), Instant::now()));

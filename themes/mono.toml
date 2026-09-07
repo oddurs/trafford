@@ -1,0 +1,35 @@
+# Mono — defers to the terminal's own sixteen colours. Good over ssh, and in
+# terminals that lie about truecolour support.
+name = "Mono"
+dark = true
+
+background   = "reset"
+surface      = "reset"
+overlay      = "reset"
+
+text         = "reset"
+muted        = "gray"
+faint        = "darkgray"
+
+border       = "darkgray"
+border_focus = "gray"
+
+selection    = "darkgray"
+cursorline   = "reset"
+
+accent       = "yellow"
+secondary    = "magenta"
+
+heading      = "white"
+link         = "magenta"
+broken       = "red"
+code         = "cyan"
+tag          = "blue"
+
+added        = "green"
+removed      = "red"
+modified     = "yellow"
+
+mode_normal  = "yellow"
+mode_insert  = "green"
+mode_visual  = "magenta"
