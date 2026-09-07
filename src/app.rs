@@ -220,6 +220,18 @@ pub enum MenuAction {
     DuplicateNote(String),
     /// Turn the selected lines into their own note, leaving a link behind.
     ExtractSelection,
+    /// Hand a file to another application and carry on. Used for things that
+    /// return immediately, like `open`.
+    Spawn {
+        program: String,
+        args: Vec<String>,
+    },
+    /// Give the terminal to another program until it exits. Used for `$EDITOR`,
+    /// which needs the screen.
+    Suspend {
+        program: String,
+        args: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -583,6 +595,9 @@ pub struct App {
     pub editor_height: usize,
     /// Where the panes were drawn, for hit-testing the mouse.
     pub panes: Panes,
+    /// A program to hand the terminal to, performed by the event loop —
+    /// `App` does not own the terminal and must not try to.
+    pub pending_suspend: Option<(String, Vec<String>)>,
     /// What each row of the context pane points at, parallel to its lines.
     pub context_targets: Vec<Option<ContextTarget>>,
     /// Tag currently filtering the note list, if any.
@@ -625,6 +640,7 @@ impl App {
             should_quit: false,
             editor_height: 20,
             panes: Panes::default(),
+            pending_suspend: None,
             context_targets: Vec::new(),
             tag_filter: None,
             theme_source,
@@ -1043,6 +1059,28 @@ impl App {
         self.chat.streaming = true;
         self.assistant_visible = true;
         self.focus = Focus::Assistant;
+    }
+
+    /// Re-read the vault after another program has had it.
+    ///
+    /// The guest may have edited the open note, or any other. Unsaved local
+    /// changes win: overwriting them with what is on disk would lose work the
+    /// user never agreed to give up.
+    pub fn reload_after_external(&mut self) -> anyhow::Result<()> {
+        self.vault.rescan()?;
+        self.refresh_git();
+        if self.editor.buf.dirty {
+            self.set_status("reloaded the vault; this note has unsaved changes and was kept");
+            return Ok(());
+        }
+        if let Some(id) = self.current.clone() {
+            if self.vault.get(&id).is_some() {
+                let row = self.editor.buf.row;
+                self.open_note(&id, false);
+                self.editor.buf.goto_line(row);
+            }
+        }
+        Ok(())
     }
 
     /// Drain any streamed tokens. Called once per event-loop tick.

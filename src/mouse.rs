@@ -151,6 +151,14 @@ impl App {
                                 },
                             ),
                             item("Move to…", A::MoveNote(id.clone())),
+                            item("Open in Obsidian", obsidian(&self.vault, &id))
+                                .unless(!has_obsidian(&self.vault), "no .obsidian in this vault"),
+                            item("Open in $EDITOR", editor_action(&self.vault, &id))
+                                .unless(std::env::var("EDITOR").is_err(), "$EDITOR is not set"),
+                            item("Reveal in the file manager", reveal(&self.vault, &id)).unless(
+                                cfg!(not(any(target_os = "macos", target_os = "linux"))),
+                                "not supported here",
+                            ),
                             item("Duplicate", A::DuplicateNote(id.clone())),
                             item("Rename…", A::RenameNote(id.clone())),
                             item("History", A::HistoryOf(id.clone()))
@@ -743,6 +751,79 @@ enum SidebarTarget {
     Dir(String),
 }
 
+/// Whether this vault is also an Obsidian vault. Offering to open a note in
+/// Obsidian for a plain folder of markdown would be an entry that fails when
+/// chosen, which is worse than one that is not there.
+fn has_obsidian(vault: &crate::vault::Vault) -> bool {
+    vault.root.join(".obsidian").is_dir()
+}
+
+/// The URL Obsidian answers, with the vault and file as query parameters.
+fn obsidian(vault: &crate::vault::Vault, id: &str) -> crate::app::MenuAction {
+    let name = vault
+        .root
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let url = format!(
+        "obsidian://open?vault={}&file={}",
+        urlencode(&name),
+        urlencode(id.trim_end_matches(".md"))
+    );
+    crate::app::MenuAction::Spawn {
+        program: opener().into(),
+        args: vec![url],
+    }
+}
+
+fn reveal(vault: &crate::vault::Vault, id: &str) -> crate::app::MenuAction {
+    let path = vault.path_for(id).to_string_lossy().to_string();
+    let args = if cfg!(target_os = "macos") {
+        // -R selects the file rather than opening it.
+        vec!["-R".to_string(), path]
+    } else {
+        vec![path]
+    };
+    crate::app::MenuAction::Spawn {
+        program: opener().into(),
+        args,
+    }
+}
+
+fn editor_action(vault: &crate::vault::Vault, id: &str) -> crate::app::MenuAction {
+    // $EDITOR may carry flags, as in "code -w" or "emacs -nw".
+    let raw = std::env::var("EDITOR").unwrap_or_default();
+    let mut parts = raw.split_whitespace().map(str::to_string);
+    let program = parts.next().unwrap_or_else(|| "vi".into());
+    let mut args: Vec<String> = parts.collect();
+    args.push(vault.path_for(id).to_string_lossy().to_string());
+    crate::app::MenuAction::Suspend { program, args }
+}
+
+fn opener() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    }
+}
+
+/// Percent-encode what a URL query cannot carry literally. Small on purpose:
+/// note names are the only input, and pulling in a crate for this would be
+/// more dependency than the job needs.
+fn urlencode(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for byte in text.as_bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(*byte as char)
+            }
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
+}
+
 /// A note id as the link you would paste into another note.
 fn wikilink(id: &str) -> String {
     format!("[[{}]]", short_name(id))
@@ -814,6 +895,18 @@ mod tests {
         assert_eq!(offset, 45);
         assert_eq!(list_index(10, 10, 100, 50, 10), Some(45));
         assert_eq!(list_index(15, 10, 100, 50, 10), Some(50));
+    }
+
+    #[test]
+    fn urls_encode_what_a_query_cannot_carry() {
+        assert_eq!(urlencode("plain"), "plain");
+        assert_eq!(urlencode("a b"), "a%20b");
+        assert_eq!(urlencode("03-resources/ai-ml"), "03-resources%2Fai-ml");
+        assert_eq!(urlencode("Karpathy's"), "Karpathy%27s");
+        // Non-ASCII goes out as its utf-8 bytes, each percent-encoded.
+        assert_eq!(urlencode("日"), "%E6%97%A5");
+        // Unreserved characters must be left alone, or Obsidian will not match.
+        assert_eq!(urlencode("a-b_c.d~e"), "a-b_c.d~e");
     }
 
     #[test]

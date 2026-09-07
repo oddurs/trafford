@@ -180,26 +180,58 @@ Back to [[Welcome]].
 
 type Term = Terminal<CrosstermBackend<Stdout>>;
 
-fn setup_terminal() -> Result<Term> {
+/// Take over the terminal: raw mode, the alternate screen, and the mouse
+/// modes we use. Paired with [`release_terminal`], which must undo all three —
+/// a program that keeps any of them after exiting leaves the user's shell
+/// unusable, which is the worst failure this could have.
+fn claim_terminal() -> Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
     write!(stdout, "{MOUSE_ON}")?;
     stdout.flush()?;
-    let terminal = Terminal::new(CrosstermBackend::new(stdout))?;
-    Ok(terminal)
+    Ok(())
 }
 
-fn restore_terminal() -> Result<()> {
-    disable_raw_mode()?;
+fn release_terminal() -> Result<()> {
     let mut stdout = io::stdout();
     write!(stdout, "{MOUSE_OFF}")?;
+    stdout.flush()?;
+    disable_raw_mode()?;
     execute!(
         stdout,
         LeaveAlternateScreen,
         SetCursorStyle::DefaultUserShape
     )?;
     Ok(())
+}
+
+fn setup_terminal() -> Result<Term> {
+    claim_terminal()?;
+    let terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
+    Ok(terminal)
+}
+
+/// Hand the terminal to another program, then take it back.
+///
+/// Everything `claim_terminal` turned on has to be turned off first and back
+/// on afterwards, or the guest program runs against a terminal in a state it
+/// did not ask for. The screen is cleared on return because the guest drew
+/// over the alternate screen we are about to reuse.
+fn run_in_terminal(terminal: &mut Term, program: &str, args: &[String]) -> Result<()> {
+    release_terminal()?;
+    let status = std::process::Command::new(program).args(args).status();
+    claim_terminal()?;
+    terminal.clear()?;
+    match status {
+        Ok(status) if status.success() => Ok(()),
+        Ok(status) => Err(anyhow::anyhow!("{program} exited with {status}")),
+        Err(err) => Err(anyhow::anyhow!("could not run {program}: {err}")),
+    }
+}
+
+fn restore_terminal() -> Result<()> {
+    release_terminal()
 }
 
 fn run(mut app: App) -> Result<()> {
@@ -239,6 +271,18 @@ fn event_loop(terminal: &mut Term, app: &mut App) -> Result<()> {
                 Event::Mouse(mouse) => app.on_mouse(mouse),
                 Event::Resize(_, _) => {}
                 _ => {}
+            }
+        }
+
+        // Handing the terminal over has to happen here, between draws, where
+        // the terminal is owned and nothing is mid-render.
+        if let Some((program, args)) = app.pending_suspend.take() {
+            if let Err(err) = run_in_terminal(terminal, &program, &args) {
+                app.set_status(err.to_string());
+            }
+            // The guest may have changed the file on disk.
+            if let Err(err) = app.reload_after_external() {
+                app.set_status(format!("reindex failed: {err}"));
             }
         }
 

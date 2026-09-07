@@ -467,6 +467,15 @@ impl App {
                 }
                 None => self.set_status("nothing selected"),
             },
+            A::Spawn { program, args } => {
+                match std::process::Command::new(&program).args(&args).spawn() {
+                    Ok(_) => self.set_status(format!("handed it to {program}")),
+                    Err(err) => self.set_status(format!("could not run {program}: {err}")),
+                }
+            }
+            // The event loop performs this: it owns the terminal, and taking
+            // it back is the half that must not be got wrong.
+            A::Suspend { program, args } => self.pending_suspend = Some((program, args)),
             A::MoveNote(id) => self.open_move_picker(&id),
             A::DuplicateNote(id) => match self.vault.duplicate_note(&id) {
                 Ok(copy) => {
