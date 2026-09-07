@@ -2,7 +2,7 @@
 id: 14
 title: Soft-wrap long lines instead of scrolling sideways
 type: feature
-status: backlog
+status: done
 milestone: v0.4
 depends_on:
 - 13
