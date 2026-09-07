@@ -50,6 +50,14 @@ the UI; `ui` reads `App` but never mutates it except for viewport bookkeeping.
   then filename stem. Changing it changes which note a `[[link]]` opens.
 - **The editor owns no I/O.** `App::save` writes and then re-indexes; the
   editor never touches the filesystem.
+- **Hit-testing shares the renderer's geometry.** `src/mouse.rs` resolves a
+  click with the same `gutter_width`, `editor_hscroll`, `column_at` and
+  `scroll_offset` the drawing code uses, against rects recorded during the
+  last draw (`App::panes`). Never compute a second, parallel idea of the
+  layout — it will diverge silently and clicks will land one row off.
+- **Only the mouse modes we use are enabled.** `MOUSE_ON` in `main.rs`
+  deliberately omits 1003 (all-motion): the loop redraws per event and nothing
+  reacts to a hover, so hover tracking would be pure cost.
 
 ## Obsidian compatibility
 
@@ -101,7 +109,12 @@ tells you *what* is wrong, and a test in `src/` keeps it from coming back.
 Prefer asserting invariants over examples: `line.width() <= width` across a
 matrix of widths catches the off-by-one that one hand-picked case does not.
 
-Two things that cost an afternoon each, so they are worth knowing:
+Three things that cost an afternoon each, so they are worth knowing:
+
+- **Assert on every scripted edit.** A `str.replace` that matches nothing
+  fails silently. Two fixes in this project were written, committed, and
+  believed for days without ever having been applied, because `cargo fmt` had
+  rewrapped the target line first.
 
 - **Send `esc` as its own step.** A terminal delivers ESC glued to the next key
   as `Alt+key`, so `b"\x1bа"` is one keypress, not two.
