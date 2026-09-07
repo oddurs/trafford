@@ -606,7 +606,10 @@ fn draw_assistant(f: &mut Frame, app: &App, area: Rect) {
         input_inner,
     );
     if focused && app.overlay.is_none() {
-        let cx = input_inner.x + (prompt.chars().count() as u16).min(input_inner.width - 1);
+        // The pane can be squeezed to nothing on a narrow terminal, so this
+        // must not assume there is a column to put the cursor in.
+        let cx = input_inner.x
+            + (prompt.chars().count() as u16).min(input_inner.width.saturating_sub(1));
         f.set_cursor_position((cx, input_inner.y));
     }
 }
@@ -1095,6 +1098,138 @@ fn draw_help(f: &mut Frame, theme: &Theme, area: Rect) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::{Confirm, ConfirmKind, GitPane, PickItem, Prompt, PromptKind, SearchPane};
+    use crate::config::Config;
+    use crate::testing::TempDir;
+    use crate::vault::Vault;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    fn app_with_every_pane_open() -> (TempDir, App) {
+        let dir = TempDir::with_files(&[
+            ("Welcome.md", "---\ntags: [meta]\n---\n# Welcome\n\nSee [[Other]] and [[Ghost]].\n\n- [ ] a task\n\n```rust\nlet x = 1;\n```\n"),
+            ("Other.md", "# Other\n\nBack to [[Welcome]].\n"),
+        ]);
+        let vault = Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, Config::default());
+        app.sidebar_visible = true;
+        app.context_visible = true;
+        app.chat.messages.push(crate::llm::Message {
+            role: crate::llm::Role::User,
+            text: "a question long enough to need wrapping in a narrow pane".into(),
+        });
+        app.chat.messages.push(crate::llm::Message {
+            role: crate::llm::Role::Assistant,
+            text: "an answer citing [[Welcome]] with `code` and a very long unbroken token                    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .into(),
+        });
+        (dir, app)
+    }
+
+    /// Sizes that starve the layout, including the ones that used to panic.
+    const SIZES: &[(u16, u16)] = &[
+        (200, 60),
+        (120, 34),
+        (80, 24),
+        (60, 20),
+        (48, 18),
+        (40, 15),
+        (30, 12),
+        (20, 10),
+        (12, 6),
+        (8, 4),
+        (4, 2),
+        (1, 1),
+    ];
+
+    fn render(app: &mut App, w: u16, h: u16) {
+        let mut terminal = Terminal::new(TestBackend::new(w, h)).unwrap();
+        terminal.draw(|f| draw(f, app)).unwrap();
+    }
+
+    /// Draw at every hostile size with each pane focused in turn. Focus
+    /// matters: the cursor-placement branches only run for the focused pane,
+    /// and those are where the width arithmetic lives.
+    fn render_every_focus(app: &mut App, w: u16, h: u16) {
+        for focus in [Focus::Editor, Focus::Sidebar, Focus::Assistant] {
+            app.focus = focus;
+            render(app, w, h);
+        }
+    }
+
+    /// A pane squeezed to zero columns must not take the app down. The
+    /// assistant's input cursor used to subtract from a zero width and panic
+    /// on any terminal narrower than about sixty columns.
+    #[test]
+    fn every_pane_survives_a_starved_layout() {
+        let (_dir, mut app) = app_with_every_pane_open();
+        for &(w, h) in SIZES {
+            for visible in [false, true] {
+                app.assistant_visible = visible;
+                for preview in [false, true] {
+                    app.preview = preview;
+                    render_every_focus(&mut app, w, h);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn every_overlay_survives_a_starved_layout() {
+        let (_dir, mut app) = app_with_every_pane_open();
+        let items = vec![PickItem {
+            label: "a note".into(),
+            detail: "a/note.md".into(),
+            key: "a/note.md".into(),
+        }];
+        let overlays = || -> Vec<Overlay> {
+            vec![
+                Overlay::Help,
+                Overlay::Palette(Picker::new("Commands", items.clone())),
+                Overlay::Switcher(Picker::new("Open note", items.clone())),
+                Overlay::Search(SearchPane {
+                    query: "welcome".into(),
+                    hits: vec![],
+                    cursor: 0,
+                }),
+                Overlay::Prompt(Prompt {
+                    kind: PromptKind::NewNote,
+                    title: "New note".into(),
+                    input: "name".into(),
+                    hint: "a hint that is wider than a narrow overlay".into(),
+                }),
+                Overlay::Git(GitPane::default()),
+                Overlay::History(vec![]),
+                Overlay::Diff {
+                    title: "diff · Welcome.md".into(),
+                    body: "@@ -1 +1 @@\n-old\n+new\n".into(),
+                    scroll: 99,
+                },
+                Overlay::Confirm(Confirm {
+                    kind: ConfirmKind::QuitDirty,
+                    message: "unsaved changes, quit anyway?".into(),
+                }),
+            ]
+        };
+        app.assistant_visible = true;
+        for overlay in overlays() {
+            app.overlay = Some(overlay);
+            for &(w, h) in SIZES {
+                render_every_focus(&mut app, w, h);
+            }
+        }
+    }
+
+    #[test]
+    fn a_vault_with_no_notes_renders() {
+        let dir = TempDir::with_files(&[]);
+        let vault = Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, Config::default());
+        app.assistant_visible = true;
+        for &(w, h) in SIZES {
+            render_every_focus(&mut app, w, h);
+        }
+    }
 
     #[test]
     fn compact_scales_word_counts() {
