@@ -224,7 +224,13 @@ fn parse_inline_tags(line: &str) -> Vec<String> {
                 end += 1;
             }
             if end > start {
-                out.push(bytes[start..end].iter().collect::<String>());
+                let tag: String = bytes[start..end].iter().collect();
+                // Obsidian requires a non-numeric character, which is what
+                // keeps "their #1 barrier" and "Lex Fridman #333" out of the
+                // tag list. Without it, ordinary prose becomes tags.
+                if tag.chars().any(|c| !c.is_ascii_digit()) {
+                    out.push(tag);
+                }
             }
             i = end;
         } else {
@@ -359,6 +365,25 @@ mod tests {
         let text = "Ärger\nİstanbul\nSTRASSE\n";
         let note = Note::parse(Path::new("/v"), Path::new("/v/n.md"), text);
         assert_eq!(note.text.lines().count(), note.haystack.lines().count());
+    }
+
+    #[test]
+    fn purely_numeric_hashes_are_not_tags() {
+        let text = "\
+cost is their #1 barrier
+Lex Fridman #333 — Karpathy
+see issue #490 and order #123
+but #a1 and #2026-review and #topic/ai are tags
+";
+        let note = Note::parse(Path::new("/v"), Path::new("/v/n.md"), text);
+        assert_eq!(
+            note.tags,
+            vec![
+                "2026-review".to_string(),
+                "a1".to_string(),
+                "topic/ai".to_string()
+            ]
+        );
     }
 
     #[test]
