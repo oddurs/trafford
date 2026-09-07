@@ -1,11 +1,11 @@
 ---
-id: 46
+id: 33
 key: v0.2
 title: Usable without the manual
 type: milestone
 status: backlog
 depends_on:
-- 45
+- 32
 created: 2026-09-07
 due: 2026-09-20
 ---

@@ -1,11 +1,11 @@
 ---
-id: 34
+id: 44
 title: Build the site from a directory of notes, deterministically
 type: feature
 status: done
 milestone: v1.0
 depends_on:
-- 33
+- 43
 created: 2026-09-07
 updated: 2026-09-07
 priority: p0
@@ -36,7 +36,7 @@ Rules that make the output trustworthy rather than merely present:
 
 - **Deterministic.** Same input, byte-identical output. Sorted iteration
   everywhere, no timestamps in the HTML, no hash of the build machine. This is
-  what lets #0039 assert that the committed generated assets are current.
+  what lets #0049 assert that the committed generated assets are current.
 - **Never partially written.** Build into a temporary directory and swap, so a
   failed build leaves the last good site in place and the dev server never
   serves a half-written page.
@@ -66,14 +66,14 @@ Rules that make the output trustworthy rather than merely present:
 
 ## Notes
 
-Shape depends on the answer to #0032; the acceptance criteria above do not.
+Shape depends on the answer to #0042; the acceptance criteria above do not.
 They are properties of a build, not of a generator, and hold whether the HTML
 comes from mdBook or from this workspace.
 
 The output directory is `target/site` because `target/` is already ignored and
 already the place a build result goes. The deployed artifact is what CI uploads
 from there; nothing generated is committed except assets that must be diffable,
-which is #0038.
+which is #0048.
 
 ## What changed on the way
 

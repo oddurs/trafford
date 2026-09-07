@@ -1,11 +1,11 @@
 ---
-id: 50
+id: 37
 key: v1.0
 title: Safe to depend on
 type: milestone
 status: backlog
 depends_on:
-- 49
+- 36
 created: 2026-09-07
 due: 2027-03-01
 ---

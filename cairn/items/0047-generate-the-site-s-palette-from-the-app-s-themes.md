@@ -1,11 +1,11 @@
 ---
-id: 37
+id: 47
 title: Generate the site's palette from the app's themes
 type: chore
 status: done
 milestone: v1.0
 depends_on:
-- 34
+- 44
 created: 2026-09-07
 updated: 2026-09-07
 priority: p1
@@ -22,7 +22,7 @@ every role the app draws with — `bg`, `surface`, `fg`, `muted`, `accent`,
 
 Typed by hand, the site's blue and the app's blue drift the first time a theme
 is adjusted, and the screenshots on the page — which come out of the real
-binary, per #0038 — stop matching the page around them. That mismatch is
+binary, per #0048 — stop matching the page around them. That mismatch is
 subtle enough to look like a rendering bug in the screenshot.
 
 ## Proposal
@@ -49,7 +49,7 @@ arrive bright white for someone whose system is not.
       generated file
 - [ ] Adding a built-in theme to `ui::theme` adds it to the site with no other
       edit
-- [ ] The generated CSS is deterministic, so #0039 can check it is current
+- [ ] The generated CSS is deterministic, so #0049 can check it is current
 - [ ] The page honours `prefers-color-scheme` on first load and remembers a
       choice after that
 - [ ] Text over every generated background meets WCAG AA, asserted in a test

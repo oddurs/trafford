@@ -280,8 +280,12 @@ impl App {
                     Some(idx) => {
                         let id = self.vault.notes[idx].id.clone();
                         items.push(item("Follow this link", A::OpenNote(id)));
+                        items.push(item("Peek at it", A::Command("peek")));
                     }
-                    None => items.push(item("Write this note…", A::CreateNote(target))),
+                    None => {
+                        items.push(item("Write this note…", A::CreateNote(target)));
+                        items.push(item("Peek at it", A::Command("peek")));
+                    }
                 }
             }
             // The one moment the interface knows exactly what you mean is
@@ -453,6 +457,13 @@ impl App {
             let len = self.sidebar_len();
             self.sidebar_cursor = step(self.sidebar_cursor, delta, len);
         } else if self.panes.editor_hit(c, r) {
+            // Reading has its own place, in rows of the document it actually
+            // draws. Scrolling it against the buffer's layout was what pinned
+            // the wheel: the view moved and was put straight back.
+            if self.preview {
+                self.scroll_preview(delta.signum() * 3);
+                return;
+            }
             // Move the view; the cursor follows only as far as it must to stay
             // on screen, which is how a wheel behaves everywhere else.
             // Scrolling moves by screen rows, so a folded line scrolls by
@@ -576,6 +587,8 @@ impl App {
             let column = c.saturating_sub(text_x) as usize;
             let (line, col) = view.layout.source_of(&view.texts(), visual, column);
             let source = view.source(line);
+            // Clicking is also a way of saying where you are reading.
+            self.preview_row = visual.min(view.layout.row_count().saturating_sub(1));
             self.editor.buf.row = source.min(self.editor.buf.line_count().saturating_sub(1));
             self.editor.buf.col = 0;
             self.editor.buf.goal_col = 0;

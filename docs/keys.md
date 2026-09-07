@@ -50,6 +50,7 @@ is wrong, the program is wrong.
 | `space` | toggle the task on this line |
 | `gm` | the context menu for this line |
 | `enter` | follow the `[[link]]` under the cursor |
+| `K` | peek at that link without leaving |
 | `ctrl-o` | back to the previous note |
 
 ## Mouse — everything is clickable

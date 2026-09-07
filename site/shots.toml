@@ -24,9 +24,11 @@ keys = ["ctrl-p", "w", "e", "l", "c", "o", "m", "e", "enter"]
 
 [[shot]]
 name = "reading"
+# Narrower than the others on purpose: the reading view holds prose to a
+# measure and centres it, so a 120-column terminal is mostly margin.
 title = "The reading view, with a table drawn as a table"
-cols = 120
-rows = 24
+cols = 92
+rows = 22
 keys = ["ctrl-p", "l", "i", "n", "k", "i", "n", "g", "enter", "ctrl-e"]
 
 [[shot]]

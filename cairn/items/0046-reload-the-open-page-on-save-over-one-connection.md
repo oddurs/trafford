@@ -1,11 +1,11 @@
 ---
-id: 36
+id: 46
 title: Reload the open page on save, over one connection
 type: feature
 status: done
 milestone: v1.0
 depends_on:
-- 35
+- 45
 created: 2026-09-07
 updated: 2026-09-07
 priority: p1
@@ -18,7 +18,7 @@ area: site
 The loop that matters when writing docs is save, look, adjust. Without a
 reload, every iteration costs a rebuild command and a manual refresh, and the
 refresh is the part that gets forgotten — you read the old page and conclude
-the edit did nothing, the same failure as serving the wrong worktree in #0035
+the edit did nothing, the same failure as serving the wrong worktree in #0045
 and just as quiet.
 
 ## Proposal

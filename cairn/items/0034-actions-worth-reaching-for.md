@@ -1,11 +1,11 @@
 ---
-id: 47
+id: 34
 key: v0.3
 title: Actions worth reaching for
 type: milestone
 status: backlog
 depends_on:
-- 46
+- 33
 created: 2026-09-07
 due: 2026-10-15
 ---

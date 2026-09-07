@@ -380,7 +380,105 @@ pub enum Overlay {
         scroll: u16,
     },
     Confirm(Confirm),
+    /// A link's destination, without going there.
+    Peek(Peek),
     Help,
+}
+
+/// What a link points at, shown beside it.
+///
+/// Deciding whether to follow a link is most of what browsing a vault is, and
+/// the alternative is commit-then-undo: open it, find it was not what you
+/// wanted, press `ctrl-o`.
+#[derive(Debug, Clone)]
+pub struct Peek {
+    pub title: String,
+    /// Tags and backlink count, or why there is nothing to show.
+    pub detail: String,
+    /// The first paragraph of prose, as written.
+    pub body: String,
+    /// The note to open on `enter`, when there is one.
+    pub open: Option<String>,
+    /// The name to write on `enter`, when the link goes nowhere.
+    pub create: Option<String>,
+}
+
+/// The first paragraph of prose in a note.
+///
+/// Skips the frontmatter, the title, and a leading callout — all three are
+/// things the reader can already see or does not need in a two-line summary.
+/// What is wanted is the sentence that says what the note is about.
+fn first_paragraph(text: &str) -> String {
+    let lines: Vec<String> = text.lines().map(str::to_string).collect();
+    let start = crate::vault::note::frontmatter_block(&lines)
+        .map(|(_, body)| body)
+        .unwrap_or(0);
+    let mut out = String::new();
+    let mut in_code = false;
+    for line in lines.iter().skip(start) {
+        let t = line.trim();
+        if crate::ui::markdown::is_fence(t) {
+            in_code = !in_code;
+            continue;
+        }
+        if in_code {
+            continue;
+        }
+        let skip = t.is_empty()
+            || t.starts_with('#')
+            || t.starts_with('>')
+            || t.starts_with("---")
+            || t.starts_with('|');
+        if skip {
+            if out.is_empty() {
+                continue;
+            }
+            break;
+        }
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(t);
+    }
+    out
+}
+
+#[cfg(test)]
+mod peek_tests {
+    use super::first_paragraph;
+
+    #[test]
+    fn the_first_paragraph_skips_what_the_reader_can_already_see() {
+        let note = "---\ntags:\n  - one\n---\n\n# Title\n\n> [!note]\n> An aside.\n\nThe sentence that says what this is about.\nStill the same paragraph.\n\nA second paragraph.\n";
+        assert_eq!(
+            first_paragraph(note),
+            "The sentence that says what this is about. Still the same paragraph."
+        );
+    }
+
+    #[test]
+    fn a_note_that_is_only_a_heading_has_no_paragraph() {
+        assert_eq!(first_paragraph("# Title\n\n## Section\n"), "");
+    }
+
+    #[test]
+    fn a_fenced_block_is_not_the_summary() {
+        let note = "# T\n\n```sh\nls -la\n```\n\nActual prose.\n";
+        assert_eq!(first_paragraph(note), "Actual prose.");
+    }
+
+    #[test]
+    fn a_note_that_opens_with_prose_still_works() {
+        assert_eq!(first_paragraph("Straight in.\n\nMore.\n"), "Straight in.");
+    }
+
+    #[test]
+    fn a_table_is_not_prose() {
+        assert_eq!(
+            first_paragraph("| a | b |\n| - | - |\n\nProse.\n"),
+            "Prose."
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -601,6 +699,26 @@ pub struct App {
     /// and the note line it names — recorded at draw time so a click can find
     /// it without a second idea of the geometry.
     pub sticky: Vec<(u16, u16, usize)>,
+    /// A note line the next draw should scroll the reading view onto, set when
+    /// a fold changes the document out from under it.
+    pub preview_anchor: Option<usize>,
+    /// Where the reader is in the reading view, as a row of the *preview*
+    /// layout — not a buffer line.
+    ///
+    /// Preview draws a different document from the one the buffer holds:
+    /// concealment shortens lines, frontmatter collapses six rows to two, and a
+    /// fold removes hundreds. Driving the view from `buf.row` meant motion and
+    /// scrolling were computed in coordinates the screen did not use, so the
+    /// wheel did nothing and `G` landed inside a fold. This is authoritative
+    /// while preview is on; `buf.row` follows it.
+    pub preview_row: usize,
+    /// Which panes were open before preview hid them, so leaving preview puts
+    /// the frame back. Cleared when a pane is toggled by hand: at that point
+    /// the reader has said what they want and it is not this program's to
+    /// undo.
+    pub chrome_before_preview: Option<(bool, bool)>,
+    /// True after the first `g` in the reading view, waiting for the second.
+    pub pending_gg: bool,
     /// True after `z`, waiting for the key that says what to fold.
     pub pending_fold: bool,
     /// Which sections are collapsed, per note.
@@ -662,7 +780,11 @@ impl App {
             editor_height: 20,
             panes: Panes::default(),
             folded: crate::ui::fold::Folds::default(),
+            preview_row: 0,
+            preview_anchor: None,
+            chrome_before_preview: None,
             sticky: Vec::new(),
+            pending_gg: false,
             pending_fold: false,
             preview_view: None,
             pending_suspend: None,
@@ -916,6 +1038,7 @@ impl App {
         let Some(id) = self.current.clone() else {
             return;
         };
+        let was = self.preview_source();
         let heads = crate::ui::fold::headings(&self.editor.buf.lines);
         let total = self.editor.buf.line_count();
         // The innermost heading at or above this line whose section still
@@ -938,6 +1061,9 @@ impl App {
         if shut {
             self.editor.buf.goto_line(row);
         }
+        // The drawn document just changed length, so the reader's row now means
+        // something else. Put them back over the line they were looking at.
+        self.keep_preview_place(if shut { row } else { was });
     }
 
     pub fn fold_all(&mut self) {
@@ -946,7 +1072,9 @@ impl App {
         };
         let heads = crate::ui::fold::headings(&self.editor.buf.lines);
         let total = self.editor.buf.line_count();
+        let was = self.preview_source();
         self.folded.fold_all(&id, &heads, total);
+        self.keep_preview_place(was);
         self.set_status("folded everything");
     }
 
@@ -954,8 +1082,126 @@ impl App {
         let Some(id) = self.current.clone() else {
             return;
         };
+        let was = self.preview_source();
         self.folded.unfold_all(&id);
+        self.keep_preview_place(was);
         self.set_status("opened everything");
+    }
+
+    /// The link `K` would act on: the one under the cursor, or failing that the
+    /// first on this line.
+    ///
+    /// The fallback is what makes this work in preview, where a click leaves
+    /// the cursor at column zero because concealment has no honest mapping back
+    /// to a source column. "Tell me about the link on this line" is a rule a
+    /// reader can hold, and it is right whenever there is only one.
+    fn link_to_peek(&self) -> Option<crate::vault::WikiLink> {
+        self.editor.link_under_cursor().or_else(|| {
+            let line = self.editor.buf.line(self.editor.buf.row);
+            crate::vault::note::parse_wikilinks(line, self.editor.buf.row)
+                .into_iter()
+                .next()
+        })
+    }
+
+    /// How many rows the reading view has, and how tall the pane is.
+    ///
+    /// Both come from the last draw. Before the first one there is nothing to
+    /// move through, which the callers treat as "do not move".
+    fn preview_extent(&self) -> Option<(usize, usize)> {
+        let view = self.preview_view.as_ref()?;
+        (view.layout.row_count() > 0).then(|| (view.layout.row_count(), self.editor_height.max(1)))
+    }
+
+    /// Move the reading view by `delta` rows, or to an end when `to` says so.
+    ///
+    /// Everything in preview goes through here: `j`, `k`, `ctrl-d`, `ctrl-u`,
+    /// `gg`, `G` and the wheel. One place that knows what a row is means the
+    /// keyboard and the mouse cannot disagree about it, which is the bug this
+    /// replaces.
+    pub fn scroll_preview(&mut self, delta: isize) -> bool {
+        let Some((rows, _)) = self.preview_extent() else {
+            return false;
+        };
+        let last = rows.saturating_sub(1) as isize;
+        self.preview_row = (self.preview_row as isize + delta).clamp(0, last) as usize;
+        true
+    }
+
+    pub fn preview_page(&mut self, down: bool) -> bool {
+        let Some((_, height)) = self.preview_extent() else {
+            return false;
+        };
+        let step = (height / 2).max(1) as isize;
+        self.scroll_preview(if down { step } else { -step })
+    }
+
+    pub fn preview_to_end(&mut self, end: bool) -> bool {
+        let Some((rows, _)) = self.preview_extent() else {
+            return false;
+        };
+        self.preview_row = if end { rows - 1 } else { 0 };
+        true
+    }
+
+    /// Ask the next draw to put the reading view back over this note line.
+    ///
+    /// Deferred rather than done here: `preview_view` is rebuilt during the
+    /// draw, so at the moment a fold is toggled it still describes the document
+    /// as it was, and resolving against it would answer the wrong question.
+    pub fn keep_preview_place(&mut self, was: usize) {
+        self.preview_anchor = Some(was);
+    }
+
+    /// The note line the reading view is sitting on.
+    pub fn preview_source(&self) -> usize {
+        match &self.preview_view {
+            Some(v) => v.source(v.layout.row(self.preview_row).map(|r| r.line).unwrap_or(0)),
+            None => self.editor.buf.row,
+        }
+    }
+
+    /// Show what a link points at without going there.
+    pub fn peek(&mut self) {
+        let Some(link) = self.link_to_peek() else {
+            self.set_status("no link on this line");
+            return;
+        };
+        let peek = match self.vault.resolve_target(&link.target) {
+            Some(idx) => {
+                let note = &self.vault.notes[idx];
+                let id = note.id.clone();
+                let mut detail = note
+                    .tags
+                    .iter()
+                    .map(|t| format!("#{t}"))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let backlinks = self.vault.backlinks_for(&id).len();
+                if !detail.is_empty() {
+                    detail.push_str("  ·  ");
+                }
+                detail.push_str(&match backlinks {
+                    1 => "1 backlink".to_string(),
+                    n => format!("{n} backlinks"),
+                });
+                Peek {
+                    title: note.title.clone(),
+                    detail,
+                    body: first_paragraph(&note.text),
+                    open: Some(id),
+                    create: None,
+                }
+            }
+            None => Peek {
+                title: link.target.clone(),
+                detail: "no note by that name".into(),
+                body: String::new(),
+                open: None,
+                create: Some(link.target.clone()),
+            },
+        };
+        self.overlay = Some(Overlay::Peek(peek));
     }
 
     /// Open what a wikilink names, jumping to its heading if it named one.

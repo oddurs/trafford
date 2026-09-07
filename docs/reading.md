@@ -12,8 +12,9 @@ what the file *means*.
 
 ![[reading.svg|The reading view: properties, fold markers, and a table drawn as a table]]
 
-Frontmatter has become two rows of properties, the sections have fold markers,
-and the table is a table. The gutter still numbers the lines it came from.
+The side panes are gone, the line numbers with them, and the prose is held to
+a readable measure. Frontmatter has become two rows of properties, the section
+has a fold marker, and the table is a table.
 
 ## What is concealed
 

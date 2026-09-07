@@ -128,13 +128,33 @@ impl Editor {
     /// Takes the row the cursor is *drawn* on rather than the buffer line it
     /// is in, so a folded line scrolls by what is visible.
     pub fn sync_scroll_visual(&mut self, cursor_row: usize, total: usize, height: usize) {
+        self.sync_scroll_margin(cursor_row, total, height, 0)
+    }
+
+    /// The same, keeping `margin` rows of context beyond the cursor where the
+    /// document allows it.
+    ///
+    /// Reading wants this and editing does not: while reading, a line arriving
+    /// hard against the bottom edge and scrolling one row at a time gives no
+    /// sense of what is coming. The margin collapses near the ends of the
+    /// document, so the last line is still reachable.
+    pub fn sync_scroll_margin(
+        &mut self,
+        cursor_row: usize,
+        total: usize,
+        height: usize,
+        margin: usize,
+    ) {
         if height == 0 {
             return;
         }
-        if cursor_row < self.scroll {
-            self.scroll = cursor_row;
-        } else if cursor_row >= self.scroll + height {
-            self.scroll = cursor_row + 1 - height;
+        let margin = margin.min(height.saturating_sub(1) / 2);
+        let top = cursor_row.saturating_sub(margin);
+        let bottom = (cursor_row + margin).min(total.saturating_sub(1));
+        if top < self.scroll {
+            self.scroll = top;
+        } else if bottom >= self.scroll + height {
+            self.scroll = bottom + 1 - height;
         }
         self.scroll = self.scroll.min(total.saturating_sub(1));
     }
@@ -633,6 +653,43 @@ mod tests {
     /// A paragraph that folds into five rows at width 12, then two short
     /// lines. The lines after it are what make an overshoot visible.
     const PARA_AND_TWO: &str = "the quick brown fox jumps over the lazy dog again\nafter\nlast";
+
+    #[test]
+    fn a_scroll_margin_keeps_context_beyond_the_cursor() {
+        let mut ed = editor("x");
+        // 100 rows, a 10-row window, 3 rows of margin.
+        ed.scroll = 0;
+        ed.sync_scroll_margin(6, 100, 10, 3);
+        assert_eq!(ed.scroll, 0, "still room below");
+        ed.sync_scroll_margin(7, 100, 10, 3);
+        assert_eq!(
+            ed.scroll, 1,
+            "the margin pushed the view before the edge did"
+        );
+        ed.sync_scroll_margin(1, 100, 10, 3);
+        assert_eq!(ed.scroll, 0, "and pulls it back going up");
+    }
+
+    #[test]
+    fn the_margin_collapses_at_the_end_of_the_document() {
+        let mut ed = editor("x");
+        ed.scroll = 0;
+        // The last row must stay reachable rather than being held three rows
+        // off the bottom forever.
+        ed.sync_scroll_margin(9, 10, 10, 3);
+        assert_eq!(ed.scroll, 0, "the whole document already fits");
+    }
+
+    #[test]
+    fn zero_margin_is_the_old_behaviour() {
+        let mut a = editor("x");
+        let mut b = editor("x");
+        for row in [0usize, 5, 9, 40, 12, 0] {
+            a.sync_scroll_visual(row, 100, 10);
+            b.sync_scroll_margin(row, 100, 10, 0);
+            assert_eq!(a.scroll, b.scroll, "at row {row}");
+        }
+    }
 
     #[test]
     fn j_steps_one_screen_row_not_one_paragraph() {

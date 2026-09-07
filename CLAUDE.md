@@ -126,11 +126,12 @@ a user's is. Five things about it are load-bearing.
   is the standard way this leaks.
 
 Two smaller things that cost time to find. The screenshots run against a *copy*
-of `site/fixture` in a temp directory: in place, trafford walks up, finds this
-repository, and puts its dirty-file count in the status bar — so every shot
-changed whenever anything else did. And `mono` is not offered as a site theme,
-because it sets its background and foreground to `reset`, meaning "whatever the
-terminal already is", which a browser cannot answer.
+of `site/fixture` in a temp directory, with `HOME` pointed there too: in place,
+trafford walks up, finds this repository, and puts its dirty-file count in the
+status bar, and `Theme::resolve` reads `~/.config/trafford/themes/` before the
+built-ins. And `mono` is not offered as a site theme, because it sets its
+background and foreground to `reset`, meaning "whatever the terminal already
+is", which a browser cannot answer.
 
 ## Obsidian compatibility
 
@@ -171,6 +172,33 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
 - **`#tags` are clickable wherever they are drawn.** `markdown::Target` says
   what a run of text points at — a note, a URL, or a tag — and a tag click sets
   the vault filter, which is what the sidebar's tags tab already did.
+- **Preview has its own cursor, and it is authoritative.** `app.preview_row` is
+  a row of `PreviewView.layout` — not a buffer line. Preview draws a different
+  document from the one the buffer holds (concealment shortens lines,
+  frontmatter collapses six rows to two, a fold removes hundreds), so motion
+  computed in buffer coordinates moves through lines that are not on screen.
+  `buf.row` *follows* it, so leaving preview lands where you were reading and
+  `za` / `K` / the crumb act on a line you can see.
+- **Nothing re-anchors the reading view per draw.** It used to call
+  `sync_scroll_visual` against `buf.row` every frame, which put the view back
+  before anyone saw it move — the wheel appeared dead. When a fold changes the
+  document, `preview_anchor` asks the *next* draw to remap, because
+  `preview_view` is rebuilt during the draw and is stale before it.
+- **Reading is a posture, not a rendering.** `ctrl-e` hides the side panes, drops
+  the line-number gutter, and holds prose to `READING_MEASURE` (72) centred —
+  `wrap_column` defaults to the pane, which is right for an editor and wrong for
+  a reading view. `reading_focus = false` keeps the editor's chrome. Toggling a
+  pane by hand clears `chrome_before_preview`, so leaving preview does not argue
+  with a choice the reader just made.
+- **Peek never touches the network.** A `[text](https://…)` link peeks as the URL
+  and nothing else. Fetching a page to summarise it would turn reading a note
+  into an outbound request, which is not something this program starts doing
+  quietly.
+- **`K` peeks, not `space`.** `space` toggles the task on the current line and
+  the vault has 917 of them. `K` is where vim already puts "tell me about this
+  word", and it falls back to the first link on the line — which is what makes
+  it work in preview, where a click leaves the cursor at column zero because
+  concealment has no honest mapping back to a source column.
 - **The section crumb costs a row, and `panes.editor` has to know.** The heading
   chain is drawn above the text, so `draw_editor` shrinks the rect and assigns
   `app.panes.editor` itself — the assignment in `draw` happens *before* the call

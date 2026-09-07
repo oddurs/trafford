@@ -164,8 +164,16 @@ def to_svg(rows, title):
         line = []
         for (fg, bg, bold, italic, under), text in runs(row):
             if text.strip():
+                # `textLength` forces the run to occupy exactly the cells it
+                # occupied in the terminal. Without it the run is drawn at the
+                # viewer's own advance width, which is only *approximately*
+                # 0.6em — so runs creep and a styled word ends up touching the
+                # one after it. That looked like the program had dropped a
+                # space, which is a bad thing for a screenshot to imply.
                 attrs = [
                     f'x="{PADDING + x * ADVANCE:.1f}"',
+                    f'textLength="{len(text) * ADVANCE:.1f}"',
+                    'lengthAdjust="spacingAndGlyphs"',
                     f'fill="#{fg}"',
                     'xml:space="preserve"',
                 ]

@@ -103,6 +103,10 @@ pub fn draw(f: &mut Frame, app: &mut App) {
             scroll,
         }) => draw_diff(f, &theme, title, body, *scroll, area),
         Some(Overlay::Menu(menu)) => draw_menu(f, &theme, menu, area),
+        Some(Overlay::Peek(peek)) => {
+            draw_peek(f, &theme, peek, area);
+            Rect::default()
+        }
         Some(Overlay::Help) => {
             draw_help(f, &theme, area);
             Rect::default()
@@ -491,12 +495,25 @@ impl PreviewView {
         self.sources.get(line).copied().unwrap_or(0)
     }
 
-    /// The first screen row showing a note line, for scrolling to it.
+    /// The screen row that stands for a note line.
+    ///
+    /// When the line itself is drawn, that row. When it is not — it is inside a
+    /// fold — the row that *contains* it, which is the folded heading above it
+    /// rather than the next thing after it. A reader who folds the section they
+    /// were inside should be looking at that section, not at the one beyond.
     pub fn row_of_source(&self, source: usize) -> usize {
-        let drawn = self
-            .sources
-            .iter()
-            .position(|s| *s >= source)
+        let exact = |numbered_only: bool| {
+            self.sources.iter().enumerate().position(|(i, s)| {
+                *s == source && (!numbered_only || self.numbered.get(i).copied().unwrap_or(true))
+            })
+        };
+        let drawn = exact(true)
+            // A table's rules share their row's line, so prefer the row that
+            // carries the number — content rather than a border.
+            .or_else(|| exact(false))
+            // Not drawn at all: the row that contains it.
+            .or_else(|| self.sources.iter().rposition(|s| *s < source))
+            .or_else(|| self.sources.iter().position(|s| *s > source))
             .unwrap_or(self.lines.len().saturating_sub(1));
         self.layout.first_of(drawn)
     }
@@ -521,6 +538,17 @@ impl PreviewView {
         self.lines.iter().map(|r| r.text.clone()).collect()
     }
 }
+
+/// How wide prose is held while reading, when nothing else says.
+///
+/// `wrap_column` defaults to the pane, which is right for an editor and wrong
+/// for a reading view: prose stretched across a hundred and fifty columns is
+/// harder to read than prose at seventy, not easier.
+const READING_MEASURE: u16 = 72;
+
+/// Rows of context kept beyond the reading cursor, so a line never arrives hard
+/// against the edge with nothing after it.
+const READING_MARGIN: usize = 3;
 
 /// Where one crumb sits: start column, end column, and the note line it names.
 type Crumb = (usize, usize, usize);
@@ -692,7 +720,28 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     // One layout, read by the drawing below, by the caret, by `j`/`k`, and by
     // the mouse. Everything that has an opinion about where a line is on
     // screen reads this and nothing else.
-    let gutter = gutter_width(app.editor.buf.line_count());
+    // Reading is a different posture: no line numbers, and prose held to a
+    // measure rather than stretched across the terminal.
+    let reading = app.preview && app.config.reading_focus;
+    let gutter = if reading {
+        0
+    } else {
+        gutter_width(app.editor.buf.line_count())
+    };
+    let inner = if reading {
+        let measure = match app.config.wrap_column {
+            0 => READING_MEASURE,
+            n => n,
+        }
+        .min(inner.width);
+        Rect {
+            x: inner.x + (inner.width - measure) / 2,
+            width: measure,
+            ..inner
+        }
+    } else {
+        inner
+    };
     let pane_width = inner.width.saturating_sub(gutter) as usize;
     let wrap = app.config.wrap;
     let text_width = wrap_width(pane_width, app.config.wrap_column);
@@ -731,12 +780,38 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     // Scroll against whichever rows are actually on screen. In preview that is
     // the rendered fold, so the top of the cursor's line is the anchor — there
     // is no caret there to keep any finer promise to.
-    let (top_row, total_rows) = match &view {
-        Some(v) => (v.row_of_source(app.editor.buf.row), v.layout.row_count()),
-        None => (cursor_visual.0, app.editor.layout.row_count()),
-    };
-    app.editor
-        .sync_scroll_visual(top_row, total_rows, inner.height as usize);
+    // Preview keeps its own place. Re-anchoring it to the buffer cursor on
+    // every draw is what pinned the wheel: the view was put back before it was
+    // seen. The editor still follows its caret, which is what a caret is for.
+    match &view {
+        Some(v) => {
+            let last = v.layout.row_count().saturating_sub(1);
+            // A fold changed the document since the last draw; put the reader
+            // back over the line they were on rather than over whatever this
+            // row index now points at.
+            if let Some(source) = app.preview_anchor.take() {
+                app.preview_row = v.row_of_source(source);
+            }
+            app.preview_row = app.preview_row.min(last);
+            app.editor.sync_scroll_margin(
+                app.preview_row,
+                v.layout.row_count(),
+                inner.height as usize,
+                READING_MARGIN,
+            );
+            // The buffer cursor follows the reader, so leaving preview lands
+            // where they were and `za`, `K` and the crumb act on a line that is
+            // actually on screen.
+            let source = v.source(v.layout.row(app.preview_row).map(|r| r.line).unwrap_or(0));
+            app.editor.buf.row = source.min(app.editor.buf.line_count().saturating_sub(1));
+            app.editor.buf.col = 0;
+        }
+        None => app.editor.sync_scroll_visual(
+            cursor_visual.0,
+            app.editor.layout.row_count(),
+            inner.height as usize,
+        ),
+    }
 
     // Which note lines are on screen, so the crumb can hide itself when the
     // heading it names is already visible.
@@ -815,10 +890,12 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     // the number belongs to the line, not to each row it folds onto.
     let gutter_span = |row: usize, first: bool, cursor: bool| {
         Span::styled(
-            if first {
-                format!("{:>width$} ", row + 1, width = gutter as usize - 1)
-            } else {
-                " ".repeat(gutter as usize)
+            match gutter {
+                // Reading mode has no gutter at all, so there is nothing to
+                // pad and nothing to number.
+                0 => String::new(),
+                w if first => format!("{:>width$} ", row + 1, width = w as usize - 1),
+                w => " ".repeat(w as usize),
             },
             if cursor {
                 Style::default().fg(theme.accent)
@@ -1891,6 +1968,61 @@ fn draw_menu(f: &mut Frame, theme: &Theme, menu: &crate::app::Menu, area: Rect) 
     inner
 }
 
+/// What a link points at, drawn over the note rather than instead of it.
+///
+/// Centred rather than beside the link: a popover that follows the cursor has
+/// to decide what to do when the cursor is at the bottom of the screen, and a
+/// reader who pressed a key already knows where they pressed it.
+fn draw_peek(f: &mut Frame, theme: &Theme, peek: &crate::app::Peek, area: Rect) {
+    // A measure rather than a percentage: a summary is prose, and prose is
+    // unreadable stretched across a wide terminal.
+    let width = area.width.saturating_sub(8).clamp(0, 64).max(20);
+    let text_width = width.saturating_sub(4) as usize;
+
+    let mut lines: Vec<Line> = vec![Line::from(Span::styled(
+        fit(&peek.title, text_width),
+        Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
+    ))];
+    if !peek.detail.is_empty() {
+        lines.push(Line::from(Span::styled(
+            fit(&peek.detail, text_width),
+            theme.faded(),
+        )));
+    }
+    if !peek.body.is_empty() {
+        lines.push(Line::from(""));
+        for row in wrap_text(&peek.body, text_width).into_iter().take(5) {
+            lines.push(Line::from(Span::styled(
+                row,
+                Style::default().fg(theme.muted),
+            )));
+        }
+    }
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        match (&peek.open, &peek.create) {
+            (Some(_), _) => "enter opens · esc dismisses",
+            (None, Some(_)) => "enter writes it · esc dismisses",
+            _ => "esc dismisses",
+        },
+        theme.faded(),
+    )));
+
+    let height = (lines.len() as u16 + 2).min(area.height);
+    let pct = ((width as u32 * 100) / area.width.max(1) as u32).min(100) as u16;
+    let rect = centred(area, pct, height);
+    f.render_widget(Clear, rect);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(theme.border_focus))
+        .style(Style::default().bg(theme.surface))
+        .title(Span::styled(" peek ", Style::default().fg(theme.accent)));
+    let inner = block.inner(rect);
+    f.render_widget(block, rect);
+    f.render_widget(Paragraph::new(lines), inner);
+}
+
 fn draw_help(f: &mut Frame, theme: &Theme, area: Rect) {
     let rect = centred(area, 62, (HELP.len() as u16 + 3).min(area.height));
     f.render_widget(Clear, rect);
@@ -2263,6 +2395,25 @@ mod tests {
     }
 
     #[test]
+    fn a_line_inside_a_fold_is_stood_for_by_the_heading_that_hides_it() {
+        let src = ["# Title", "intro", "## One", "a", "b", "c", "## Two", "d"];
+        let (_t, open) = preview_of(&src, 40);
+        // Unfolded, line 4 is drawn and stands for itself.
+        assert_eq!(
+            open.source(open.layout.row(open.row_of_source(4)).unwrap().line),
+            4
+        );
+
+        // Folded, line 4 is inside "## One" — which is where the reader
+        // belongs, not "## Two" beyond it.
+        let (_t, shut) = folded_preview_of(&src, 40, &[2]);
+        let row = shut.row_of_source(4);
+        let line = shut.layout.row(row).unwrap().line;
+        assert_eq!(shut.source(line), 2, "the heading that hides it");
+        assert!(shut.lines[line].text.starts_with('▸'));
+    }
+
+    #[test]
     fn a_table_draws_more_lines_than_it_occupies_and_still_maps_back() {
         let (_t, view) = preview_of(
             &[
@@ -2360,6 +2511,227 @@ mod tests {
                 .into(),
         });
         (dir, app)
+    }
+
+    /// Whether a drawn row carries a line number in its gutter.
+    ///
+    /// The gutter sits after a pane border partway along the row, so this looks
+    /// for `│`, then padding, then digits, then a space — the padding is what
+    /// separates it from the sidebar's `│2 notes · …`.
+    fn numbered_row(line: &str) -> bool {
+        line.match_indices('│').any(|(i, _)| {
+            let rest = &line[i + '│'.len_utf8()..];
+            let after = rest.trim_start_matches(' ');
+            if after.len() == rest.len() {
+                return false;
+            }
+            let digits: String = after.chars().take_while(char::is_ascii_digit).collect();
+            !digits.is_empty() && after[digits.len()..].starts_with(' ')
+        })
+    }
+
+    /// Draw at `width`x`height` and read the screen back, the way the pty probe
+    /// does but without leaving the process.
+    fn screen(app: &mut App, width: u16, height: u16) -> Vec<String> {
+        let mut term = Terminal::new(TestBackend::new(width, height)).unwrap();
+        term.draw(|f| draw(f, app)).unwrap();
+        let buf = term.backend().buffer().clone();
+        (0..height)
+            .map(|y| {
+                (0..width)
+                    .map(|x| buf[(x, y)].symbol())
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string()
+            })
+            .collect()
+    }
+
+    /// An app on a note long enough to scroll, already in the reading view.
+    fn reading_a_long_note() -> (TempDir, App) {
+        let mut body = String::from("---\ntags: [meta]\n---\n# Long\n\n");
+        for section in 1..=6 {
+            body.push_str(&format!("## Section {section}\n\n"));
+            for line in 1..=12 {
+                body.push_str(&format!("Paragraph {section}.{line} of the note.\n\n"));
+            }
+        }
+        let dir = TempDir::with_files(&[("Long.md", &body)]);
+        let vault = Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, Config::default());
+        app.open_note("Long.md", false);
+        app.run_command("toggle-preview");
+        screen(&mut app, 90, 14);
+        (dir, app)
+    }
+
+    #[test]
+    fn a_redraw_does_not_undo_a_scroll() {
+        // The bug this replaces: the view was re-anchored to the buffer cursor
+        // on every draw, so the wheel moved it and it was put straight back
+        // before anyone saw.
+        let (_dir, mut app) = reading_a_long_note();
+        assert!(app.scroll_preview(9));
+        assert_eq!(app.preview_row, 9);
+        screen(&mut app, 90, 14);
+        assert_eq!(app.preview_row, 9, "a draw must not move the reader");
+        screen(&mut app, 90, 14);
+        assert_eq!(app.preview_row, 9);
+    }
+
+    #[test]
+    fn reading_motions_move_within_the_drawn_document() {
+        let (_dir, mut app) = reading_a_long_note();
+        let rows = app.preview_view.as_ref().unwrap().layout.row_count();
+        assert!(rows > 40, "the fixture should be longer than a screen");
+
+        app.preview_to_end(true);
+        assert_eq!(app.preview_row, rows - 1, "G goes to the last drawn row");
+        app.preview_to_end(false);
+        assert_eq!(app.preview_row, 0, "gg to the first");
+
+        app.preview_page(true);
+        let paged = app.preview_row;
+        assert!(paged > 0 && paged < rows, "ctrl-d moved by a screenful");
+        app.preview_page(false);
+        assert_eq!(app.preview_row, 0, "and ctrl-u came back");
+    }
+
+    #[test]
+    fn reading_motions_stop_at_the_ends() {
+        let (_dir, mut app) = reading_a_long_note();
+        let rows = app.preview_view.as_ref().unwrap().layout.row_count();
+        app.scroll_preview(-5);
+        assert_eq!(app.preview_row, 0, "not above the first row");
+        app.scroll_preview(rows as isize * 2);
+        assert_eq!(app.preview_row, rows - 1, "nor past the last");
+    }
+
+    #[test]
+    fn the_buffer_cursor_follows_what_is_being_read() {
+        let (_dir, mut app) = reading_a_long_note();
+        app.preview_page(true);
+        app.preview_page(true);
+        screen(&mut app, 90, 14);
+        let read = app.preview_source();
+        assert!(read > 5, "we scrolled somewhere");
+        assert_eq!(
+            app.editor.buf.row, read,
+            "leaving preview must land where the reader was"
+        );
+    }
+
+    #[test]
+    fn folding_under_the_reader_keeps_their_place() {
+        let (_dir, mut app) = reading_a_long_note();
+        app.preview_page(true);
+        app.preview_page(true);
+        screen(&mut app, 90, 14);
+        let before = app.preview_source();
+
+        app.fold_all();
+        screen(&mut app, 90, 14);
+        let after = app.preview_source();
+        assert!(
+            after <= before,
+            "folding should not throw the reader forwards: {before} -> {after}"
+        );
+        // The line they were on is inside the section now standing for it.
+        let heads = crate::ui::fold::headings(&app.editor.buf.lines);
+        let end = crate::ui::fold::section_end(&heads, after, app.editor.buf.line_count());
+        assert!(
+            after <= before && before < end,
+            "{before} should be inside the section at {after}..{end}"
+        );
+    }
+
+    #[test]
+    fn reading_hides_the_panes_and_puts_them_back() {
+        let (_dir, mut app) = app_with_every_pane_open();
+        app.open_note("Welcome.md", false);
+        assert!(screen(&mut app, 120, 20)
+            .iter()
+            .any(|l| l.contains("OUTLINE")));
+
+        app.run_command("toggle-preview");
+        let reading = screen(&mut app, 120, 20);
+        assert!(
+            !reading.iter().any(|l| l.contains("OUTLINE")),
+            "context pane gone"
+        );
+        assert!(
+            !reading.iter().any(|l| l.contains("notes ·")),
+            "sidebar gone"
+        );
+
+        app.run_command("toggle-preview");
+        assert!(screen(&mut app, 120, 20)
+            .iter()
+            .any(|l| l.contains("OUTLINE")));
+    }
+
+    #[test]
+    fn a_pane_toggled_by_hand_while_reading_stays_that_way() {
+        let (_dir, mut app) = app_with_every_pane_open();
+        app.open_note("Welcome.md", false);
+        app.run_command("toggle-preview");
+        app.run_command("toggle-sidebar");
+        assert!(app.sidebar_visible, "the reader asked for it back");
+        app.run_command("toggle-preview");
+        assert!(
+            app.sidebar_visible,
+            "and leaving preview must not argue with them"
+        );
+    }
+
+    #[test]
+    fn reading_drops_the_line_numbers() {
+        let (_dir, mut app) = app_with_every_pane_open();
+        app.open_note("Welcome.md", false);
+        let numbered = |app: &mut App| screen(app, 100, 16).iter().any(|l| numbered_row(l));
+        assert!(numbered(&mut app), "the editor numbers its lines");
+        app.run_command("toggle-preview");
+        assert!(!numbered(&mut app), "reading does not");
+    }
+
+    #[test]
+    fn reading_holds_prose_to_a_measure_on_a_wide_terminal() {
+        let (_dir, mut app) = app_with_every_pane_open();
+        app.open_note("Welcome.md", false);
+        app.run_command("toggle-preview");
+        let wide = screen(&mut app, 160, 16);
+        // Text starts well inside the pane rather than against its left edge.
+        // Every row opens with the pane's border, so measure past it.
+        let indents: Vec<usize> = wide
+            .iter()
+            .filter(|l| l.contains("Welcome") && !l.contains('╭'))
+            .map(|l| {
+                let body = l.trim_start_matches('│');
+                body.len() - body.trim_start().len()
+            })
+            .collect();
+        assert!(!indents.is_empty(), "the note should be on screen");
+        assert!(
+            indents.iter().all(|i| *i > 20),
+            "prose should be centred, indents were {indents:?}"
+        );
+    }
+
+    #[test]
+    fn the_chrome_can_be_kept_for_anyone_who_wants_it() {
+        let (_dir, mut app) = app_with_every_pane_open();
+        app.config.reading_focus = false;
+        app.open_note("Welcome.md", false);
+        app.run_command("toggle-preview");
+        let reading = screen(&mut app, 120, 20);
+        assert!(
+            reading.iter().any(|l| l.contains("OUTLINE")),
+            "the panes stayed"
+        );
+        assert!(
+            reading.iter().any(|l| numbered_row(l)),
+            "and so did the line numbers"
+        );
     }
 
     /// Sizes that starve the layout, including the ones that used to panic.

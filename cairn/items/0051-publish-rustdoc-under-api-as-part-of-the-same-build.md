@@ -1,11 +1,11 @@
 ---
-id: 41
+id: 51
 title: Publish rustdoc under /api as part of the same build
 type: chore
 status: done
 milestone: v1.0
 depends_on:
-- 34
+- 44
 created: 2026-09-07
 updated: 2026-09-07
 priority: p2
@@ -44,7 +44,7 @@ Build rustdoc as part of the site build and publish it under `/api`.
 
 ## Notes
 
-That last criterion is why this is a separate item and not part of #0034:
-`cargo doc` over the workspace is tens of seconds, and #0036 lives or dies
+That last criterion is why this is a separate item and not part of #0044:
+`cargo doc` over the workspace is tens of seconds, and #0046 lives or dies
 on the rebuild staying under a second. Rustdoc is a CI-and-deploy step with a
 local opt-in flag, not part of the watch loop.

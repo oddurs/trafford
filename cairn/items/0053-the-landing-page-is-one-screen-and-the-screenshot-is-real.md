@@ -1,12 +1,12 @@
 ---
-id: 43
+id: 53
 title: The landing page is one screen, and the screenshot is real
 type: feature
 status: done
 milestone: v1.0
 depends_on:
-- 34
-- 38
+- 44
+- 48
 created: 2026-09-07
 updated: 2026-09-07
 priority: p1
@@ -29,7 +29,7 @@ One screen, in this order, and no more above the fold than fits on a laptop:
 1. **What it is**, in a sentence: a terminal knowledge base — an Obsidian-shaped
    vault with a modal editor, git in the status bar, and an assistant that reads
    your notes.
-2. **The interface**, as a generated screenshot from #0038 — the real thing,
+2. **The interface**, as a generated screenshot from #0048 — the real thing,
    at a real size, current with the commit.
 3. **How to get it**, as a command you can copy, with the copy button working
    without a framework.
@@ -55,7 +55,7 @@ Constraints the page has to hold to, which are the parts worth writing down:
 - [ ] Lighthouse: 100 for accessibility and best practices, and no layout shift
 - [ ] The page works with JavaScript disabled, including navigation to the docs
 - [ ] No request leaves the origin
-- [ ] Every colour comes from the generated palette in #0037
+- [ ] Every colour comes from the generated palette in #0047
 - [ ] The screenshot is generated, never pasted
 
 ## Notes
@@ -63,7 +63,7 @@ Constraints the page has to hold to, which are the parts worth writing down:
 The temptation is a terminal animation on the hero. It is expensive, it is a
 dependency, and a still of a real screen with a caption tends to convert
 better than a loop nobody waits out. If it earns its place later it is the cast
-half of #0038, not a bespoke script.
+half of #0048, not a bespoke script.
 
 Content is not the hard part of this item and should not be argued in it. The
 page is a shell with four slots; what goes in them can change weekly without
