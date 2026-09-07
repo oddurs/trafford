@@ -213,6 +213,8 @@ pub enum MenuAction {
         what: &'static str,
         text: String,
     },
+    MoveNote(String),
+    DuplicateNote(String),
 }
 
 #[derive(Debug, Clone)]
@@ -344,6 +346,12 @@ pub enum Overlay {
     Themes(Picker),
     /// A right-click menu, drawn where the click landed.
     Menu(Menu),
+    /// Where to move a note to. Carries the note, since the picker itself only
+    /// knows about folders.
+    MoveTo {
+        picker: Picker,
+        note: String,
+    },
     Search(SearchPane),
     Prompt(Prompt),
     Git(GitPane),

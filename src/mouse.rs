@@ -150,6 +150,8 @@ impl App {
                                     text: id.clone(),
                                 },
                             ),
+                            item("Move to…", A::MoveNote(id.clone())),
+                            item("Duplicate", A::DuplicateNote(id.clone())),
                             item("Rename…", A::RenameNote(id.clone())),
                             item("History", A::HistoryOf(id.clone()))
                                 .unless(!tracked, "not a git repository"),
@@ -160,6 +162,11 @@ impl App {
                 Some(SidebarTarget::Dir(path)) => (
                     short_name(&path),
                     vec![
+                        // There is no "New folder": a vault is indexed from
+                        // its notes, so a folder with nothing in it has
+                        // nowhere to live. Naming `folder/note` here makes
+                        // both at once, which is the same gesture with an
+                        // honest label.
                         item("New note here…", A::NewNoteIn(path.clone())),
                         item("Expand everything under", A::ExpandUnder(path.clone())),
                         item("Collapse", A::CollapseDir(path)),
@@ -356,6 +363,7 @@ impl App {
                     ],
                 ))
             }
+            Overlay::MoveTo { .. } | Overlay::Themes(_) => None,
             Overlay::Search(pane) => {
                 let index = list_index(r, top + 1, pane.hits.len(), pane.cursor, height - 1)?;
                 let hit = pane.hits.get(index)?.clone();

@@ -388,6 +388,50 @@ impl Vault {
         Ok(self.root.join(rel))
     }
 
+    /// Every directory that holds a note, plus the root, for a "move where?"
+    /// picker. Sorted, and the root first since it is the shortest answer.
+    pub fn folders(&self) -> Vec<String> {
+        let mut dirs: Vec<String> = self
+            .notes
+            .iter()
+            .flat_map(|n| crate::tree::ancestors(&n.id))
+            .collect();
+        dirs.sort();
+        dirs.dedup();
+        let mut out = vec![String::new()];
+        out.extend(dirs);
+        out
+    }
+
+    /// Copy a note beside itself under a name nothing else has taken.
+    ///
+    /// The copy is a new note rather than a second home for the old one, so
+    /// its incoming links are deliberately *not* redirected: the original
+    /// keeps them.
+    pub fn duplicate_note(&mut self, id: &str) -> Result<String> {
+        let Some(note) = self.get(id) else {
+            anyhow::bail!("no such note: {id}");
+        };
+        let text = note.text.clone();
+        let stem = note.stem().to_string();
+        let parent = id.rsplit_once('/').map(|(d, _)| d.to_string());
+        for n in 1..1000 {
+            let candidate = match n {
+                1 => format!("{stem} copy"),
+                _ => format!("{stem} copy {n}"),
+            };
+            let rel = match &parent {
+                Some(dir) => format!("{dir}/{candidate}"),
+                None => candidate,
+            };
+            if self.resolve_new_path(&rel)?.exists() {
+                continue;
+            }
+            return self.create_note(&rel, &text);
+        }
+        anyhow::bail!("could not find a free name for a copy of {stem}")
+    }
+
     /// Rename a note on disk and rewrite every `[[link]]` that pointed at it.
     /// Returns the new id and the number of files whose links were updated.
     pub fn rename_note(&mut self, id: &str, new_rel: &str) -> Result<(String, usize)> {
@@ -640,6 +684,101 @@ mod tests {
     fn a_leading_dot_slash_is_harmless() {
         let (_d, mut vault) = scratch(&[]);
         assert_eq!(vault.create_note("./here", "x").unwrap(), "here.md");
+    }
+
+    /// Moving a note is renaming it into another directory, so the tree's
+    /// "Move to…" needs no vault code of its own.
+    ///
+    /// Links survive without being touched: they name the *stem*, and a move
+    /// does not change it. Nothing is rewritten because nothing needs to be —
+    /// which is worth pinning, since a passing rewrite count would otherwise
+    /// look like the interesting result.
+    #[test]
+    fn moving_a_note_between_folders_leaves_its_incoming_links_working() {
+        let (dir, mut vault) = scratch(&[
+            ("inbox/thought.md", "# Thought\n"),
+            ("a.md", "see [[thought]] and [[thought|it]]\n"),
+        ]);
+        let (new_id, touched) = vault
+            .rename_note("inbox/thought.md", "archive/2026/thought")
+            .unwrap();
+
+        assert_eq!(new_id, "archive/2026/thought.md");
+        assert_eq!(
+            touched, 0,
+            "the stem did not change, so no text needed editing"
+        );
+        // Directories that did not exist are created on the way.
+        assert!(dir.path().join("archive/2026/thought.md").exists());
+        assert!(!dir.path().join("inbox/thought.md").exists());
+        let a = std::fs::read_to_string(vault.path_for("a.md")).unwrap();
+        assert!(a.contains("[[thought]]"), "{a}");
+        // What matters is that they still resolve, at the new location.
+        assert_eq!(vault.backlinks_for("archive/2026/thought.md").len(), 2);
+    }
+
+    /// A link written as a path does have to be rewritten, since the path is
+    /// exactly what a move invalidates.
+    #[test]
+    fn moving_a_note_rewrites_links_that_named_its_old_path() {
+        let (_d, mut vault) = scratch(&[
+            ("inbox/thought.md", "# Thought\n"),
+            ("a.md", "see [[inbox/thought]]\n"),
+        ]);
+        vault
+            .rename_note("inbox/thought.md", "archive/thought")
+            .unwrap();
+        let a = std::fs::read_to_string(vault.path_for("a.md")).unwrap();
+        assert!(!a.contains("inbox/thought"), "the stale path survived: {a}");
+        assert_eq!(vault.backlinks_for("archive/thought.md").len(), 1);
+    }
+
+    #[test]
+    fn folders_lists_every_directory_with_the_root_first() {
+        let (_d, vault) = scratch(&[("a/b/deep.md", "x"), ("c/mid.md", "x"), ("top.md", "x")]);
+        assert_eq!(
+            vault.folders(),
+            vec!["".to_string(), "a".into(), "a/b".into(), "c".into()]
+        );
+    }
+
+    #[test]
+    fn duplicating_picks_a_free_name_beside_the_original() {
+        let (_d, mut vault) = scratch(&[("notes/idea.md", "# Idea\n\nbody\n")]);
+        let first = vault.duplicate_note("notes/idea.md").unwrap();
+        assert_eq!(first, "notes/idea copy.md");
+        // Same folder, same content.
+        assert_eq!(vault.get(&first).unwrap().text, "# Idea\n\nbody\n");
+        // A second copy must not overwrite the first.
+        let second = vault.duplicate_note("notes/idea.md").unwrap();
+        assert_eq!(second, "notes/idea copy 2.md");
+        assert_eq!(vault.notes.len(), 3);
+    }
+
+    /// A copy is a new note, not a second home for the old one, so the links
+    /// that pointed at the original keep pointing there.
+    #[test]
+    fn duplicating_does_not_steal_the_original_backlinks() {
+        let (_d, mut vault) = scratch(&[("idea.md", "# Idea\n"), ("a.md", "[[idea]]\n")]);
+        vault.duplicate_note("idea.md").unwrap();
+        assert_eq!(vault.backlinks_for("idea.md").len(), 1);
+        assert_eq!(vault.backlinks_for("idea copy.md").len(), 0);
+    }
+
+    #[test]
+    fn duplicating_a_note_at_the_root_stays_at_the_root() {
+        let (_d, mut vault) = scratch(&[("top.md", "x")]);
+        assert_eq!(vault.duplicate_note("top.md").unwrap(), "top copy.md");
+    }
+
+    #[test]
+    fn moving_onto_an_existing_note_is_refused() {
+        let (_d, mut vault) = scratch(&[("a/n.md", "# n\n"), ("b/n.md", "# other\n")]);
+        let err = vault.rename_note("a/n.md", "b/n").unwrap_err();
+        assert!(err.to_string().contains("already exists"), "{err}");
+        // Both survive a refused move.
+        assert!(vault.get("a/n.md").is_some());
+        assert!(vault.get("b/n.md").is_some());
     }
 
     #[test]
