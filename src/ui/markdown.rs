@@ -23,6 +23,19 @@ pub struct Renderer<'a> {
     pub conceal: bool,
 }
 
+/// What a clickable run of text points at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Target {
+    /// A note in the vault, named by a `[[wikilink]]`.
+    Note,
+    /// A URL, or a `#anchor` into this note.
+    Url,
+    /// A `#tag`. Clicking one filters the vault by it, which is what the tags
+    /// tab in the sidebar already does — the tag was just never clickable where
+    /// it was written.
+    Tag,
+}
+
 /// Somewhere a click can go: the drawn characters, and where they point.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Link {
@@ -37,7 +50,7 @@ pub struct Link {
     /// click in preview could open the note but not land on the section the
     /// link actually named.
     pub heading: Option<String>,
-    pub wiki: bool,
+    pub kind: Target,
 }
 
 impl Link {
@@ -86,6 +99,27 @@ impl Rendered {
                 })
                 .collect(),
         }
+    }
+
+    /// A copy with a clickable run appended, recording where it landed.
+    ///
+    /// Building a line out of pieces rather than scanning one: the properties
+    /// row has no markdown source to parse, only values that should behave like
+    /// the tags a reader is used to clicking.
+    pub fn with_link(&self, text: &str, style: Style, target: String, kind: Target) -> Rendered {
+        let start = self.text.chars().count();
+        let mut out = self.suffixed(text, style);
+        let len = text.chars().count();
+        if len > 0 {
+            out.links.push(Link {
+                start,
+                len,
+                target,
+                heading: None,
+                kind,
+            });
+        }
+        out
     }
 
     /// A copy with `text` after it. Links are unaffected: they are all in front
@@ -163,7 +197,7 @@ impl Out {
         style: Style,
         target: String,
         heading: Option<String>,
-        wiki: bool,
+        kind: Target,
     ) {
         let start = self.width;
         self.push(content, style);
@@ -173,7 +207,7 @@ impl Out {
                 len: self.width - start,
                 target,
                 heading,
-                wiki,
+                kind,
             });
         }
     }
@@ -335,7 +369,7 @@ impl<'a> Renderer<'a> {
                             .add_modifier(Modifier::UNDERLINED),
                         target,
                         heading,
-                        true,
+                        Target::Note,
                     );
                     i = end + 2;
                     continue;
@@ -362,7 +396,7 @@ impl<'a> Renderer<'a> {
                                         .add_modifier(Modifier::UNDERLINED),
                                     url,
                                     None,
-                                    false,
+                                    Target::Url,
                                 );
                             } else {
                                 let bracketed: String = chars[i..=close].iter().collect();
@@ -372,7 +406,7 @@ impl<'a> Renderer<'a> {
                                     Style::default().fg(t.link),
                                     url.clone(),
                                     None,
-                                    false,
+                                    Target::Url,
                                 );
                                 out.push(&parens, t.faded());
                             }
@@ -456,8 +490,9 @@ impl<'a> Renderer<'a> {
                 }
                 if end > i + 1 {
                     let all: String = chars[i..end].iter().collect();
+                    let name: String = chars[i + 1..end].iter().collect();
                     flush!();
-                    out.push(&all, Style::default().fg(t.tag));
+                    out.push_link(&all, Style::default().fg(t.tag), name, None, Target::Tag);
                     i = end;
                     continue;
                 }
@@ -685,7 +720,7 @@ mod tests {
         assert_eq!(rendered.text, "see alias there");
         let link = rendered.link_at(4).expect("a link under column 4");
         assert_eq!(link.target, "Note");
-        assert!(link.wiki);
+        assert_eq!(link.kind, Target::Note);
         assert_eq!((link.start, link.len), (4, 5), "exactly the drawn alias");
         assert!(rendered.link_at(3).is_none(), "the space before it is not");
         assert!(rendered.link_at(9).is_none(), "nor the space after");
@@ -698,7 +733,7 @@ mod tests {
         assert_eq!(rendered.text, "text");
         let link = rendered.link_at(0).unwrap();
         assert_eq!(link.target, "http://x");
-        assert!(!link.wiki);
+        assert_eq!(link.kind, Target::Url);
     }
 
     #[test]

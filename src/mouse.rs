@@ -8,6 +8,7 @@
 use crate::app::{App, ContextTarget, Focus, Overlay, SidebarTab};
 use crate::editor::Mode;
 use crate::tree::Entry;
+use crate::ui::markdown::Target;
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 
 /// Rows a wheel notch moves a list. Three matches most terminals' own scroll.
@@ -587,20 +588,22 @@ impl App {
                 return;
             }
             if let Some(link) = hit {
-                if link.wiki {
-                    self.open_target(&link.target, link.heading);
-                } else if let Some(anchor) = link.target.strip_prefix('#') {
-                    match self.heading_line_here(anchor) {
-                        Some(row) => self.editor.buf.goto_line(row),
-                        None => {
-                            self.set_status(format!("no heading called \"{anchor}\" in this note"))
-                        }
+                match link.kind {
+                    Target::Note => self.open_target(&link.target, link.heading),
+                    Target::Tag => {
+                        self.run_menu_action(crate::app::MenuAction::FilterByTag(link.target))
                     }
-                } else {
-                    self.run_menu_action(crate::app::MenuAction::Spawn {
-                        program: opener().to_string(),
-                        args: vec![link.target.clone()],
-                    });
+                    Target::Url => match link.target.strip_prefix('#') {
+                        Some(anchor) => match self.heading_line_here(anchor) {
+                            Some(row) => self.editor.buf.goto_line(row),
+                            None => self
+                                .set_status(format!("no heading called \"{anchor}\" in this note")),
+                        },
+                        None => self.run_menu_action(crate::app::MenuAction::Spawn {
+                            program: opener().to_string(),
+                            args: vec![link.target.clone()],
+                        }),
+                    },
                 }
             }
             return;

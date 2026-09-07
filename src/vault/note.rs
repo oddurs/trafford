@@ -208,6 +208,33 @@ fn split_frontmatter(text: &str) -> (Vec<(String, String)>, usize) {
     (pairs, 0)
 }
 
+/// The frontmatter block at the top of a note: its key/value pairs, and the
+/// line the body starts on.
+///
+/// `None` when there is none, or when the block is never closed — an
+/// unterminated `---` is not frontmatter, it is a note that begins with a
+/// horizontal rule and should be shown as written.
+pub fn frontmatter_block(lines: &[String]) -> Option<(Vec<(String, String)>, usize)> {
+    if lines.first().map(|l| l.trim_end()) != Some("---") {
+        return None;
+    }
+    let text = lines.join("\n");
+    let (pairs, body) = split_frontmatter(&text);
+    // `split_frontmatter` reports 0 for an unterminated block.
+    if body == 0 {
+        return None;
+    }
+    // A `- item` list accumulates onto an empty value, so it comes back with a
+    // leading comma. That is an artefact of how it is gathered rather than
+    // anything the author wrote, and `parse_tag_list` drops it silently — but
+    // anything that shows the value to a reader has to.
+    let pairs = pairs
+        .into_iter()
+        .map(|(k, v)| (k, v.trim_start_matches(',').to_string()))
+        .collect();
+    Some((pairs, body))
+}
+
 fn parse_tag_list(value: &str) -> Vec<String> {
     value
         .trim_matches(|c| c == '[' || c == ']')
@@ -355,6 +382,35 @@ mod tests {
         let links = parse_wikilinks("xx [[A]]", 0);
         assert_eq!(links[0].col, 3);
         assert_eq!(links[0].len, "[[A]]".chars().count());
+    }
+
+    #[test]
+    fn a_frontmatter_block_reports_where_the_body_starts() {
+        let src: Vec<String> = "---\ntags:\n  - one\n---\n# Body"
+            .split('\n')
+            .map(str::to_string)
+            .collect();
+        let (pairs, body) = frontmatter_block(&src).expect("a block");
+        assert_eq!(body, 4, "the line after the closing ---");
+        assert_eq!(pairs, vec![("tags".to_string(), "one".to_string())]);
+    }
+
+    #[test]
+    fn an_unterminated_block_is_not_frontmatter() {
+        let src: Vec<String> = "---\ntags: one\n# never closed"
+            .split('\n')
+            .map(str::to_string)
+            .collect();
+        assert!(frontmatter_block(&src).is_none());
+    }
+
+    #[test]
+    fn a_rule_partway_down_is_not_frontmatter() {
+        let src: Vec<String> = "# Title\n---\nkey: value\n---"
+            .split('\n')
+            .map(str::to_string)
+            .collect();
+        assert!(frontmatter_block(&src).is_none());
     }
 
     #[test]

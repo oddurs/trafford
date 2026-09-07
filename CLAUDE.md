@@ -104,6 +104,15 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
   by line number, so `reload_after_external` throws it away — another program
   may have moved every line, and a stale fold collapses whatever now sits where
   a heading used to.
+- **Frontmatter is a block too, and preview shows it as properties.** Six lines
+  of YAML become at most two rows: the tags, then everything else dimmed.
+  Nothing is dropped — a key nobody anticipated still appears. The whole block
+  maps back to line 0, because a chip has no YAML line of its own and the top of
+  the block is where a click should land. An unterminated `---` is not
+  frontmatter and is shown as written.
+- **`#tags` are clickable wherever they are drawn.** `markdown::Target` says
+  what a run of text points at — a note, a URL, or a tag — and a tag click sets
+  the vault filter, which is what the sidebar's tags tab already did.
 - **A table is a block, not a line.** `ui::table` parses a header, a separator
   and its rows together, and draws two more lines than the block occupies — so
   preview cannot assume one drawn line per source line. `PreviewView.sources`
