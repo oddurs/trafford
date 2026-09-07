@@ -699,6 +699,41 @@ impl App {
         };
     }
 
+    /// Motion in the reading view. Returns true when the key was used.
+    ///
+    /// Preview draws a different document from the one the buffer holds, so a
+    /// motion that moved `buf.row` would move the cursor through lines that are
+    /// not on screen — which is exactly what it used to do.
+    fn preview_motion(&mut self, key: KeyEvent) -> bool {
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        match key.code {
+            KeyCode::Char('d') if ctrl => self.preview_page(true),
+            KeyCode::Char('u') if ctrl => self.preview_page(false),
+            KeyCode::Char('f') if ctrl => self.preview_page(true),
+            KeyCode::Char('b') if ctrl => self.preview_page(false),
+            _ if ctrl => false,
+            KeyCode::Char('j') | KeyCode::Down => self.scroll_preview(1),
+            KeyCode::Char('k') | KeyCode::Up => self.scroll_preview(-1),
+            KeyCode::PageDown | KeyCode::Char(' ') => self.preview_page(true),
+            KeyCode::PageUp => self.preview_page(false),
+            KeyCode::Char('G') | KeyCode::End => self.preview_to_end(true),
+            KeyCode::Home => self.preview_to_end(false),
+            // `gg`, which needs the second `g` before it means anything.
+            KeyCode::Char('g') if self.pending_gg => {
+                self.pending_gg = false;
+                self.preview_to_end(false)
+            }
+            KeyCode::Char('g') => {
+                self.pending_gg = true;
+                true
+            }
+            _ => {
+                self.pending_gg = false;
+                false
+            }
+        }
+    }
+
     fn editor_key(&mut self, key: KeyEvent) {
         // Folding belongs to the reading view, so `z` is only a prefix there.
         // In the editor it is still free for whatever wants it later.
@@ -713,6 +748,11 @@ impl App {
             && !key.modifiers.contains(KeyModifiers::CONTROL)
         {
             self.peek();
+            return;
+        }
+        // Reading moves the view, not a caret. Anything this does not claim —
+        // `enter`, `K`, `ctrl-o` — still reaches the editor below.
+        if self.preview && self.preview_motion(key) {
             return;
         }
         self.last_edit = std::time::Instant::now();

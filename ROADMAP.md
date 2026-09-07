@@ -50,9 +50,14 @@ The editor stops showing markdown as plain text. Long lines wrap, links read as
 
 ## v0.5 — Reading is its own posture
 
-`##########` 100% · 6 of 6 done · due 2026-12-20
+`########··` 78% · 7 of 9 done · due 2026-12-20
 
 Preview stops being the editor with the syntax hidden. A note's structure folds,
+
+### backlog
+
+- [ ] `0040` Never land the cursor on a line that is folded away <sup>bug · p1 · chrome</sup>
+- [ ] `0041` Say where you are in the note <sup>feature · p1 · chrome</sup>
 
 ### done
 
@@ -62,6 +67,7 @@ Preview stops being the editor with the syntax hidden. A note's structure folds,
 - [x] `0023` Keep the current section's heading on screen <sup>feature · p1 · chrome</sup>
 - [x] `0024` Peek at a link without leaving the note <sup>feature · p1 · chrome</sup>
 - [x] `0025` Let the chrome recede while reading <sup>feature · p2 · chrome</sup>
+- [x] `0039` Give preview a cursor of its own <sup>bug · p0 · chrome</sup>
 
 ## later — Someday
 

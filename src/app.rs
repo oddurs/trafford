@@ -699,11 +699,26 @@ pub struct App {
     /// and the note line it names — recorded at draw time so a click can find
     /// it without a second idea of the geometry.
     pub sticky: Vec<(u16, u16, usize)>,
+    /// A note line the next draw should scroll the reading view onto, set when
+    /// a fold changes the document out from under it.
+    pub preview_anchor: Option<usize>,
+    /// Where the reader is in the reading view, as a row of the *preview*
+    /// layout — not a buffer line.
+    ///
+    /// Preview draws a different document from the one the buffer holds:
+    /// concealment shortens lines, frontmatter collapses six rows to two, and a
+    /// fold removes hundreds. Driving the view from `buf.row` meant motion and
+    /// scrolling were computed in coordinates the screen did not use, so the
+    /// wheel did nothing and `G` landed inside a fold. This is authoritative
+    /// while preview is on; `buf.row` follows it.
+    pub preview_row: usize,
     /// Which panes were open before preview hid them, so leaving preview puts
     /// the frame back. Cleared when a pane is toggled by hand: at that point
     /// the reader has said what they want and it is not this program's to
     /// undo.
     pub chrome_before_preview: Option<(bool, bool)>,
+    /// True after the first `g` in the reading view, waiting for the second.
+    pub pending_gg: bool,
     /// True after `z`, waiting for the key that says what to fold.
     pub pending_fold: bool,
     /// Which sections are collapsed, per note.
@@ -765,8 +780,11 @@ impl App {
             editor_height: 20,
             panes: Panes::default(),
             folded: crate::ui::fold::Folds::default(),
+            preview_row: 0,
+            preview_anchor: None,
             chrome_before_preview: None,
             sticky: Vec::new(),
+            pending_gg: false,
             pending_fold: false,
             preview_view: None,
             pending_suspend: None,
@@ -1020,6 +1038,7 @@ impl App {
         let Some(id) = self.current.clone() else {
             return;
         };
+        let was = self.preview_source();
         let heads = crate::ui::fold::headings(&self.editor.buf.lines);
         let total = self.editor.buf.len();
         // The innermost heading at or above this line whose section still
@@ -1042,6 +1061,9 @@ impl App {
         if shut {
             self.editor.buf.goto_line(row);
         }
+        // The drawn document just changed length, so the reader's row now means
+        // something else. Put them back over the line they were looking at.
+        self.keep_preview_place(if shut { row } else { was });
     }
 
     pub fn fold_all(&mut self) {
@@ -1050,7 +1072,9 @@ impl App {
         };
         let heads = crate::ui::fold::headings(&self.editor.buf.lines);
         let total = self.editor.buf.len();
+        let was = self.preview_source();
         self.folded.fold_all(&id, &heads, total);
+        self.keep_preview_place(was);
         self.set_status("folded everything");
     }
 
@@ -1058,7 +1082,9 @@ impl App {
         let Some(id) = self.current.clone() else {
             return;
         };
+        let was = self.preview_source();
         self.folded.unfold_all(&id);
+        self.keep_preview_place(was);
         self.set_status("opened everything");
     }
 
@@ -1076,6 +1102,63 @@ impl App {
                 .into_iter()
                 .next()
         })
+    }
+
+    /// How many rows the reading view has, and how tall the pane is.
+    ///
+    /// Both come from the last draw. Before the first one there is nothing to
+    /// move through, which the callers treat as "do not move".
+    fn preview_extent(&self) -> Option<(usize, usize)> {
+        let view = self.preview_view.as_ref()?;
+        (view.layout.len() > 0).then(|| (view.layout.len(), self.editor_height.max(1)))
+    }
+
+    /// Move the reading view by `delta` rows, or to an end when `to` says so.
+    ///
+    /// Everything in preview goes through here: `j`, `k`, `ctrl-d`, `ctrl-u`,
+    /// `gg`, `G` and the wheel. One place that knows what a row is means the
+    /// keyboard and the mouse cannot disagree about it, which is the bug this
+    /// replaces.
+    pub fn scroll_preview(&mut self, delta: isize) -> bool {
+        let Some((rows, _)) = self.preview_extent() else {
+            return false;
+        };
+        let last = rows.saturating_sub(1) as isize;
+        self.preview_row = (self.preview_row as isize + delta).clamp(0, last) as usize;
+        true
+    }
+
+    pub fn preview_page(&mut self, down: bool) -> bool {
+        let Some((_, height)) = self.preview_extent() else {
+            return false;
+        };
+        let step = (height / 2).max(1) as isize;
+        self.scroll_preview(if down { step } else { -step })
+    }
+
+    pub fn preview_to_end(&mut self, end: bool) -> bool {
+        let Some((rows, _)) = self.preview_extent() else {
+            return false;
+        };
+        self.preview_row = if end { rows - 1 } else { 0 };
+        true
+    }
+
+    /// Ask the next draw to put the reading view back over this note line.
+    ///
+    /// Deferred rather than done here: `preview_view` is rebuilt during the
+    /// draw, so at the moment a fold is toggled it still describes the document
+    /// as it was, and resolving against it would answer the wrong question.
+    pub fn keep_preview_place(&mut self, was: usize) {
+        self.preview_anchor = Some(was);
+    }
+
+    /// The note line the reading view is sitting on.
+    pub fn preview_source(&self) -> usize {
+        match &self.preview_view {
+            Some(v) => v.source(v.layout.row(self.preview_row).map(|r| r.line).unwrap_or(0)),
+            None => self.editor.buf.row,
+        }
     }
 
     /// Show what a link points at without going there.
