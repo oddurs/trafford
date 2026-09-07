@@ -203,6 +203,17 @@ table. Every one of these breaks the same assumption — that a line of source i
 a line of screen — so the model underneath them comes first."""
 
 [[milestone]]
+name = "v0.5"
+title = "Reading is its own posture"
+due = "2026-12-20"
+description = """
+Preview stops being the editor with the syntax hidden. A note's structure folds,
+its properties stop being seven lines of YAML, its callouts look like callouts,
+and you can look at a link without leaving the page. Measured against the vault
+rather than guessed at: a heading every six lines of body means these notes are
+reference material, and reference material is navigated, not read through."""
+
+[[milestone]]
 name = "v1.0"
 title = "Safe to depend on"
 due = "2027-03-01"

@@ -56,11 +56,39 @@ a line of screen — so the model underneath them comes first.
 - [x] `0018` Draw markdown tables as tables <sup>feature · p2 · markdown</sup>
 - [x] `0019` Retire the character-preserving invariant <sup>docs · p2 · docs</sup>
 
+## v0.5 — Reading is its own posture
+
+`··········` 0% · 0 of 6 done · due 2026-12-20
+
+Preview stops being the editor with the syntax hidden. A note's structure folds,
+its properties stop being seven lines of YAML, its callouts look like callouts,
+and you can look at a link without leaving the page. Measured against the vault
+rather than guessed at: a heading every six lines of body means these notes are
+reference material, and reference material is navigated, not read through.
+
+### backlog
+
+- [ ] `0020` Fold a note's sections in the reading view <sup>feature · p0 · markdown</sup>
+- [ ] `0021` Show frontmatter as properties, not as seven lines of YAML <sup>feature · p1 · markdown</sup>
+- [ ] `0022` Draw callouts as callouts <sup>feature · p1 · markdown</sup>
+- [ ] `0023` Keep the current section's heading on screen <sup>feature · p1 · chrome</sup>
+- [ ] `0024` Peek at a link without leaving the note <sup>feature · p1 · chrome</sup>
+- [ ] `0025` Let the chrome recede while reading <sup>feature · p2 · chrome</sup>
+
 ## later — Someday
 
-`##########` 100% · 1 of 1 done
+`##········` 14% · 1 of 7 done
 
 Good ideas without a date yet.
+
+### backlog
+
+- [ ] `0026` A rail showing the shape of the note beside it <sup>feature · p2 · chrome</sup>
+- [ ] `0027` Every unfinished task in the vault, in one place <sup>feature · p2 · vault</sup>
+- [ ] `0028` Show where you came from, and reopen where you left off <sup>feature · p3 · chrome</sup>
+- [ ] `0029` Read two notes side by side <sup>feature · p3 · chrome</sup>
+- [ ] `0030` Should the editor render in place, the way Obsidian does? <sup>spike · p2 · editor</sup>
+- [ ] `0031` Inline images and dataview, and why not yet <sup>docs · p3 · docs</sup>
 
 ### done
 
