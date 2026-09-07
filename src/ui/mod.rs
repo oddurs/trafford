@@ -526,6 +526,13 @@ impl PreviewView {
     }
 }
 
+/// How wide prose is held while reading, when nothing else says.
+///
+/// `wrap_column` defaults to the pane, which is right for an editor and wrong
+/// for a reading view: prose stretched across a hundred and fifty columns is
+/// harder to read than prose at seventy, not easier.
+const READING_MEASURE: u16 = 72;
+
 /// Where one crumb sits: start column, end column, and the note line it names.
 type Crumb = (usize, usize, usize);
 
@@ -696,7 +703,28 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     // One layout, read by the drawing below, by the caret, by `j`/`k`, and by
     // the mouse. Everything that has an opinion about where a line is on
     // screen reads this and nothing else.
-    let gutter = gutter_width(app.editor.buf.len());
+    // Reading is a different posture: no line numbers, and prose held to a
+    // measure rather than stretched across the terminal.
+    let reading = app.preview && app.config.reading_focus;
+    let gutter = if reading {
+        0
+    } else {
+        gutter_width(app.editor.buf.len())
+    };
+    let inner = if reading {
+        let measure = match app.config.wrap_column {
+            0 => READING_MEASURE,
+            n => n,
+        }
+        .min(inner.width);
+        Rect {
+            x: inner.x + (inner.width - measure) / 2,
+            width: measure,
+            ..inner
+        }
+    } else {
+        inner
+    };
     let pane_width = inner.width.saturating_sub(gutter) as usize;
     let wrap = app.config.wrap;
     let text_width = wrap_width(pane_width, app.config.wrap_column);
@@ -819,10 +847,12 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     // the number belongs to the line, not to each row it folds onto.
     let gutter_span = |row: usize, first: bool, cursor: bool| {
         Span::styled(
-            if first {
-                format!("{:>width$} ", row + 1, width = gutter as usize - 1)
-            } else {
-                " ".repeat(gutter as usize)
+            match gutter {
+                // Reading mode has no gutter at all, so there is nothing to
+                // pad and nothing to number.
+                0 => String::new(),
+                w if first => format!("{:>width$} ", row + 1, width = w as usize - 1),
+                w => " ".repeat(w as usize),
             },
             if cursor {
                 Style::default().fg(theme.accent)
@@ -2415,6 +2445,129 @@ mod tests {
                 .into(),
         });
         (dir, app)
+    }
+
+    /// Whether a drawn row carries a line number in its gutter.
+    ///
+    /// The gutter sits after a pane border partway along the row, so this looks
+    /// for `│`, then padding, then digits, then a space — the padding is what
+    /// separates it from the sidebar's `│2 notes · …`.
+    fn numbered_row(line: &str) -> bool {
+        line.match_indices('│').any(|(i, _)| {
+            let rest = &line[i + '│'.len_utf8()..];
+            let after = rest.trim_start_matches(' ');
+            if after.len() == rest.len() {
+                return false;
+            }
+            let digits: String = after.chars().take_while(char::is_ascii_digit).collect();
+            !digits.is_empty() && after[digits.len()..].starts_with(' ')
+        })
+    }
+
+    /// Draw at `width`x`height` and read the screen back, the way the pty probe
+    /// does but without leaving the process.
+    fn screen(app: &mut App, width: u16, height: u16) -> Vec<String> {
+        let mut term = Terminal::new(TestBackend::new(width, height)).unwrap();
+        term.draw(|f| draw(f, app)).unwrap();
+        let buf = term.backend().buffer().clone();
+        (0..height)
+            .map(|y| {
+                (0..width)
+                    .map(|x| buf[(x, y)].symbol())
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn reading_hides_the_panes_and_puts_them_back() {
+        let (_dir, mut app) = app_with_every_pane_open();
+        app.open_note("Welcome.md", false);
+        assert!(screen(&mut app, 120, 20)
+            .iter()
+            .any(|l| l.contains("OUTLINE")));
+
+        app.run_command("toggle-preview");
+        let reading = screen(&mut app, 120, 20);
+        assert!(
+            !reading.iter().any(|l| l.contains("OUTLINE")),
+            "context pane gone"
+        );
+        assert!(
+            !reading.iter().any(|l| l.contains("notes ·")),
+            "sidebar gone"
+        );
+
+        app.run_command("toggle-preview");
+        assert!(screen(&mut app, 120, 20)
+            .iter()
+            .any(|l| l.contains("OUTLINE")));
+    }
+
+    #[test]
+    fn a_pane_toggled_by_hand_while_reading_stays_that_way() {
+        let (_dir, mut app) = app_with_every_pane_open();
+        app.open_note("Welcome.md", false);
+        app.run_command("toggle-preview");
+        app.run_command("toggle-sidebar");
+        assert!(app.sidebar_visible, "the reader asked for it back");
+        app.run_command("toggle-preview");
+        assert!(
+            app.sidebar_visible,
+            "and leaving preview must not argue with them"
+        );
+    }
+
+    #[test]
+    fn reading_drops_the_line_numbers() {
+        let (_dir, mut app) = app_with_every_pane_open();
+        app.open_note("Welcome.md", false);
+        let numbered = |app: &mut App| screen(app, 100, 16).iter().any(|l| numbered_row(l));
+        assert!(numbered(&mut app), "the editor numbers its lines");
+        app.run_command("toggle-preview");
+        assert!(!numbered(&mut app), "reading does not");
+    }
+
+    #[test]
+    fn reading_holds_prose_to_a_measure_on_a_wide_terminal() {
+        let (_dir, mut app) = app_with_every_pane_open();
+        app.open_note("Welcome.md", false);
+        app.run_command("toggle-preview");
+        let wide = screen(&mut app, 160, 16);
+        // Text starts well inside the pane rather than against its left edge.
+        // Every row opens with the pane's border, so measure past it.
+        let indents: Vec<usize> = wide
+            .iter()
+            .filter(|l| l.contains("Welcome") && !l.contains('╭'))
+            .map(|l| {
+                let body = l.trim_start_matches('│');
+                body.len() - body.trim_start().len()
+            })
+            .collect();
+        assert!(!indents.is_empty(), "the note should be on screen");
+        assert!(
+            indents.iter().all(|i| *i > 20),
+            "prose should be centred, indents were {indents:?}"
+        );
+    }
+
+    #[test]
+    fn the_chrome_can_be_kept_for_anyone_who_wants_it() {
+        let (_dir, mut app) = app_with_every_pane_open();
+        app.config.reading_focus = false;
+        app.open_note("Welcome.md", false);
+        app.run_command("toggle-preview");
+        let reading = screen(&mut app, 120, 20);
+        assert!(
+            reading.iter().any(|l| l.contains("OUTLINE")),
+            "the panes stayed"
+        );
+        assert!(
+            reading.iter().any(|l| numbered_row(l)),
+            "and so did the line numbers"
+        );
     }
 
     /// Sizes that starve the layout, including the ones that used to panic.
