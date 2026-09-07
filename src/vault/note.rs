@@ -44,6 +44,22 @@ pub struct Note {
 }
 
 impl Note {
+    /// The line a `#anchor` names, matching either the heading's text or its
+    /// slug — a link may be written either way, and both should work.
+    ///
+    /// Duplicate headings resolve to the first, as GitHub does.
+    pub fn heading_line(&self, anchor: &str) -> Option<usize> {
+        let anchor = anchor.trim();
+        if anchor.is_empty() {
+            return None;
+        }
+        let wanted = slug(anchor);
+        self.headings
+            .iter()
+            .find(|h| h.text.eq_ignore_ascii_case(anchor) || slug(&h.text) == wanted)
+            .map(|h| h.line)
+    }
+
     /// The filename stem — what `[[Bare Links]]` match against.
     pub fn stem(&self) -> &str {
         self.path
@@ -127,6 +143,29 @@ impl Note {
 fn is_placeholder(text: &str) -> bool {
     let t = text.trim();
     (t.contains("<%") && t.contains("%>")) || (t.contains("{{") && t.contains("}}"))
+}
+
+/// A heading turned into the anchor a link would name it by.
+///
+/// GitHub's rule, because that is what people's notes are already written
+/// against: lowercase, punctuation dropped, spaces to hyphens. Matching it
+/// exactly matters more than any improvement on it would.
+pub fn slug(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut last_was_hyphen = true; // trims leading hyphens
+    for c in text.chars() {
+        if c.is_alphanumeric() {
+            out.extend(c.to_lowercase());
+            last_was_hyphen = false;
+        } else if (c.is_whitespace() || c == '-' || c == '_') && !last_was_hyphen {
+            out.push('-');
+            last_was_hyphen = true;
+        }
+    }
+    while out.ends_with('-') {
+        out.pop();
+    }
+    out
 }
 
 pub fn relative_id(root: &Path, path: &Path) -> String {
@@ -384,6 +423,45 @@ but #a1 and #2026-review and #topic/ai are tags
                 "topic/ai".to_string()
             ]
         );
+    }
+
+    #[test]
+    fn slugs_follow_the_rule_notes_are_written_against() {
+        assert_eq!(
+            slug("Phase 1: Foundations (Months 1-3)"),
+            "phase-1-foundations-months-1-3"
+        );
+        assert_eq!(
+            slug("The three-layer architecture"),
+            "the-three-layer-architecture"
+        );
+        assert_eq!(
+            slug("Why this works (the bookkeeping)"),
+            "why-this-works-the-bookkeeping"
+        );
+        assert_eq!(slug("  Leading and trailing  "), "leading-and-trailing");
+        assert_eq!(slug("Karpathy's LLM Wiki"), "karpathys-llm-wiki");
+        // Runs of punctuation collapse rather than leaving empty segments.
+        assert_eq!(slug("A -- B"), "a-b");
+        assert_eq!(slug("!!!"), "");
+    }
+
+    #[test]
+    fn an_anchor_matches_a_heading_by_slug_or_by_text() {
+        let text = "# Top\n\n## Phase 1: Foundations\n\nbody\n### Deep Dive\n";
+        let note = Note::parse(Path::new("/v"), Path::new("/v/n.md"), text);
+        assert_eq!(note.heading_line("phase-1-foundations"), Some(2));
+        assert_eq!(note.heading_line("Phase 1: Foundations"), Some(2));
+        assert_eq!(note.heading_line("deep-dive"), Some(5));
+        assert_eq!(note.heading_line("nothing here"), None);
+        assert_eq!(note.heading_line(""), None);
+    }
+
+    #[test]
+    fn a_duplicated_heading_resolves_to_the_first() {
+        let text = "## Goal\n\na\n## Goal\n\nb\n";
+        let note = Note::parse(Path::new("/v"), Path::new("/v/n.md"), text);
+        assert_eq!(note.heading_line("goal"), Some(0));
     }
 
     #[test]

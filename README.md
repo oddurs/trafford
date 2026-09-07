@@ -72,6 +72,10 @@ uses. `enter` follows the link under the cursor; if it points at nothing yet,
 you get a prompt to write it. Renaming a note rewrites every link that pointed
 at it.
 
+A link into the same note works too: `enter` on `[Phase 1](#phase-1)` jumps to
+that heading, matching the slug the way GitHub does, and `[[Note#Heading]]`
+opens the note *at* the heading rather than at the top.
+
 **Backlinks.** Always in the right-hand pane, with the line each one came from.
 `ctrl-t` turns them into a jump list. Links that point at notes you have not
 written yet are listed as "unwritten" — the vault's growing edge.

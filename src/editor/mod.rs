@@ -472,6 +472,15 @@ impl Editor {
         Some(self.buf.yank_lines(start, end - start + 1))
     }
 
+    /// The `#anchor` of a markdown link under the cursor, if the cursor is
+    /// inside one — `[Phase 1](#phase-1)` gives `phase-1`.
+    ///
+    /// Only same-note anchors. A `[text](path.md)` is a different thing and is
+    /// not followed here.
+    pub fn anchor_under_cursor(&self) -> Option<String> {
+        anchor_at(self.buf.line(self.buf.row), self.buf.col)
+    }
+
     /// The `[[link]]` under the cursor, if any.
     pub fn link_under_cursor(&self) -> Option<crate::vault::WikiLink> {
         let line = self.buf.line(self.buf.row);
@@ -479,6 +488,45 @@ impl Editor {
             .into_iter()
             .find(|l| self.buf.col >= l.col && self.buf.col < l.col + l.len)
     }
+}
+
+/// Find `[text](#anchor)` spanning character `col`, returning the anchor.
+///
+/// Deliberately small: a full markdown link parser is not needed to answer
+/// "is the cursor inside a link to a heading in this note".
+pub fn anchor_at(line: &str, col: usize) -> Option<String> {
+    let chars: Vec<char> = line.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] != '[' {
+            i += 1;
+            continue;
+        }
+        // A `[[wikilink]]` is not a markdown link; leave it to the other path.
+        if chars.get(i + 1) == Some(&'[') {
+            i += 2;
+            continue;
+        }
+        let Some(close) = chars[i..].iter().position(|c| *c == ']').map(|p| p + i) else {
+            break;
+        };
+        if chars.get(close + 1) != Some(&'(') || chars.get(close + 2) != Some(&'#') {
+            i = close + 1;
+            continue;
+        }
+        let Some(paren) = chars[close..]
+            .iter()
+            .position(|c| *c == ')')
+            .map(|p| p + close)
+        else {
+            break;
+        };
+        if col >= i && col <= paren {
+            return Some(chars[close + 3..paren].iter().collect());
+        }
+        i = paren + 1;
+    }
+    None
 }
 
 #[cfg(test)]
@@ -568,6 +616,43 @@ mod tests {
         let action = ed.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert_eq!(action, EditorAction::FollowLink);
         assert_eq!(ed.link_under_cursor().unwrap().target, "Target");
+    }
+
+    #[test]
+    fn an_anchor_link_is_found_from_anywhere_inside_it() {
+        let line = "- [Phase 1: Foundations](#phase-1-foundations) and more";
+        // Every column from the opening bracket to the closing paren.
+        for col in 2..=44 {
+            assert_eq!(
+                anchor_at(line, col).as_deref(),
+                Some("phase-1-foundations"),
+                "col {col}"
+            );
+        }
+        assert_eq!(anchor_at(line, 1), None, "before the link");
+        assert_eq!(anchor_at(line, 50), None, "after the link");
+    }
+
+    #[test]
+    fn a_wikilink_is_not_mistaken_for_an_anchor() {
+        assert_eq!(anchor_at("see [[Note#Heading]] here", 8), None);
+        // A wikilink before a real anchor must not swallow it.
+        let line = "[[Note]] then [x](#y)";
+        assert_eq!(anchor_at(line, 17).as_deref(), Some("y"));
+    }
+
+    #[test]
+    fn a_link_to_a_file_is_not_an_anchor() {
+        assert_eq!(anchor_at("[the note](other.md)", 5), None);
+        assert_eq!(anchor_at("[a site](https://example.com)", 5), None);
+    }
+
+    #[test]
+    fn unclosed_link_syntax_does_not_hang_or_panic() {
+        for line in ["[unclosed", "[a](", "[a](#", "[[", "]("] {
+            let _ = anchor_at(line, 0);
+            let _ = anchor_at(line, line.chars().count().saturating_sub(1));
+        }
     }
 
     #[test]
