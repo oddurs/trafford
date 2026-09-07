@@ -515,6 +515,8 @@ pub struct Panes {
     pub assistant_input: Rect,
     /// The list area of whatever overlay is open.
     pub overlay: Rect,
+    /// The screen row the section crumb was drawn on, when there was one.
+    pub sticky_y: Option<u16>,
 }
 
 fn hit(area: Rect, column: u16, row: u16) -> bool {
@@ -595,6 +597,10 @@ pub struct App {
     pub editor_height: usize,
     /// Where the panes were drawn, for hit-testing the mouse.
     pub panes: Panes,
+    /// Where each crumb of the section header sits — start column, end column,
+    /// and the note line it names — recorded at draw time so a click can find
+    /// it without a second idea of the geometry.
+    pub sticky: Vec<(u16, u16, usize)>,
     /// True after `z`, waiting for the key that says what to fold.
     pub pending_fold: bool,
     /// Which sections are collapsed, per note.
@@ -656,6 +662,7 @@ impl App {
             editor_height: 20,
             panes: Panes::default(),
             folded: crate::ui::fold::Folds::default(),
+            sticky: Vec::new(),
             pending_fold: false,
             preview_view: None,
             pending_suspend: None,

@@ -1321,6 +1321,7 @@ pub const HELP: &[(&str, &str)] = &[
     ("click a folder", "opens or closes it"),
     ("click a note", "opens it, in the tree or in any list"),
     ("click the outline", "jumps to that heading"),
+    ("click a section crumb", "jumps to that heading"),
     ("click a ▸ or ▾", "opens or shuts that section"),
     (
         "click a backlink",
