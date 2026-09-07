@@ -179,7 +179,15 @@ fn stream(model: &str, system: &str, history: &[Message], tx: &Sender<Event>) ->
         Err(e) => bail!(e.to_string()),
     };
 
-    let reader = BufReader::new(response.into_reader());
+    read_stream(BufReader::new(response.into_reader()), tx)
+}
+
+/// Turn an SSE body into [`Event::Delta`]s on `tx`. Split out from the HTTP
+/// call so the parsing can be tested against a canned transcript.
+///
+/// Unrecognised events and unparseable payloads are skipped: the wire format
+/// gains event types over time, and one bad frame should not end a turn.
+pub fn read_stream(reader: impl BufRead, tx: &Sender<Event>) -> Result<()> {
     for line in reader.lines() {
         let line = line?;
         let Some(payload) = line.strip_prefix("data:") else {
@@ -296,5 +304,119 @@ mod tests {
         let ev: StreamEvent = serde_json::from_str(payload).unwrap();
         assert_eq!(ev.kind, "content_block_delta");
         assert_eq!(ev.delta.unwrap().text.unwrap(), "hi");
+    }
+
+    // ---- read_stream ---------------------------------------------------
+
+    /// Run a canned SSE body through the reader and collect what came out.
+    fn drain(body: &str) -> (Result<()>, String) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let result = read_stream(std::io::Cursor::new(body.as_bytes().to_vec()), &tx);
+        drop(tx);
+        let text = rx
+            .into_iter()
+            .map(|e| match e {
+                Event::Delta(t) => t,
+                other => panic!("unexpected event: {other:?}"),
+            })
+            .collect();
+        (result, text)
+    }
+
+    /// The shape the API actually sends, down to the event: lines and the
+    /// bookkeeping frames around the deltas.
+    const TRANSCRIPT: &str = concat!(
+        "event: message_start\n",
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"role\":\"assistant\"}}\n",
+        "\n",
+        "event: content_block_start\n",
+        "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n",
+        "\n",
+        "event: content_block_delta\n",
+        "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Your vault \"}}\n",
+        "\n",
+        "event: content_block_delta\n",
+        "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"has [[Notes]].\"}}\n",
+        "\n",
+        "event: content_block_stop\n",
+        "data: {\"type\":\"content_block_stop\",\"index\":0}\n",
+        "\n",
+        "event: message_delta\n",
+        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}\n",
+        "\n",
+        "event: message_stop\n",
+        "data: {\"type\":\"message_stop\"}\n",
+        "\n",
+    );
+
+    #[test]
+    fn a_full_transcript_yields_only_the_text_deltas() {
+        let (result, text) = drain(TRANSCRIPT);
+        assert!(result.is_ok(), "{result:?}");
+        assert_eq!(text, "Your vault has [[Notes]].");
+    }
+
+    #[test]
+    fn ping_and_unknown_event_types_are_ignored() {
+        let body = concat!(
+            "event: ping\n",
+            "data: {\"type\":\"ping\"}\n",
+            "\n",
+            "data: {\"type\":\"some_future_event\",\"whatever\":1}\n",
+            "data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}\n",
+        );
+        let (result, text) = drain(body);
+        assert!(result.is_ok());
+        assert_eq!(text, "ok");
+    }
+
+    #[test]
+    fn a_mid_stream_error_frame_stops_the_turn_with_its_message() {
+        let body = concat!(
+            "data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"partial\"}}\n",
+            "data: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}\n",
+            "data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"never\"}}\n",
+        );
+        let (result, text) = drain(body);
+        // Text received before the error is kept; nothing after it is read.
+        assert_eq!(text, "partial");
+        assert_eq!(result.unwrap_err().to_string(), "Overloaded");
+    }
+
+    #[test]
+    fn a_malformed_frame_does_not_end_the_stream() {
+        let body = concat!(
+            "data: {not json at all\n",
+            "data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"still here\"}}\n",
+        );
+        let (result, text) = drain(body);
+        assert!(result.is_ok());
+        assert_eq!(text, "still here");
+    }
+
+    #[test]
+    fn done_sentinels_and_blank_data_lines_are_skipped() {
+        let body = "data:\ndata: [DONE]\n";
+        let (result, text) = drain(body);
+        assert!(result.is_ok());
+        assert!(text.is_empty());
+    }
+
+    #[test]
+    fn deltas_with_no_text_field_contribute_nothing() {
+        // `message_delta` carries a delta object without a `text` key.
+        let body =
+            "data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"input_json_delta\"}}\n";
+        let (result, text) = drain(body);
+        assert!(result.is_ok());
+        assert!(text.is_empty());
+    }
+
+    #[test]
+    fn a_dropped_receiver_ends_the_read_without_an_error() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        drop(rx);
+        let result = read_stream(std::io::Cursor::new(TRANSCRIPT.as_bytes().to_vec()), &tx);
+        assert!(result.is_ok(), "the UI going away is not a failure");
     }
 }
