@@ -91,6 +91,20 @@ are retrieved by keyword overlap and named in the prompt, so answers cite
 `[[notes]]` you can jump straight to. `ctrl-y` inserts the last answer at the
 cursor. Needs `ANTHROPIC_API_KEY`.
 
+## Mouse
+
+All of it is clickable. Click a pane to focus it, a folder to fold it, a note
+to open it. Click an outline entry to jump to that heading, or a backlink to
+open that note at the line mentioning this one. The wheel scrolls whatever is
+under the pointer, and clicking outside an overlay dismisses it.
+
+Links follow Obsidian: in source mode a click puts the cursor in the link and
+`ctrl-click` follows it, so a link is still editable; in preview a plain click
+follows.
+
+Mouse capture takes your terminal's own text selection away — hold `shift` to
+get it back, which every terminal worth using supports.
+
 ## Keys
 
 `ctrl-p` open · `ctrl-k` palette · `ctrl-f` search · `ctrl-n` new · `ctrl-l` insert link ·

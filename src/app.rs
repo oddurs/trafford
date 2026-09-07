@@ -6,6 +6,7 @@ use crate::tree;
 use crate::ui::theme::Theme;
 use crate::vault::Vault;
 use anyhow::Result;
+use ratatui::layout::{Position, Rect};
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
@@ -306,6 +307,55 @@ impl Chat {
 // App
 // ---------------------------------------------------------------------------
 
+/// Where each pane was drawn, so a click can be resolved to the thing under
+/// it. Recorded on every draw; the mouse handler reads it and nothing else.
+/// These are the *inner* areas, inside the borders.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Panes {
+    pub sidebar: Rect,
+    pub editor: Rect,
+    pub context: Rect,
+    pub assistant: Rect,
+    pub assistant_input: Rect,
+    /// The list area of whatever overlay is open.
+    pub overlay: Rect,
+}
+
+fn hit(area: Rect, column: u16, row: u16) -> bool {
+    area.width > 0 && area.height > 0 && area.contains(Position::new(column, row))
+}
+
+impl Panes {
+    pub fn sidebar_hit(&self, c: u16, r: u16) -> bool {
+        hit(self.sidebar, c, r)
+    }
+    pub fn editor_hit(&self, c: u16, r: u16) -> bool {
+        hit(self.editor, c, r)
+    }
+    pub fn context_hit(&self, c: u16, r: u16) -> bool {
+        hit(self.context, c, r)
+    }
+    pub fn assistant_hit(&self, c: u16, r: u16) -> bool {
+        hit(self.assistant, c, r) || hit(self.assistant_input, c, r)
+    }
+    pub fn overlay_hit(&self, c: u16, r: u16) -> bool {
+        hit(self.overlay, c, r)
+    }
+}
+
+/// Something in the context pane a click can act on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ContextTarget {
+    /// A heading in the open note, by buffer row.
+    Heading(usize),
+    /// Another note, opened whole.
+    Note(String),
+    /// Another note, opened at the line that mentions this one.
+    Backlink(String, usize),
+    /// An unwritten note, offered for creation.
+    Unwritten(String),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Focus {
     Sidebar,
@@ -347,6 +397,10 @@ pub struct App {
     pub should_quit: bool,
     /// Height of the editor viewport, updated each draw so paging can use it.
     pub editor_height: usize,
+    /// Where the panes were drawn, for hit-testing the mouse.
+    pub panes: Panes,
+    /// What each row of the context pane points at, parallel to its lines.
+    pub context_targets: Vec<Option<ContextTarget>>,
     /// Tag currently filtering the note list, if any.
     pub tag_filter: Option<String>,
 }
@@ -382,6 +436,8 @@ impl App {
             last_edit: Instant::now(),
             should_quit: false,
             editor_height: 20,
+            panes: Panes::default(),
+            context_targets: Vec::new(),
             tag_filter: None,
             config,
         };
@@ -540,6 +596,16 @@ impl App {
         }
     }
 
+    /// Offer to create a note for a link that resolves to nothing.
+    pub fn prompt_new_note_from_link(&mut self, target: &str) {
+        self.overlay = Some(Overlay::Prompt(Prompt {
+            kind: PromptKind::NewNoteFromLink,
+            title: "Create note".into(),
+            input: target.to_string(),
+            hint: "this link points at nothing yet — enter to create".into(),
+        }));
+    }
+
     /// Follow the `[[link]]` under the cursor, offering to create it if missing.
     pub fn follow_link(&mut self) {
         let Some(link) = self.editor.link_under_cursor() else {
@@ -565,14 +631,7 @@ impl App {
                     }
                 }
             }
-            None => {
-                self.overlay = Some(Overlay::Prompt(Prompt {
-                    kind: PromptKind::NewNoteFromLink,
-                    title: "Create note".into(),
-                    input: link.target.clone(),
-                    hint: "this link points at nothing yet — enter to create".into(),
-                }));
-            }
+            None => self.prompt_new_note_from_link(&link.target),
         }
     }
 

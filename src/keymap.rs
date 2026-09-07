@@ -633,7 +633,7 @@ impl App {
     }
 
     /// `key` is `note-id:line`, as packed by the backlinks command.
-    fn jump_to_backlink(&mut self, key: &str) {
+    pub(crate) fn jump_to_backlink(&mut self, key: &str) {
         let (id, line) = match key.rsplit_once(':') {
             Some((id, line)) => (id, line.parse::<usize>().unwrap_or(0)),
             None => (key, 0),
@@ -643,7 +643,7 @@ impl App {
         self.editor.buf.goto_line(line);
     }
 
-    fn insert_link_to(&mut self, id: &str) {
+    pub(crate) fn insert_link_to(&mut self, id: &str) {
         let stem = id.trim_end_matches(".md").rsplit('/').next().unwrap_or(id);
         self.editor.buf.checkpoint();
         // Insert after the cursor character, matching `a` rather than `i`.
@@ -926,6 +926,23 @@ pub const HELP: &[(&str, &str)] = &[
     ("space", "toggle the task on this line"),
     ("enter", "follow the [[link]] under the cursor"),
     ("ctrl-o", "back to the previous note"),
+    ("", ""),
+    ("", "MOUSE — everything is clickable"),
+    ("click a pane", "focuses it"),
+    ("click a folder", "opens or closes it"),
+    ("click a note", "opens it, in the tree or in any list"),
+    ("click the outline", "jumps to that heading"),
+    (
+        "click a backlink",
+        "opens that note at the line that mentions this one",
+    ),
+    (
+        "click a [[link]]",
+        "moves the cursor; ctrl-click follows it",
+    ),
+    ("", "  (in preview, a plain click follows it)"),
+    ("wheel", "scrolls whatever is under the pointer"),
+    ("shift-drag", "select text, as your terminal normally would"),
     ("", ""),
     ("", "SIDEBAR — a tree of the vault"),
     ("j k ↑ ↓", "move"),
