@@ -113,6 +113,17 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
 - **`#tags` are clickable wherever they are drawn.** `markdown::Target` says
   what a run of text points at — a note, a URL, or a tag — and a tag click sets
   the vault filter, which is what the sidebar's tags tab already did.
+- **A callout is a block that draws one line per source line.** `ui::callout`
+  turns `> [!note]` into a barred, labelled block. Unlike a table the mapping
+  back to the note is the identity, so nothing has to be tracked. A kind nobody
+  anticipated still draws, labelled with what the author wrote — refusing to
+  draw it would leave `[!quote]` sitting in the text as characters. Colours come
+  from `accent` / `added` / `modified` rather than three new theme roles.
+- **`Rendered.rail` is what a wrapped line repeats down its left.** A callout's
+  bar is part of the line's text, so without it the bar appears on the first row
+  and nowhere else, and the callout stops reading as one halfway through a
+  paragraph. `layout::continuation_indent` treats `▎ ` as a marker for the same
+  reason it treats `> `.
 - **A table is a block, not a line.** `ui::table` parses a header, a separator
   and its rows together, and draws two more lines than the block occupies — so
   preview cannot assume one drawn line per source line. `PreviewView.sources`

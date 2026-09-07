@@ -1,3 +1,4 @@
+pub mod callout;
 pub mod fold;
 pub mod markdown;
 pub mod table;
@@ -430,6 +431,23 @@ impl PreviewView {
                 continue;
             }
 
+            // A callout is a block too, and one that draws a line for each
+            // line it covers — so unlike a table it needs no mapping back.
+            if !in_code && !opens {
+                if let Some(c) = callout::parse(source, i) {
+                    for (n, drawn) in callout::render(&c, source, i, renderer)
+                        .into_iter()
+                        .enumerate()
+                    {
+                        lines.push(drawn);
+                        sources.push(i + n);
+                        numbered.push(true);
+                    }
+                    i += c.height;
+                    continue;
+                }
+            }
+
             // A table is a block, not a line. Inside a fence it is text like
             // anything else — pipes in a code sample are not a table.
             if !in_code && !opens {
@@ -720,8 +738,16 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
                 vrow.is_first() && view.starts_source(vrow.line),
                 source == app.editor.buf.row,
             )];
-            if vrow.indent > 0 {
-                spans.push(Span::raw(" ".repeat(vrow.indent)));
+            match (&rendered.rail, vrow.is_first(), vrow.indent) {
+                // A continuation row of a railed line redraws the rail, then
+                // pads to where the text was.
+                (Some(rail), false, indent) if indent > 0 => {
+                    let width = rail.content.chars().count().min(indent);
+                    spans.push(rail.clone());
+                    spans.push(Span::raw(" ".repeat(indent - width)));
+                }
+                (_, _, indent) if indent > 0 => spans.push(Span::raw(" ".repeat(indent))),
+                _ => {}
             }
             spans.extend(rendered.slice(vrow.start, vrow.len));
             lines.push(highlight(Line::from(spans), source));
@@ -1933,6 +1959,46 @@ mod tests {
         assert_eq!(view.source(0), 0);
         assert_eq!(view.source(1), 0);
         assert_eq!(view.source(3), 7, "the heading still names its own line");
+    }
+
+    #[test]
+    fn a_callout_draws_a_line_for_each_line_it_covers() {
+        let (_t, view) = preview_of(&["before", "> [!tip] Watch out", "> body", "after"], 60);
+        assert_eq!(
+            view.lines
+                .iter()
+                .map(|r| r.text.as_str())
+                .collect::<Vec<_>>(),
+            ["before", "▎ TIP · Watch out", "▎ body", "after"]
+        );
+        assert_eq!(
+            view.sources,
+            vec![0, 1, 2, 3],
+            "the mapping is the identity"
+        );
+    }
+
+    #[test]
+    fn a_quote_that_is_not_a_callout_still_draws_as_a_quote() {
+        let (_t, view) = preview_of(&["> just quoting"], 60);
+        assert_eq!(view.lines[0].text, "> just quoting");
+    }
+
+    #[test]
+    fn a_callout_inside_a_fence_is_left_alone() {
+        let (_t, view) = preview_of(&["```", "> [!note]", "```"], 60);
+        assert_eq!(view.lines[1].text, "> [!note]");
+    }
+
+    #[test]
+    fn a_link_in_a_callout_is_still_clickable_past_the_bar() {
+        let (_t, view) = preview_of(&["> [!note]", "> see [[Note]]"], 60);
+        assert_eq!(view.lines[1].text, "▎ see Note");
+        assert_eq!(
+            view.link_at(1, 6).map(|l| l.target.as_str()),
+            Some("Note"),
+            "the bar moved it along, and the map moved with it"
+        );
     }
 
     const SECTIONED: [&str; 9] = [

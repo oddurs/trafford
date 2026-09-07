@@ -64,6 +64,12 @@ impl Link {
 #[derive(Debug, Clone, Default)]
 pub struct Rendered {
     pub spans: Vec<Span<'static>>,
+    /// Drawn at the start of every row this line wraps onto.
+    ///
+    /// A callout's bar is part of the line's text, so it appears on the first
+    /// row and nowhere else — and a callout that loses its bar halfway through
+    /// a paragraph stops reading as one. Anything with a rail repeats it.
+    pub rail: Option<Span<'static>>,
     /// The characters actually drawn. With `conceal` off this is the source
     /// line unchanged; with it on it is shorter, and is what preview folds and
     /// hit-tests against — since it is what is on the screen.
@@ -89,6 +95,7 @@ impl Rendered {
         spans.extend(self.spans.iter().cloned());
         Rendered {
             spans,
+            rail: self.rail.clone(),
             text: format!("{text}{}", self.text),
             links: self
                 .links
@@ -215,6 +222,7 @@ impl Out {
     fn finish(self) -> Rendered {
         Rendered {
             spans: self.spans,
+            rail: None,
             text: self.text,
             links: self.links,
         }
