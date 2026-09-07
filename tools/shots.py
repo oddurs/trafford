@@ -211,6 +211,14 @@ def main():
         # anything. That is how this was found.
         vault = pathlib.Path(tmp) / "vault"
         shutil.copytree(base / manifest["vault"], vault)
+        # And no user config either. `Theme::resolve` looks in
+        # `~/.config/trafford/themes/` *before* the built-ins, so a developer
+        # with their own gotham.toml would take a different screenshot from CI
+        # and neither would be wrong. An empty home removes the question.
+        home = pathlib.Path(tmp) / "home"
+        home.mkdir()
+        os.environ["HOME"] = str(home)
+        os.environ["XDG_CONFIG_HOME"] = str(home / ".config")
         shots = [(shot, to_svg(capture(shot, vault), shot["title"])) for shot in manifest["shot"]]
 
     for shot, svg in shots:
@@ -234,7 +242,5 @@ def main():
 
 
 if __name__ == "__main__":
-    # Keep the fixture's own config out of the picture: a shot should not
-    # change because the person running it has a theme set.
     os.environ.pop("TRAFFORD_VAULT", None)
     main()

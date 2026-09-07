@@ -143,6 +143,11 @@ impl Server {
     /// One thread per connection. A docs preview has one reader and a handful
     /// of open tabs; a thread pool would be machinery in the way of a thing
     /// that is never under load.
+    ///
+    /// `stop` is checked between connections, so it ends the loop on the next
+    /// request rather than immediately — `accept` is blocking and waking it
+    /// would mean either a self-connection or a non-blocking rewrite. For a
+    /// development server the process ends anyway; the tests rely on that.
     pub fn run(&self) -> Result<()> {
         for stream in self.listener.incoming() {
             if self.state.stopped() {

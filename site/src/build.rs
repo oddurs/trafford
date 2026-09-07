@@ -106,16 +106,23 @@ pub fn build(opts: &Options) -> Result<Built> {
     let mut notes: Vec<&Note> = vault.notes.iter().collect();
     notes.sort_by(|a, b| a.id.cmp(&b.id));
 
-    let mut pages: BTreeMap<String, PageLink> = BTreeMap::new();
-    for note in &notes {
-        pages.insert(
-            note.id.clone(),
-            PageLink {
-                url: url_for(note),
-                title: note.title.clone(),
-            },
-        );
-    }
+    // Frontmatter is parsed once per note, here, and read from this map
+    // everywhere else. `url_for` used to re-parse on every call and is called
+    // once per navigation entry per page, which is quadratic in a docs tree
+    // that only has to grow a little to notice.
+    let metas: BTreeMap<String, Meta> = notes.iter().map(|n| (n.id.clone(), meta(n))).collect();
+    let pages: BTreeMap<String, PageLink> = notes
+        .iter()
+        .map(|note| {
+            (
+                note.id.clone(),
+                PageLink {
+                    url: url_for(note, &metas[&note.id]),
+                    title: note.title.clone(),
+                },
+            )
+        })
+        .collect();
 
     let assets = Assets {
         css: hashed("assets/site", "css", &stylesheet()?),
@@ -125,9 +132,9 @@ pub fn build(opts: &Options) -> Result<Built> {
 
     // Navigation is every page but the landing one, in the order the notes ask
     // for and then alphabetically — a stable order rather than a lucky one.
-    let mut nav_source: Vec<(&Note, Meta)> = notes
+    let mut nav_source: Vec<(&Note, &Meta)> = notes
         .iter()
-        .map(|n| (*n, meta(n)))
+        .map(|n| (*n, &metas[&n.id]))
         .filter(|(_, m)| m.layout != "landing")
         .collect();
     nav_source
@@ -144,8 +151,8 @@ pub fn build(opts: &Options) -> Result<Built> {
     let mut page_paths: Vec<String> = Vec::new();
 
     for note in &notes {
-        let m = meta(note);
-        let url = url_for(note);
+        let m = &metas[&note.id];
+        let url = pages[&note.id].url.clone();
         let depth = url.matches('/').count();
         let ctx = Ctx {
             vault: &vault,
@@ -157,7 +164,7 @@ pub fn build(opts: &Options) -> Result<Built> {
             .iter()
             .map(|(n, nm)| NavItem {
                 title: n.title.clone(),
-                url: url_for(n),
+                url: pages[&n.id].url.clone(),
                 section: nm.section.clone(),
                 current: n.id == note.id,
             })
@@ -178,7 +185,7 @@ pub fn build(opts: &Options) -> Result<Built> {
             reload: opts.reload,
         };
         let doc = if m.layout == "landing" {
-            let hero = hero(&ctx, note, &m, &vault, &mut problems);
+            let hero = hero(&ctx, note, m, &vault, &mut problems);
             shell::landing(&ctx, &page, &hero)
         } else {
             shell::doc(&ctx, &page)
@@ -240,8 +247,8 @@ pub fn build(opts: &Options) -> Result<Built> {
 /// Where a note lands. The landing page is the root; everything else is a
 /// directory with an `index.html`, so its URL ends in a slash and relative
 /// links from it are predictable.
-fn url_for(note: &Note) -> String {
-    if meta(note).layout == "landing" {
+fn url_for(note: &Note, m: &Meta) -> String {
+    if m.layout == "landing" {
         String::new()
     } else {
         format!("docs/{}/", slug(note.stem()))
