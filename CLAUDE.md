@@ -64,6 +64,13 @@ the UI; `ui` reads `App` but never mutates it except for viewport bookkeeping.
   Match on `haystack`, display from `text`, or you will show mangled case.
 - **Link resolution order** is exact relative path, then case-insensitive path,
   then filename stem. Changing it changes which note a `[[link]]` opens.
+- **Navigating away holds an unsaved buffer; it does not discard it.**
+  `App.unsaved` keeps dirty buffers per note, so switching away and back returns
+  what was typed. Following a link is the common case and a prompt on every link
+  would be intolerable, so the answer is to keep rather than to ask. Clean
+  buffers are deliberately *not* held: they are what is on disk, and re-reading
+  picks up anything written meanwhile. The stamp from #0043 travels with a held
+  buffer, or holding one would quietly disarm the conflict guard.
 - **The vault is watched, and the watcher reacts to content, not to events.**
   `src/watch.rs` debounces filesystem events for 120ms and sends batches;
   `App::absorb_disk_changes` drains them each tick. trafford's own saves make the
@@ -80,12 +87,6 @@ the UI; `ui` reads `App` but never mutates it except for viewport bookkeeping.
   cannot be expressed as a patch, so it rebuilds; an edit to a known note
   refreshes just that note. Dot-directories and editor scratch files are ignored,
   or `.git` during a commit would rescan continuously.
-- **Navigating away holds an unsaved buffer; it does not discard it.**
-  `App.unsaved` keeps dirty buffers per note, so switching away and back returns
-  what was typed — a prompt on every link would be intolerable. Clean buffers are
-  deliberately *not* held: they are what is on disk, and re-reading picks up
-  anything written meanwhile. The save guard's stamp travels with a held buffer,
-  or holding one would quietly disarm it.
 - **A save never writes over a change nobody has seen.** `App::save` compares
   the file's mtime and length against what they were when the note was loaded.
   If they moved, it compares the *content* — identical bytes are not a
