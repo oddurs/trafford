@@ -26,7 +26,7 @@ browser engine, and all of it belongs next to git.
 ## Install
 
 ```sh
-cargo install --path .
+cargo install --path trafford
 ```
 
 ## Use
@@ -185,7 +185,7 @@ accent     = "#d29922"
 link       = "#58a6ff"
 ```
 
-The full set of roles is in `themes/gotham.toml`, which is an ordinary theme
+The full set of roles is in `trafford/themes/gotham.toml`, which is an ordinary theme
 file — the built-ins are compiled in and parsed by the same code you would use,
 so they cannot drift from the format.
 

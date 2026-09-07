@@ -22,16 +22,16 @@ first, or run `cargo +<version> clippy` with the version CI reports. Two
 
 | Path | What lives there |
 | --- | --- |
-| `src/vault/note.rs` | Parsing one note: frontmatter, headings, `#tags`, `[[wikilinks]]` |
-| `src/vault/index.rs` | The vault: scanning, link resolution, backlinks, search, rename |
-| `src/editor/buffer.rs` | Text buffer — cursor, edits, undo. No key handling. |
-| `src/editor/mod.rs` | Modal layer: normal/insert/visual, operators, counts |
-| `src/git.rs` | Git by shelling out to `git`. Porcelain parsing, commit, push, pull |
-| `src/llm.rs` | Anthropic streaming client; runs on a worker thread |
-| `src/app.rs` | Application state, note navigation, assistant plumbing |
-| `src/keymap.rs` | Key routing, the command palette, the help table |
-| `src/ui/` | Theme, markdown-to-spans renderer, tables, and all drawing |
-| `src/main.rs` | CLI, terminal setup, event loop |
+| `trafford/src/vault/note.rs` | Parsing one note: frontmatter, headings, `#tags`, `[[wikilinks]]` |
+| `trafford/src/vault/index.rs` | The vault: scanning, link resolution, backlinks, search, rename |
+| `trafford/src/editor/buffer.rs` | Text buffer — cursor, edits, undo. No key handling. |
+| `trafford/src/editor/mod.rs` | Modal layer: normal/insert/visual, operators, counts |
+| `trafford/src/git.rs` | Git by shelling out to `git`. Porcelain parsing, commit, push, pull |
+| `trafford/src/llm.rs` | Anthropic streaming client; runs on a worker thread |
+| `trafford/src/app.rs` | Application state, note navigation, assistant plumbing |
+| `trafford/src/keymap.rs` | Key routing, the command palette, the help table |
+| `trafford/src/ui/` | Theme, markdown-to-spans renderer, tables, and all drawing |
+| `trafford/src/main.rs` | CLI, terminal setup, event loop |
 
 The dependency direction is one-way: `vault` and `editor` know nothing about
 the UI; `ui` reads `App` but never mutates it except for viewport bookkeeping.
@@ -65,7 +65,7 @@ the UI; `ui` reads `App` but never mutates it except for viewport bookkeeping.
   then filename stem. Changing it changes which note a `[[link]]` opens.
 - **The editor owns no I/O.** `App::save` writes and then re-indexes; the
   editor never touches the filesystem.
-- **Hit-testing shares the renderer's geometry.** `src/mouse.rs` resolves a
+- **Hit-testing shares the renderer's geometry.** `trafford/src/mouse.rs` resolves a
   click with the same `gutter_width`, `editor_hscroll`, `column_at` and
   `scroll_offset` the drawing code uses, against rects recorded during the
   last draw (`App::panes`). Never compute a second, parallel idea of the
@@ -176,7 +176,7 @@ CJK text, and a 700 ms stall on save in a large vault. All four are invisible
 to `cargo test` and to reading a screenshot of ASCII notes.
 
 When it finds something, the fix belongs in a unit test as well — the probe
-tells you *what* is wrong, and a test in `src/` keeps it from coming back.
+tells you *what* is wrong, and a test in `trafford/src/` keeps it from coming back.
 Prefer asserting invariants over examples: `line.width() <= width` across a
 matrix of widths catches the off-by-one that one hand-picked case does not.
 

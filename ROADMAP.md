@@ -9,9 +9,6 @@ A terminal knowledge base — an Obsidian-shaped markdown vault with modal editi
 `##########` 100% · 5 of 5 done · due 2026-09-20
 
 The interface explains itself. A file tree instead of a flat list, the mouse
-working everywhere, a right-click menu on every surface that has actions, and
-themes you can see before you choose. The milestone that answers "I do not
-understand how to use this".
 
 ### done
 
@@ -26,8 +23,6 @@ understand how to use this".
 `##########` 100% · 4 of 4 done · due 2026-10-15
 
 The things you go to a menu *for*: moving and duplicating notes, folders,
-clipboard, acting on a selection. Enough that the menu is a tool rather than a
-demonstration that menus exist.
 
 ### done
 
@@ -41,9 +36,6 @@ demonstration that menus exist.
 `##########` 100% · 8 of 8 done · due 2026-11-15
 
 The editor stops showing markdown as plain text. Long lines wrap, links read as
-links, headings in a table of contents go somewhere, and a table looks like a
-table. Every one of these breaks the same assumption — that a line of source is
-a line of screen — so the model underneath them comes first.
 
 ### done
 
@@ -61,10 +53,6 @@ a line of screen — so the model underneath them comes first.
 `#######···` 67% · 4 of 6 done · due 2026-12-20
 
 Preview stops being the editor with the syntax hidden. A note's structure folds,
-its properties stop being seven lines of YAML, its callouts look like callouts,
-and you can look at a link without leaving the page. Measured against the vault
-rather than guessed at: a heading every six lines of body means these notes are
-reference material, and reference material is navigated, not read through.
 
 ### backlog
 
@@ -80,15 +68,12 @@ reference material, and reference material is navigated, not read through.
 
 ## v1.0 — Safe to depend on
 
-`··········` 0% · 0 of 12 done · due 2027-03-01
+`##········` 17% · 2 of 12 done · due 2027-03-01
 
 Documented, packaged, and hardened. Someone who is not the author can install
-it and trust it with their notes.
 
 ### backlog
 
-- [ ] `0032` What builds the site, and where does its code live? <sup>spike · p0 · site</sup>
-- [ ] `0033` Make the crate a workspace so site tooling never ships in the binary <sup>chore · p0 · packaging</sup>
 - [ ] `0034` Build the site from a directory of notes, deterministically <sup>feature · p0 · site</sup>
 - [ ] `0035` The development server binds port zero <sup>feature · p0 · site</sup>
 - [ ] `0036` Reload the open page on save, over one connection <sup>feature · p1 · site</sup>
@@ -99,6 +84,11 @@ it and trust it with their notes.
 - [ ] `0041` Publish rustdoc under /api as part of the same build <sup>chore · p2 · docs</sup>
 - [ ] `0042` Smoke-test the site by serving it on a random port <sup>chore · p1 · site</sup>
 - [ ] `0043` The landing page is one screen, and the screenshot is real <sup>feature · p1 · site</sup>
+
+### done
+
+- [x] `0032` What builds the site, and where does its code live? <sup>spike · p0 · site</sup>
+- [x] `0033` Make the crate a workspace so site tooling never ships in the binary <sup>chore · p0 · packaging</sup>
 
 ## later — Someday
 

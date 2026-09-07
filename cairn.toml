@@ -10,7 +10,7 @@
 
 # On-disk format version. cairn refuses to open a project written in a format it
 # does not know, rather than misreading it. See "Compatibility" in the manual.
-format = 1
+format = 2
 
 [project]
 name = "trafford"
@@ -83,6 +83,10 @@ template = """
 name = "docs"
 icon = "*"
 color = "blue"
+
+[[type]]
+name = "milestone"
+description = "a release, or whatever this project ships"
 
 # ─── Statuses ────────────────────────────────────────────────────────────────
 # Order matters: it is the column order on the board and the sort order in
@@ -162,70 +166,19 @@ values = [
 column = true
 description = "Subsystem this touches"
 
-# ─── Milestones ──────────────────────────────────────────────────────────────
-# Sections of the rendered roadmap, in due-date order.
+[[field]]
+name = "due"
+kind = "date"
+description = "when a milestone is meant to land"
 
-[[milestone]]
-name = "v0.1"
-title = "It reads a real vault"
-due = "2026-09-06"
-description = """
-Wikilinks, backlinks, tags, a modal editor, git, and an assistant grounded in
-the notes. Proven against a 127-note Obsidian vault rather than a fixture.
-Shipped."""
-
-[[milestone]]
-name = "v0.2"
-title = "Usable without the manual"
-due = "2026-09-20"
-description = """
-The interface explains itself. A file tree instead of a flat list, the mouse
-working everywhere, a right-click menu on every surface that has actions, and
-themes you can see before you choose. The milestone that answers "I do not
-understand how to use this"."""
-
-[[milestone]]
-name = "v0.3"
-title = "Actions worth reaching for"
-due = "2026-10-15"
-description = """
-The things you go to a menu *for*: moving and duplicating notes, folders,
-clipboard, acting on a selection. Enough that the menu is a tool rather than a
-demonstration that menus exist."""
-
-[[milestone]]
-name = "v0.4"
-title = "What you wrote, as you wrote it"
-due = "2026-11-15"
-description = """
-The editor stops showing markdown as plain text. Long lines wrap, links read as
-links, headings in a table of contents go somewhere, and a table looks like a
-table. Every one of these breaks the same assumption — that a line of source is
-a line of screen — so the model underneath them comes first."""
-
-[[milestone]]
-name = "v0.5"
-title = "Reading is its own posture"
-due = "2026-12-20"
-description = """
-Preview stops being the editor with the syntax hidden. A note's structure folds,
-its properties stop being seven lines of YAML, its callouts look like callouts,
-and you can look at a link without leaving the page. Measured against the vault
-rather than guessed at: a heading every six lines of body means these notes are
-reference material, and reference material is navigated, not read through."""
-
-[[milestone]]
-name = "v1.0"
-title = "Safe to depend on"
-due = "2027-03-01"
-description = """
-Documented, packaged, and hardened. Someone who is not the author can install
-it and trust it with their notes."""
-
-[[milestone]]
-name = "later"
-title = "Someday"
-description = "Good ideas without a date yet."
+[[field]]
+name = "milestone"
+kind = "ref"
+target = "milestone"
+by = "key"
+rollup = true
+inverse = "scheduled"
+description = "what this ships in"
 
 # ─── Saved views ─────────────────────────────────────────────────────────────
 # `cairn list --view next`, `cairn board --view triage`

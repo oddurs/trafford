@@ -1,24 +1,10 @@
-[package]
-name = "trafford"
-version = "0.1.0"
-edition = "2021"
-description = "A terminal knowledge base — Obsidian-style vault, modal editing, git, and an LLM that reads your notes."
-license = "MIT"
+[workspace]
+members = ["trafford", "site"]
+resolver = "2"
 
-[dependencies]
-ratatui = "0.29"
-crossterm = "0.28"
-anyhow = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-toml = "0.8"
-dirs = "5"
-ignore = "0.4"
-unicode-width = "0.2"
-chrono = "0.4"
-base64 = "0.22"
-ureq = { version = "2", features = ["json", "tls"] }
-
+# At the workspace root deliberately. A `[profile.release]` left in a member is
+# silently ignored, and nobody notices until a release binary is three times the
+# size it should be.
 [profile.release]
 opt-level = 3
 lto = true

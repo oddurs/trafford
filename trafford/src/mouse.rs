@@ -98,7 +98,7 @@ impl App {
                 }
                 let row = self.editor.buf.row.checked_sub(self.editor.scroll)?;
                 let y = inner.y + u16::try_from(row).ok()?;
-                let gutter = crate::ui::gutter_width(self.editor.buf.len());
+                let gutter = crate::ui::gutter_width(self.editor.buf.line_count());
                 (y < inner.bottom()).then_some((inner.x + gutter, y))
             }
             Focus::Assistant => {
@@ -458,7 +458,7 @@ impl App {
             // Scrolling moves by screen rows, so a folded line scrolls by
             // what is visible rather than by whole paragraphs.
             let height = self.editor_height.max(1);
-            let max = self.editor.layout.len().saturating_sub(1);
+            let max = self.editor.layout.row_count().saturating_sub(1);
             self.editor.scroll = step(self.editor.scroll, delta, max + 1).min(max);
             let top = self.editor.scroll;
             let bottom = (top + height).saturating_sub(1).min(max);
@@ -560,9 +560,9 @@ impl App {
 
     fn click_editor(&mut self, c: u16, r: u16, event: MouseEvent) {
         let inner = self.panes.editor;
-        let gutter = crate::ui::gutter_width(self.editor.buf.len());
+        let gutter = crate::ui::gutter_width(self.editor.buf.line_count());
         let visual = self.editor.scroll + (r.saturating_sub(inner.y)) as usize;
-        if visual >= self.editor.layout.len() {
+        if visual >= self.editor.layout.row_count() {
             return;
         }
 
@@ -576,7 +576,7 @@ impl App {
             let column = c.saturating_sub(text_x) as usize;
             let (line, col) = view.layout.source_of(&view.texts(), visual, column);
             let source = view.source(line);
-            self.editor.buf.row = source.min(self.editor.buf.len().saturating_sub(1));
+            self.editor.buf.row = source.min(self.editor.buf.line_count().saturating_sub(1));
             self.editor.buf.col = 0;
             self.editor.buf.goal_col = 0;
             // The fold marker occupies the first two drawn columns of a

@@ -796,7 +796,7 @@ impl App {
         let path = self.vault.path_for(id);
         match std::fs::read_to_string(&path) {
             Ok(text) => {
-                self.editor.load(Buffer::from_str(&text));
+                self.editor.load(Buffer::from_text(&text));
                 self.current = Some(id.to_string());
                 self.focus = Focus::Editor;
                 // Keep the sidebar pointing at whatever is open, opening the
@@ -917,7 +917,7 @@ impl App {
             return;
         };
         let heads = crate::ui::fold::headings(&self.editor.buf.lines);
-        let total = self.editor.buf.len();
+        let total = self.editor.buf.line_count();
         // The innermost heading at or above this line whose section still
         // contains it — the one you would point at if asked "which section?".
         let target = heads
@@ -945,7 +945,7 @@ impl App {
             return;
         };
         let heads = crate::ui::fold::headings(&self.editor.buf.lines);
-        let total = self.editor.buf.len();
+        let total = self.editor.buf.line_count();
         self.folded.fold_all(&id, &heads, total);
         self.set_status("folded everything");
     }
@@ -1073,7 +1073,7 @@ impl App {
                 let _ = self.vault.rescan();
                 if self.current.as_deref() == Some(id) {
                     self.current = None;
-                    self.editor.load(Buffer::from_str(""));
+                    self.editor.load(Buffer::from_text(""));
                     if let Some(next) = self.vault.notes.first().map(|n| n.id.clone()) {
                         self.open_note(&next, false);
                     }

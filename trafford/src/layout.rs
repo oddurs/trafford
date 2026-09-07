@@ -91,7 +91,9 @@ impl Layout {
         &self.rows
     }
 
-    pub fn len(&self) -> usize {
+    /// How many screen rows the buffer occupies once wrapped. Never zero,
+    /// since a buffer is never zero lines — hence no `is_empty`.
+    pub fn row_count(&self) -> usize {
         self.rows.len()
     }
 
@@ -287,7 +289,7 @@ mod tests {
     fn without_wrapping_each_line_is_one_row() {
         let lines = lines("one\ntwo is longer\nthree");
         let layout = Layout::new(&lines, 4, false);
-        assert_eq!(layout.len(), 3);
+        assert_eq!(layout.row_count(), 3);
         for (i, row) in layout.rows().iter().enumerate() {
             assert_eq!(row.line, i);
             assert_eq!(row.start, 0);
@@ -318,7 +320,7 @@ mod tests {
     fn a_word_wider_than_the_pane_is_split() {
         let lines = lines(&"x".repeat(25));
         let layout = Layout::new(&lines, 10, true);
-        assert_eq!(layout.len(), 3);
+        assert_eq!(layout.row_count(), 3);
         assert_eq!(layout.rows()[0].len, 10);
     }
 
@@ -326,7 +328,7 @@ mod tests {
     fn a_wrapped_list_item_hangs_under_its_text() {
         let lines = lines("- an item long enough to wrap onto another row");
         let layout = Layout::new(&lines, 20, true);
-        assert!(layout.len() > 1);
+        assert!(layout.row_count() > 1);
         assert_eq!(
             layout.rows()[0].indent,
             0,
@@ -339,7 +341,7 @@ mod tests {
     fn an_empty_line_still_produces_a_row() {
         let lines = lines("a\n\nb");
         let layout = Layout::new(&lines, 10, true);
-        assert_eq!(layout.len(), 3);
+        assert_eq!(layout.row_count(), 3);
         assert_eq!(layout.rows()[1].len, 0);
         // And the cursor can sit on it.
         assert_eq!(layout.visual_of(&lines, 1, 0), (1, 0));
@@ -361,8 +363,8 @@ mod tests {
         let lines = lines("some text");
         for width in [0usize, 1] {
             let layout = Layout::new(&lines, width, true);
-            assert!(layout.len() > 0);
-            assert!(layout.len() <= "some text".len() + 1);
+            assert!(layout.row_count() > 0);
+            assert!(layout.row_count() <= "some text".len() + 1);
         }
     }
 
