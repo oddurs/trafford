@@ -39,7 +39,7 @@ impl App {
             if let Some((_, _, row)) = self.sticky.iter().find(|(a, b, _)| c >= *a && c < *b) {
                 let row = *row;
                 self.focus = Focus::Editor;
-                self.editor.buf.goto_line(row);
+                self.jump_to(row);
             }
             return;
         }
@@ -618,7 +618,7 @@ impl App {
                     }
                     Target::Url => match link.target.strip_prefix('#') {
                         Some(anchor) => match self.heading_line_here(anchor) {
-                            Some(row) => self.editor.buf.goto_line(row),
+                            Some(row) => self.jump_to(row),
                             None => self
                                 .set_status(format!("no heading called \"{anchor}\" in this note")),
                         },
@@ -678,12 +678,12 @@ impl App {
         match target {
             ContextTarget::Heading(row) => {
                 self.focus = Focus::Editor;
-                self.editor.buf.goto_line(row);
+                self.jump_to(row);
             }
             ContextTarget::Note(id) => self.open_note(&id, true),
             ContextTarget::Backlink(id, line) => {
                 self.open_note(&id, true);
-                self.editor.buf.goto_line(line);
+                self.jump_to(line);
             }
             ContextTarget::Unwritten(target) => {
                 self.prompt_new_note_from_link(&target);
@@ -782,7 +782,7 @@ impl App {
                     pane.cursor = i;
                     if let Some(hit) = pane.hits.get(i).cloned() {
                         self.open_note(&hit.id, true);
-                        self.editor.buf.goto_line(hit.line);
+                        self.jump_to(hit.line);
                         return;
                     }
                 }

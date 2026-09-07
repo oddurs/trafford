@@ -1013,7 +1013,7 @@ impl App {
         if let Some(anchor) = self.editor.anchor_under_cursor() {
             match self.heading_line_here(&anchor) {
                 Some(row) => {
-                    self.editor.buf.goto_line(row);
+                    self.jump_to(row);
                     self.focus = Focus::Editor;
                 }
                 None => self.set_status(format!("no heading called \"{anchor}\" in this note")),
@@ -1204,6 +1204,33 @@ impl App {
         self.overlay = Some(Overlay::Peek(peek));
     }
 
+    /// Go to a line, opening whatever folds are hiding it.
+    ///
+    /// Everything that jumps somewhere specific goes through here: search,
+    /// backlinks, the outline, a heading link, a crumb. A destination the
+    /// reader cannot see is not a destination — the search used to land on the
+    /// right line inside a collapsed section and leave them looking at nothing.
+    ///
+    /// Only the folds standing in the way are opened. Ones the reader closed
+    /// elsewhere stay closed.
+    pub fn jump_to(&mut self, row: usize) {
+        if let Some(id) = self.current.clone() {
+            let heads = crate::ui::fold::headings(&self.editor.buf.lines);
+            let total = self.editor.buf.line_count();
+            let containing: Vec<usize> = crate::ui::fold::chain(&heads, row, total)
+                .iter()
+                .map(|h| h.row)
+                .collect();
+            for head in containing {
+                if self.folded.is_folded(&id, head) {
+                    self.folded.toggle(&id, head);
+                }
+            }
+        }
+        self.editor.buf.goto_line(row);
+        self.keep_preview_place(row);
+    }
+
     /// Open what a wikilink names, jumping to its heading if it named one.
     ///
     /// Shared with preview, where the syntax has been concealed and there is no
@@ -1216,7 +1243,7 @@ impl App {
                 if let Some(h) = heading {
                     // By slug or by text: a link may be written either way.
                     match self.vault.get(&id).and_then(|n| n.heading_line(&h)) {
-                        Some(row) => self.editor.buf.goto_line(row),
+                        Some(row) => self.jump_to(row),
                         None => self.set_status(format!(
                             "opened {id}, but it has no heading called \"{h}\""
                         )),

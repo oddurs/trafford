@@ -387,7 +387,7 @@ impl App {
             A::OpenNote(id) => self.open_note(&id, true),
             A::OpenNoteAt(id, line) => {
                 self.open_note(&id, true);
-                self.editor.buf.goto_line(line);
+                self.jump_to(line);
             }
             A::GoToLine(line) => {
                 self.focus = Focus::Editor;
@@ -1114,7 +1114,7 @@ impl App {
         };
         let id = id.to_string();
         self.open_note(&id, true);
-        self.editor.buf.goto_line(line);
+        self.jump_to(line);
     }
 
     pub(crate) fn insert_link_to(&mut self, id: &str) {
@@ -1135,7 +1135,7 @@ impl App {
             KeyCode::Enter => {
                 if let Some(hit) = pane.hits.get(pane.cursor).cloned() {
                     self.open_note(&hit.id, true);
-                    self.editor.buf.goto_line(hit.line);
+                    self.jump_to(hit.line);
                     return;
                 }
             }

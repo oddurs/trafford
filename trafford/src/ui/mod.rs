@@ -2566,6 +2566,71 @@ mod tests {
     }
 
     #[test]
+    fn jumping_into_a_folded_section_opens_it() {
+        let (_dir, mut app) = reading_a_long_note();
+        app.fold_all();
+        screen(&mut app, 90, 14);
+
+        // Somewhere well inside the third section, which is collapsed.
+        let heads = crate::ui::fold::headings(&app.editor.buf.lines);
+        let third = heads.iter().filter(|h| h.level == 2).nth(2).unwrap().row;
+        let target = third + 4;
+        assert!(
+            app.folded.is_folded("Long.md", third),
+            "the section should start out shut"
+        );
+
+        app.jump_to(target);
+        screen(&mut app, 90, 14);
+        assert!(!app.folded.is_folded("Long.md", third), "the fold opened");
+
+        let view = app.preview_view.as_ref().unwrap();
+        let drawn: Vec<usize> = view.sources.clone();
+        assert!(
+            drawn.contains(&target),
+            "and the line is actually drawn now"
+        );
+    }
+
+    #[test]
+    fn jumping_leaves_folds_that_are_not_in_the_way_alone() {
+        let (_dir, mut app) = reading_a_long_note();
+        app.fold_all();
+        screen(&mut app, 90, 14);
+        let heads = crate::ui::fold::headings(&app.editor.buf.lines);
+        let sections: Vec<usize> = heads
+            .iter()
+            .filter(|h| h.level == 2)
+            .map(|h| h.row)
+            .collect();
+
+        app.jump_to(sections[1] + 3);
+        screen(&mut app, 90, 14);
+        assert!(
+            !app.folded.is_folded("Long.md", sections[1]),
+            "the one in the way"
+        );
+        assert!(
+            app.folded.is_folded("Long.md", sections[3]),
+            "a section elsewhere stays as the reader left it"
+        );
+    }
+
+    #[test]
+    fn jumping_to_a_line_that_is_not_hidden_folds_nothing() {
+        let (_dir, mut app) = reading_a_long_note();
+        screen(&mut app, 90, 14);
+        app.jump_to(6);
+        assert!(
+            app.folded
+                .of("Long.md")
+                .map(|f| f.is_empty())
+                .unwrap_or(true),
+            "nothing was folded, so nothing needed opening"
+        );
+    }
+
+    #[test]
     fn a_redraw_does_not_undo_a_scroll() {
         // The bug this replaces: the view was re-anchored to the buffer cursor
         // on every draw, so the wheel moved it and it was put straight back

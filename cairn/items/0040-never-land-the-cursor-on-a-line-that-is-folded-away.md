@@ -2,8 +2,9 @@
 id: 40
 title: Never land the cursor on a line that is folded away
 type: bug
-status: backlog
+status: done
 milestone: v0.5
+assignee: Oddur Sigurdsson
 created: 2026-09-07
 updated: 2026-09-07
 priority: p1
@@ -41,8 +42,8 @@ the ones standing between them and where they asked to go.
 
 ## Acceptance criteria
 
-- [ ] A search hit inside a fold opens the folds above it and shows the line
-- [ ] Clicking a heading in the outline reveals it
-- [ ] Following a link to a heading reveals it
-- [ ] `42G` reveals line 42
-- [ ] Folds not in the way are left alone
+- [x] A search hit inside a fold opens the folds above it and shows the line
+- [x] Clicking a heading in the outline reveals it
+- [x] Following a link to a heading reveals it
+- [x] `42G` reveals line 42
+- [x] Folds not in the way are left alone
