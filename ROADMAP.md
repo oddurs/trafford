@@ -50,9 +50,14 @@ The editor stops showing markdown as plain text. Long lines wrap, links read as
 
 ## v0.5 — Reading is its own posture
 
-`##########` 100% · 10 of 10 done · due 2026-12-20
+`#########·` 85% · 11 of 13 done · due 2026-12-20
 
 Preview stops being the editor with the syntax hidden. A note's structure folds,
+
+### backlog
+
+- [ ] `0044` Switching notes throws away unsaved changes without asking <sup>bug · p0 · editor</sup>
+- [ ] `0045` Watch the vault and keep up with it <sup>feature · p0 · vault</sup>
 
 ### done
 
@@ -66,6 +71,7 @@ Preview stops being the editor with the syntax hidden. A note's structure folds,
 - [x] `0040` Never land the cursor on a line that is folded away <sup>bug · p1 · chrome</sup>
 - [x] `0041` Say where you are in the note <sup>feature · p1 · chrome</sup>
 - [x] `0042` The reading measure should not truncate tables <sup>bug · p1 · markdown</sup>
+- [x] `0043` Saving over a note another program changed destroys their work <sup>bug · p0 · vault</sup>
 
 ## later — Someday
 

@@ -218,6 +218,10 @@ pub enum MenuAction {
     },
     MoveNote(String),
     DuplicateNote(String),
+    /// Answers to "this note changed on disk since you opened it".
+    SaveAsConflictCopy(String),
+    ReloadFromDisk(String),
+    OverwriteOnDisk(String),
     /// Turn the selected lines into their own note, leaving a link behind.
     ExtractSelection,
     /// Hand a file to another application and carry on. Used for things that
@@ -481,6 +485,12 @@ mod peek_tests {
     }
 }
 
+/// A file's modification time and length, as far as the filesystem will say.
+fn stamp_of(path: &std::path::Path) -> Option<(std::time::SystemTime, u64)> {
+    let meta = std::fs::metadata(path).ok()?;
+    Some((meta.modified().ok()?, meta.len()))
+}
+
 // ---------------------------------------------------------------------------
 // Assistant
 // ---------------------------------------------------------------------------
@@ -699,6 +709,14 @@ pub struct App {
     /// and the note line it names — recorded at draw time so a click can find
     /// it without a second idea of the geometry.
     pub sticky: Vec<(u16, u16, usize)>,
+    /// What the open note looked like on disk when it was loaded — its
+    /// modification time and its length.
+    ///
+    /// Saving compares against this. Without it a save is a blind `fs::write`,
+    /// and the work of anything else writing to the vault — an assistant in
+    /// another window, most obviously — is gone with a "saved" in the status
+    /// line.
+    pub loaded_from_disk: Option<(std::time::SystemTime, u64)>,
     /// A note line the next draw should scroll the reading view onto, set when
     /// a fold changes the document out from under it.
     pub preview_anchor: Option<usize>,
@@ -780,6 +798,7 @@ impl App {
             editor_height: 20,
             panes: Panes::default(),
             folded: crate::ui::fold::Folds::default(),
+            loaded_from_disk: None,
             preview_row: 0,
             preview_anchor: None,
             chrome_before_preview: None,
@@ -918,6 +937,7 @@ impl App {
         let path = self.vault.path_for(id);
         match std::fs::read_to_string(&path) {
             Ok(text) => {
+                self.loaded_from_disk = stamp_of(&path);
                 self.editor.load(Buffer::from_str(&text));
                 self.current = Some(id.to_string());
                 self.focus = Focus::Editor;
@@ -945,14 +965,109 @@ impl App {
             return;
         };
         let path = self.vault.path_for(&id);
+
+        // Somebody else wrote to this file since it was read. Do not put the
+        // buffer over the top of work nobody has seen.
+        if self.changed_underneath(&path) {
+            let text = self.editor.buf.text();
+            if std::fs::read_to_string(&path).ok().as_deref() == Some(text.as_str()) {
+                // The same bytes, whoever wrote them. Nothing to resolve.
+                self.loaded_from_disk = stamp_of(&path);
+            } else {
+                self.ask_about_conflict(&id);
+                return;
+            }
+        }
+
+        self.write_note(&id);
+    }
+
+    /// Whether the file has moved on since it was read into the buffer.
+    ///
+    /// mtime *and* length: a filesystem with one-second mtime granularity will
+    /// happily report the same instant for two writes a moment apart, and a
+    /// length that changed catches most of what that misses. Neither is a
+    /// content hash, and neither needs to be — the content is compared before
+    /// anyone is asked anything.
+    fn changed_underneath(&self, path: &std::path::Path) -> bool {
+        match (self.loaded_from_disk, stamp_of(path)) {
+            (Some(was), Some(now)) => was != now,
+            // Never read, or gone: not a conflict this can reason about.
+            _ => false,
+        }
+    }
+
+    /// Offer the three answers worth having when two writers disagree.
+    ///
+    /// "Keep both" is what makes this safe rather than merely careful. A prompt
+    /// offering only overwrite and cancel pushes people towards overwrite,
+    /// which is the thing being prevented.
+    fn ask_about_conflict(&mut self, id: &str) {
+        let short = crate::mouse::short_name(id);
+        self.overlay = Some(Overlay::Menu(Menu {
+            title: format!("{short} changed on disk"),
+            items: vec![
+                MenuItem::new(
+                    "Keep both — save mine beside it",
+                    MenuAction::SaveAsConflictCopy(id.to_string()),
+                ),
+                MenuItem::new(
+                    "Load theirs — lose my changes",
+                    MenuAction::ReloadFromDisk(id.to_string()),
+                ),
+                MenuItem::new(
+                    "Overwrite theirs with mine",
+                    MenuAction::OverwriteOnDisk(id.to_string()),
+                ),
+            ],
+            cursor: 0,
+            at: (2, 2),
+        }));
+    }
+
+    /// Write the buffer beside the note rather than over it, so neither writer
+    /// loses anything and the reader can compare them at leisure.
+    pub fn save_as_conflict_copy(&mut self, id: &str) {
+        let stem = id.trim_end_matches(".md");
+        let mut n = 1;
+        let mut rel = format!("{stem} (conflict).md");
+        while self.vault.path_for(&rel).exists() {
+            n += 1;
+            rel = format!("{stem} (conflict {n}).md");
+        }
+        let path = self.vault.path_for(&rel);
+        match std::fs::write(&path, self.editor.buf.text()) {
+            Ok(()) => {
+                let _ = self.vault.rescan();
+                self.open_note(&rel, true);
+                self.set_status(format!("kept both — yours is now {rel}"));
+                self.refresh_git();
+            }
+            Err(err) => self.set_status(format!("could not write the copy: {err}")),
+        }
+    }
+
+    /// Throw the buffer away and take what is on disk.
+    pub fn reload_from_disk(&mut self, id: &str) {
+        let id = id.to_string();
+        self.editor.buf.mark_saved();
+        self.folded.forget(&id);
+        self.open_note(&id, false);
+        self.set_status(format!("reloaded {id} from disk"));
+    }
+
+    /// Write the buffer to the open note, unconditionally.
+    fn write_note(&mut self, id: &str) {
+        let path = self.vault.path_for(id);
         let text = self.editor.buf.text();
         match std::fs::write(&path, &text) {
             Ok(()) => {
+                self.loaded_from_disk = stamp_of(&path);
                 self.editor.buf.mark_saved();
                 // Re-index so links, backlinks and tags reflect what was
                 // written. Only this note changed, so the whole vault does not
                 // need re-reading.
-                if let Err(err) = self.vault.refresh_note(&id) {
+                if let Err(err) = self.vault.refresh_note(id) {
                     self.set_status(format!("saved, but reindex failed: {err}"));
                 } else {
                     self.set_status(format!("saved {id}"));
@@ -1580,6 +1695,117 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// An app on a one-note vault, that note open.
+    fn app_on_a_note(body: &str) -> (crate::testing::TempDir, App) {
+        let dir = crate::testing::TempDir::with_files(&[("Note.md", body)]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.open_note("Note.md", false);
+        (dir, app)
+    }
+
+    /// Write to the note behind trafford's back, far enough after the load that
+    /// a one-second mtime cannot report the same instant.
+    fn write_behind_its_back(dir: &crate::testing::TempDir, body: &str) {
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        std::fs::write(dir.path().join("Note.md"), body).unwrap();
+    }
+
+    #[test]
+    fn saving_over_someone_elses_write_asks_first() {
+        let (dir, mut app) = app_on_a_note("# Note\n\nOriginal.\n");
+        write_behind_its_back(&dir, "# Note\n\nOriginal.\nTheirs.\n");
+        app.editor.buf.lines.push("Mine.".into());
+        app.editor.buf.dirty = true;
+
+        app.save();
+        assert!(
+            matches!(app.overlay, Some(Overlay::Menu(_))),
+            "a save into a changed file must stop and ask"
+        );
+        let on_disk = std::fs::read_to_string(dir.path().join("Note.md")).unwrap();
+        assert!(on_disk.contains("Theirs."), "and must not have written yet");
+        assert!(!on_disk.contains("Mine."));
+    }
+
+    #[test]
+    fn an_ordinary_save_does_not_ask_anything() {
+        let (dir, mut app) = app_on_a_note("# Note\n\nOriginal.\n");
+        app.editor.buf.lines.push("Mine.".into());
+        app.save();
+        assert!(app.overlay.is_none(), "nobody else touched it");
+        let on_disk = std::fs::read_to_string(dir.path().join("Note.md")).unwrap();
+        assert!(on_disk.contains("Mine."));
+        assert!(!app.editor.buf.dirty);
+    }
+
+    #[test]
+    fn saving_twice_in_a_row_does_not_conflict_with_itself() {
+        // trafford's own write moves the mtime. If that counted, the second
+        // save would accuse the reader of being someone else.
+        let (_dir, mut app) = app_on_a_note("# Note\n\nOriginal.\n");
+        app.editor.buf.lines.push("One.".into());
+        app.save();
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        app.editor.buf.lines.push("Two.".into());
+        app.save();
+        assert!(app.overlay.is_none(), "its own write is not a conflict");
+    }
+
+    #[test]
+    fn an_identical_write_by_another_program_is_not_a_conflict() {
+        // Two writers, same bytes — a formatter, a sync, a git checkout that
+        // restored what was already there. There is nothing to resolve.
+        let (dir, mut app) = app_on_a_note("# Note\n\nOriginal.\n");
+        write_behind_its_back(&dir, "# Note\n\nOriginal.\n");
+        app.save();
+        assert!(
+            app.overlay.is_none(),
+            "the same content is not a disagreement"
+        );
+    }
+
+    #[test]
+    fn keeping_both_leaves_each_writer_their_work() {
+        let (dir, mut app) = app_on_a_note("# Note\n\nOriginal.\n");
+        write_behind_its_back(&dir, "# Note\n\nTheirs.\n");
+        app.editor.buf.lines = vec!["# Note".into(), String::new(), "Mine.".into()];
+        app.editor.buf.dirty = true;
+
+        app.save_as_conflict_copy("Note.md");
+        let theirs = std::fs::read_to_string(dir.path().join("Note.md")).unwrap();
+        let mine = std::fs::read_to_string(dir.path().join("Note (conflict).md")).unwrap();
+        assert!(theirs.contains("Theirs."), "their file is untouched");
+        assert!(mine.contains("Mine."), "and mine is beside it");
+        assert_eq!(app.current.as_deref(), Some("Note (conflict).md"));
+    }
+
+    #[test]
+    fn keeping_both_twice_does_not_overwrite_the_first_copy() {
+        let (dir, mut app) = app_on_a_note("# Note\n\nOriginal.\n");
+        std::fs::write(dir.path().join("Note (conflict).md"), "an earlier rescue").unwrap();
+        app.vault.rescan().unwrap();
+        app.open_note("Note.md", false);
+        app.editor.buf.lines = vec!["Mine.".into()];
+        app.save_as_conflict_copy("Note.md");
+        let first = std::fs::read_to_string(dir.path().join("Note (conflict).md")).unwrap();
+        assert_eq!(first, "an earlier rescue", "the earlier copy survived");
+        assert_eq!(app.current.as_deref(), Some("Note (conflict 2).md"));
+    }
+
+    #[test]
+    fn loading_theirs_throws_the_buffer_away_and_says_so() {
+        let (dir, mut app) = app_on_a_note("# Note\n\nOriginal.\n");
+        write_behind_its_back(&dir, "# Note\n\nTheirs.\n");
+        app.editor.buf.lines.push("Mine.".into());
+        app.editor.buf.dirty = true;
+
+        app.reload_from_disk("Note.md");
+        assert!(app.editor.buf.text().contains("Theirs."));
+        assert!(!app.editor.buf.text().contains("Mine."));
+        assert!(!app.editor.buf.dirty);
+    }
 
     fn assistant_turn() -> (Chat, std::sync::mpsc::Sender<llm::Event>) {
         let (tx, rx) = std::sync::mpsc::channel();
