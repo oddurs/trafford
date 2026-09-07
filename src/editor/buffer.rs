@@ -8,6 +8,10 @@ pub struct Buffer {
     /// Column the cursor wants to return to during vertical motion.
     pub goal_col: usize,
     pub dirty: bool,
+    /// The file used CRLF endings, so writing it back must too. Stripping them
+    /// on load keeps the lone `\r` out of the renderer, where it would reset
+    /// the terminal cursor to column zero and tear the layout apart.
+    crlf: bool,
     undo: Vec<Snapshot>,
     redo: Vec<Snapshot>,
     /// Set while an insert session is open so the whole session undoes at once.
@@ -29,7 +33,13 @@ impl Default for Buffer {
 
 impl Buffer {
     pub fn from_str(text: &str) -> Buffer {
-        let mut lines: Vec<String> = text.split('\n').map(|l| l.to_string()).collect();
+        // A file counts as CRLF if every one of its line breaks is one.
+        let breaks = text.matches('\n').count();
+        let crlf = breaks > 0 && text.matches("\r\n").count() == breaks;
+        let mut lines: Vec<String> = text
+            .split('\n')
+            .map(|l| l.strip_suffix('\r').unwrap_or(l).to_string())
+            .collect();
         if lines.is_empty() {
             lines.push(String::new());
         }
@@ -39,14 +49,16 @@ impl Buffer {
             col: 0,
             goal_col: 0,
             dirty: false,
+            crlf,
             undo: Vec::new(),
             redo: Vec::new(),
             insert_open: false,
         }
     }
 
+    /// The buffer as it should be written to disk, in the file's own endings.
     pub fn text(&self) -> String {
-        self.lines.join("\n")
+        self.lines.join(if self.crlf { "\r\n" } else { "\n" })
     }
 
     pub fn line(&self, row: usize) -> &str {
@@ -622,6 +634,47 @@ mod tests {
         b.col = 8;
         b.insert_newline_smart();
         assert_eq!(b.line(1), "4. ");
+    }
+
+    #[test]
+    fn crlf_files_load_without_the_carriage_returns() {
+        let b = Buffer::from_str("one\r\ntwo\r\n");
+        assert_eq!(b.line(0), "one");
+        assert_eq!(b.line(1), "two");
+        assert_eq!(b.line_len(0), 3, "the \\r must not count as a column");
+    }
+
+    #[test]
+    fn crlf_files_are_written_back_with_crlf() {
+        let text = "one\r\ntwo\r\n";
+        assert_eq!(
+            Buffer::from_str(text).text(),
+            text,
+            "round trip must be exact"
+        );
+    }
+
+    #[test]
+    fn lf_files_stay_lf() {
+        let text = "one\ntwo\n";
+        assert_eq!(Buffer::from_str(text).text(), text);
+    }
+
+    #[test]
+    fn a_mixed_file_is_normalised_to_lf() {
+        // Mixed endings are already broken; picking one is better than
+        // preserving the mess, and LF is the one git wants.
+        let b = Buffer::from_str("one\r\ntwo\nthree\r\n");
+        assert_eq!(b.text(), "one\ntwo\nthree\n");
+    }
+
+    #[test]
+    fn editing_a_crlf_file_keeps_its_endings() {
+        let mut b = Buffer::from_str("one\r\ntwo\r\n");
+        b.row = 0;
+        b.col = 3;
+        b.insert_str("!");
+        assert_eq!(b.text(), "one!\r\ntwo\r\n");
     }
 
     #[test]
