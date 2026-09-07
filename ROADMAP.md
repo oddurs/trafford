@@ -50,7 +50,7 @@ The editor stops showing markdown as plain text. Long lines wrap, links read as
 
 ## v0.5 — Reading is its own posture
 
-`##########` 100% · 13 of 13 done · due 2026-12-20
+`##########` 100% · 14 of 14 done · due 2026-12-20
 
 Preview stops being the editor with the syntax hidden. A note's structure folds,
 
@@ -69,6 +69,7 @@ Preview stops being the editor with the syntax hidden. A note's structure folds,
 - [x] `0043` Saving over a note another program changed destroys their work <sup>bug · p0 · vault</sup>
 - [x] `0044` Switching notes throws away unsaved changes without asking <sup>bug · p0 · editor</sup>
 - [x] `0045` Watch the vault and keep up with it <sup>feature · p0 · vault</sup>
+- [x] `0046` Tell agent instructions apart from notes in the sidebar <sup>feature · p2 · tree</sup>
 
 ## later — Someday
 
