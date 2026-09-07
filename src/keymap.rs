@@ -941,6 +941,7 @@ pub const HELP: &[(&str, &str)] = &[
         "moves the cursor; ctrl-click follows it",
     ),
     ("", "  (in preview, a plain click follows it)"),
+    ("drag", "selects lines; y d c then act on them"),
     ("wheel", "scrolls whatever is under the pointer"),
     ("shift-drag", "select text, as your terminal normally would"),
     ("", ""),

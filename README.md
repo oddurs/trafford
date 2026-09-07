@@ -96,7 +96,8 @@ cursor. Needs `ANTHROPIC_API_KEY`.
 All of it is clickable. Click a pane to focus it, a folder to fold it, a note
 to open it. Click an outline entry to jump to that heading, or a backlink to
 open that note at the line mentioning this one. The wheel scrolls whatever is
-under the pointer, and clicking outside an overlay dismisses it.
+under the pointer, dragging in the editor selects lines for `y`, `d` and
+`c`, and clicking outside an overlay dismisses it.
 
 Links follow Obsidian: in source mode a click puts the cursor in the link and
 `ctrl-click` follows it, so a link is still editable; in preview a plain click
