@@ -14,7 +14,6 @@ use ratatui::Frame;
 use theme::Theme;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-const SIDEBAR_WIDTH: u16 = 30;
 const CONTEXT_WIDTH: u16 = 32;
 const ASSISTANT_WIDTH: u16 = 46;
 
@@ -30,7 +29,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 
     let mut cols: Vec<Constraint> = Vec::new();
     if app.sidebar_visible {
-        cols.push(Constraint::Length(SIDEBAR_WIDTH));
+        cols.push(Constraint::Length(app.config.sidebar_width.clamp(18, 60)));
     }
     cols.push(Constraint::Min(20));
     let right_width = if app.assistant_visible {
@@ -176,31 +175,86 @@ fn draw_sidebar(f: &mut Frame, app: &App, area: Rect) {
     let mut lines: Vec<Line> = Vec::new();
     match app.sidebar_tab {
         SidebarTab::Notes => {
+            let rows = app.tree_rows();
             let notes = app.listed_notes();
-            let offset = scroll_offset(app.sidebar_cursor, notes.len(), height.saturating_sub(1));
             let words: usize = notes.iter().map(|n| n.words).sum();
             lines.push(Line::from(Span::styled(
                 fit(
-                    &format!("{} notes · {}", notes.len(), compact(words)),
+                    &format!("{} · {}", plural(notes.len(), "note"), compact(words)),
                     width,
                 ),
                 theme.faded(),
             )));
-            for (i, note) in notes.iter().enumerate().skip(offset).take(height - 1) {
+
+            let visible = height.saturating_sub(1);
+            let offset = scroll_offset(app.sidebar_cursor, rows.len(), visible);
+            for (i, row) in rows.iter().enumerate().skip(offset).take(visible) {
                 let selected = i == app.sidebar_cursor && focused;
-                let is_open = app.current.as_deref() == Some(note.id.as_str());
-                let marker = if is_open { "▌" } else { " " };
-                let style = if selected {
-                    theme.selected()
-                } else if is_open {
-                    Style::default().fg(theme.accent)
-                } else {
-                    Style::default().fg(theme.fg)
-                };
-                lines.push(Line::from(vec![
-                    Span::styled(marker, Style::default().fg(theme.accent)),
-                    Span::styled(fit(&note.title, width.saturating_sub(1)), style),
-                ]));
+                // Two columns per level. Levels below the first get a faint
+                // rule so a deep note can still be traced to its folder once
+                // the folder's own row has scrolled away. The first level is
+                // plain, or the rule would sit flush against the pane border
+                // and read as a doubled edge.
+                let indent: String = (0..row.depth)
+                    .map(|i| if i == 0 { "  " } else { "│ " })
+                    .collect();
+                let mut spans = vec![Span::styled(indent.clone(), theme.faded())];
+                let used = row.depth * 2;
+
+                match &row.entry {
+                    crate::tree::Entry::Dir {
+                        name,
+                        expanded,
+                        notes,
+                        ..
+                    } => {
+                        let count = format!(" {notes}");
+                        let room = width.saturating_sub(used + 2 + count.chars().count());
+                        let label = fit(name, room);
+                        let pad = room.saturating_sub(label.width());
+                        spans.push(Span::styled(
+                            if *expanded { "▾ " } else { "▸ " },
+                            Style::default().fg(theme.accent),
+                        ));
+                        spans.push(Span::styled(
+                            label,
+                            if selected {
+                                theme.selected()
+                            } else {
+                                Style::default()
+                                    .fg(theme.heading)
+                                    .add_modifier(Modifier::BOLD)
+                            },
+                        ));
+                        spans.push(Span::styled(" ".repeat(pad), theme.dimmed()));
+                        spans.push(Span::styled(count, theme.faded()));
+                    }
+                    crate::tree::Entry::Note { id, title } => {
+                        let is_open = app.current.as_deref() == Some(id.as_str());
+                        spans.push(Span::styled(
+                            if is_open { "▌ " } else { "  " },
+                            Style::default().fg(theme.accent),
+                        ));
+                        spans.push(Span::styled(
+                            fit(title, width.saturating_sub(used + 2)),
+                            if selected {
+                                theme.selected()
+                            } else if is_open {
+                                Style::default().fg(theme.accent)
+                            } else {
+                                Style::default().fg(theme.fg)
+                            },
+                        ));
+                    }
+                }
+                let mut line = Line::from(spans);
+                if selected {
+                    line = line.style(Style::default().bg(theme.sel));
+                }
+                lines.push(line);
+            }
+            if rows.is_empty() {
+                lines.push(Line::from(Span::styled("  no notes", theme.faded())));
             }
         }
         SidebarTab::Tags => {

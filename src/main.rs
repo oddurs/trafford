@@ -6,6 +6,7 @@ mod keymap;
 mod llm;
 #[cfg(test)]
 mod testing;
+mod tree;
 mod ui;
 mod vault;
 

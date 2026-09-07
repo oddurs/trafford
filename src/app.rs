@@ -2,6 +2,7 @@ use crate::config::Config;
 use crate::editor::{Buffer, Editor};
 use crate::git::{self, Repo};
 use crate::llm;
+use crate::tree;
 use crate::ui::theme::Theme;
 use crate::vault::Vault;
 use anyhow::Result;
@@ -329,7 +330,10 @@ pub struct App {
     pub history: Vec<(String, usize)>,
     pub focus: Focus,
     pub sidebar_tab: SidebarTab,
+    /// Index into the rows [`App::tree_rows`] returns, not into the note list.
     pub sidebar_cursor: usize,
+    /// Directories the sidebar is showing the contents of.
+    pub expanded: std::collections::HashSet<String>,
     pub sidebar_visible: bool,
     pub context_visible: bool,
     pub assistant_visible: bool,
@@ -365,6 +369,7 @@ impl App {
             focus: Focus::Editor,
             sidebar_tab: SidebarTab::Notes,
             sidebar_cursor: 0,
+            expanded: std::collections::HashSet::new(),
             sidebar_visible: config.sidebar,
             context_visible: config.context_pane,
             assistant_visible: false,
@@ -389,6 +394,10 @@ impl App {
             .map(|n| n.id.clone())
         {
             app.open_note(&id, false);
+        }
+        app.sidebar_cursor = 0;
+        if let Some(id) = app.current.clone() {
+            app.reveal_in_tree(&id);
         }
         app
     }
@@ -415,11 +424,62 @@ impl App {
 
     // ---- notes --------------------------------------------------------
 
-    /// The note ids currently listed in the sidebar, honouring any tag filter.
+    /// The notes the sidebar may show, honouring any tag filter.
     pub fn listed_notes(&self) -> Vec<&crate::vault::Note> {
         match &self.tag_filter {
             Some(tag) => self.vault.notes_with_tag(tag),
             None => self.vault.notes.iter().collect(),
+        }
+    }
+
+    fn tree_input(&self) -> Vec<(String, String)> {
+        self.listed_notes()
+            .iter()
+            .map(|n| (n.id.clone(), n.title.clone()))
+            .collect()
+    }
+
+    /// The sidebar's visible rows: directories and notes, in tree order.
+    pub fn tree_rows(&self) -> Vec<tree::Row> {
+        tree::build(&self.tree_input(), &self.expanded)
+    }
+
+    /// Open every directory containing `id`, so the note is visible, and put
+    /// the cursor on it.
+    pub fn reveal_in_tree(&mut self, id: &str) {
+        for dir in tree::ancestors(id) {
+            self.expanded.insert(dir);
+        }
+        if let Some(pos) = self
+            .tree_rows()
+            .iter()
+            .position(|r| r.note_id() == Some(id))
+        {
+            self.sidebar_cursor = pos;
+        }
+    }
+
+    pub fn expand_all(&mut self) {
+        self.expanded = tree::all_dirs(&self.tree_input());
+    }
+
+    /// Collapse every directory, leaving the cursor somewhere useful.
+    pub fn collapse_all(&mut self) {
+        self.expanded.clear();
+        self.sidebar_cursor = 0;
+        let Some(id) = self.current.clone() else {
+            return;
+        };
+        let rows = self.tree_rows();
+        // The open note is no longer visible, so aim at the outermost folder
+        // holding it: you can see where you were, and `l` walks back in.
+        let found = match tree::ancestors(&id).into_iter().next() {
+            Some(dir) => rows.iter().position(|r| r.dir_path() == Some(dir.as_str())),
+            // A note at the vault root stays visible when all is collapsed.
+            None => rows.iter().position(|r| r.note_id() == Some(id.as_str())),
+        };
+        if let Some(pos) = found {
+            self.sidebar_cursor = pos;
         }
     }
 
@@ -438,9 +498,9 @@ impl App {
                 self.editor.load(Buffer::from_str(&text));
                 self.current = Some(id.to_string());
                 self.focus = Focus::Editor;
-                if let Some(pos) = self.listed_notes().iter().position(|n| n.id == id) {
-                    self.sidebar_cursor = pos;
-                }
+                // Keep the sidebar pointing at whatever is open, opening the
+                // directories needed to show it.
+                self.reveal_in_tree(id);
             }
             Err(err) => self.set_status(format!("cannot open {id}: {err}")),
         }
