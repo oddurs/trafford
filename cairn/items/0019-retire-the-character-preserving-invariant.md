@@ -2,7 +2,7 @@
 id: 19
 title: Retire the character-preserving invariant
 type: docs
-status: backlog
+status: done
 milestone: v0.4
 depends_on:
 - 15

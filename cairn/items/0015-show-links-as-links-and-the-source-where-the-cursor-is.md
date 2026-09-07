@@ -2,7 +2,7 @@
 id: 15
 title: Show links as links, and the source where the cursor is
 type: feature
-status: doing
+status: done
 milestone: v0.4
 assignee: Oddur Sigurdsson
 depends_on:
