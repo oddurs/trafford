@@ -2,8 +2,9 @@
 id: 6
 title: Entries that cannot apply should be shown, not hidden
 type: feature
-status: backlog
+status: doing
 milestone: v0.3
+assignee: Oddur Sigurdsson
 created: 2026-09-07
 updated: 2026-09-07
 priority: p3

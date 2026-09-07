@@ -207,6 +207,37 @@ pub enum MenuAction {
 pub struct MenuItem {
     pub label: String,
     pub action: MenuAction,
+    /// Why this cannot run right now. `None` means it can.
+    ///
+    /// An action that exists but does not apply *here* is shown greyed with
+    /// the reason, rather than left out: a menu whose shape changes under you
+    /// cannot teach what is possible, and an absent entry looks the same as an
+    /// action that was never built. Actions that make no sense for the thing
+    /// clicked stay absent — a folder never lists "Delete note", greyed or
+    /// otherwise.
+    pub disabled: Option<String>,
+}
+
+impl MenuItem {
+    pub fn new(label: impl Into<String>, action: MenuAction) -> MenuItem {
+        MenuItem {
+            label: label.into(),
+            action,
+            disabled: None,
+        }
+    }
+
+    /// The same entry, greyed out, with the reason shown beside it.
+    pub fn unless(mut self, blocked: bool, reason: &str) -> MenuItem {
+        if blocked {
+            self.disabled = Some(reason.to_string());
+        }
+        self
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.disabled.is_none()
+    }
 }
 
 impl MenuItem {
@@ -246,12 +277,33 @@ pub struct Menu {
 }
 
 impl Menu {
+    /// Move by `delta`, skipping entries that cannot run. Stays put when
+    /// nothing in the menu is selectable, rather than spinning forever.
     pub fn move_cursor(&mut self, delta: isize) {
-        if self.items.is_empty() {
+        if self.items.is_empty() || !self.items.iter().any(|i| i.is_enabled()) {
             return;
         }
         let len = self.items.len() as isize;
-        self.cursor = (((self.cursor as isize + delta) % len + len) % len) as usize;
+        let step = if delta >= 0 { 1 } else { -1 };
+        let mut at = self.cursor as isize;
+        for _ in 0..len {
+            at = (at + step).rem_euclid(len);
+            if self.items[at as usize].is_enabled() {
+                break;
+            }
+        }
+        self.cursor = at as usize;
+    }
+
+    /// Put the cursor on the first entry that can actually run.
+    pub fn select_first_enabled(&mut self) {
+        if let Some(i) = self.items.iter().position(|i| i.is_enabled()) {
+            self.cursor = i;
+        }
+    }
+
+    pub fn selected(&self) -> Option<&MenuItem> {
+        self.items.get(self.cursor).filter(|i| i.is_enabled())
     }
 }
 
@@ -1077,9 +1129,15 @@ mod menu_tests {
     use super::*;
 
     fn item(action: MenuAction) -> MenuItem {
-        MenuItem {
-            label: "whatever".into(),
-            action,
+        MenuItem::new("whatever", action)
+    }
+
+    fn menu(items: Vec<MenuItem>) -> Menu {
+        Menu {
+            title: "t".into(),
+            items,
+            cursor: 0,
+            at: (0, 0),
         }
     }
 
@@ -1132,5 +1190,59 @@ mod menu_tests {
         assert_eq!(item(MenuAction::DeleteNote("a.md".into())).shortcut(), None);
         assert_eq!(item(MenuAction::RenameNote("a.md".into())).shortcut(), None);
         assert_eq!(item(MenuAction::LinkToNote("a.md".into())).shortcut(), None);
+    }
+
+    #[test]
+    fn a_disabled_entry_carries_its_reason() {
+        let entry = item(MenuAction::Command("save")).unless(true, "no unsaved changes");
+        assert!(!entry.is_enabled());
+        assert_eq!(entry.disabled.as_deref(), Some("no unsaved changes"));
+        // `unless(false, ...)` must leave the entry alone.
+        let fine = item(MenuAction::Command("save")).unless(false, "never shown");
+        assert!(fine.is_enabled());
+    }
+
+    #[test]
+    fn the_cursor_steps_over_disabled_entries() {
+        let mut m = menu(vec![
+            item(MenuAction::Command("save")),
+            item(MenuAction::Command("save")).unless(true, "nope"),
+            item(MenuAction::Command("save")).unless(true, "nope"),
+            item(MenuAction::Command("save")),
+        ]);
+        m.move_cursor(1);
+        assert_eq!(m.cursor, 3, "should skip the two greyed entries");
+        m.move_cursor(1);
+        assert_eq!(m.cursor, 0, "and wrap to the first enabled one");
+        m.move_cursor(-1);
+        assert_eq!(m.cursor, 3, "backwards too");
+    }
+
+    /// Spinning forever looking for an enabled entry would hang the draw loop.
+    #[test]
+    fn a_menu_of_only_disabled_entries_does_not_move_or_hang() {
+        let mut m = menu(vec![
+            item(MenuAction::Command("save")).unless(true, "nope"),
+            item(MenuAction::Command("save")).unless(true, "nope"),
+        ]);
+        m.move_cursor(1);
+        assert_eq!(m.cursor, 0);
+        assert!(m.selected().is_none(), "nothing is selectable");
+    }
+
+    #[test]
+    fn a_menu_opens_on_the_first_entry_that_can_run() {
+        let mut m = menu(vec![
+            item(MenuAction::Command("save")).unless(true, "nope"),
+            item(MenuAction::Command("save")),
+        ]);
+        m.select_first_enabled();
+        assert_eq!(m.cursor, 1);
+    }
+
+    #[test]
+    fn selected_refuses_to_return_a_disabled_entry() {
+        let m = menu(vec![item(MenuAction::Command("save")).unless(true, "nope")]);
+        assert!(m.selected().is_none());
     }
 }

@@ -704,8 +704,11 @@ impl App {
                     self.overlay = Some(Overlay::Menu(menu));
                 }
                 KeyCode::Enter | KeyCode::Char('l') | KeyCode::Right | KeyCode::Char(' ') => {
-                    if let Some(item) = menu.items.get(menu.cursor).cloned() {
-                        self.run_menu_action(item.action);
+                    match menu.selected().map(|i| i.action.clone()) {
+                        Some(action) => self.run_menu_action(action),
+                        // The cursor cannot normally rest on a greyed entry,
+                        // but if every entry is greyed it has nowhere else.
+                        None => self.overlay = Some(Overlay::Menu(menu)),
                     }
                 }
                 _ => self.overlay = Some(Overlay::Menu(menu)),
