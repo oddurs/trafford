@@ -2,8 +2,9 @@
 id: 23
 title: Keep the current section's heading on screen
 type: feature
-status: backlog
+status: done
 milestone: v0.5
+assignee: Oddur Sigurdsson
 created: 2026-09-07
 updated: 2026-09-07
 priority: p1

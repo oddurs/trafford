@@ -68,6 +68,24 @@ pub fn section_end(heads: &[Heading], at: usize, total: usize) -> usize {
         .unwrap_or(total)
 }
 
+/// The headings containing `row`, outermost first.
+///
+/// This is the answer to "which section am I in", which with a heading every
+/// six lines of body is a question the reader is otherwise always half-asking.
+pub fn chain(heads: &[Heading], row: usize, total: usize) -> Vec<&Heading> {
+    let mut out: Vec<&Heading> = Vec::new();
+    for h in heads.iter().filter(|h| h.row <= row) {
+        if section_end(heads, h.row, total) <= row {
+            continue;
+        }
+        // A heading replaces anything at its level or deeper: `## Two` ends
+        // `## One` and everything that was under it.
+        out.retain(|k| k.level < h.level);
+        out.push(h);
+    }
+    out
+}
+
 /// Which headings are collapsed, per note.
 ///
 /// Keyed by the line the heading sits on. That moves if the note is edited
@@ -198,6 +216,41 @@ d
         let src = lines(NOTE);
         let h = headings(&src);
         assert_eq!(section_end(&h, 3, src.len()), 4);
+    }
+
+    #[test]
+    fn the_chain_names_every_section_a_line_is_inside() {
+        let src = lines(NOTE);
+        let h = headings(&src);
+        let total = src.len();
+        let names = |row| {
+            chain(&h, row, total)
+                .iter()
+                .map(|h| h.text.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(names(1), ["Title"], "the intro is only under the title");
+        assert_eq!(names(4), ["Title", "One"]);
+        assert_eq!(names(6), ["Title", "One", "One A"], "deepest last");
+        assert_eq!(names(8), ["Title", "Two"], "One and its child are done");
+    }
+
+    #[test]
+    fn a_heading_is_in_its_own_chain() {
+        let src = lines(NOTE);
+        let h = headings(&src);
+        let names: Vec<&str> = chain(&h, 5, src.len())
+            .iter()
+            .map(|h| h.text.as_str())
+            .collect();
+        assert_eq!(names, ["Title", "One", "One A"]);
+    }
+
+    #[test]
+    fn a_line_above_every_heading_has_no_chain() {
+        let src = lines("intro\n# Title\nbody");
+        let h = headings(&src);
+        assert!(chain(&h, 0, src.len()).is_empty());
     }
 
     #[test]
