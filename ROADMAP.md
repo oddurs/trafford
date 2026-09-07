@@ -23,30 +23,26 @@ understand how to use this".
 
 ## v0.3 — Actions worth reaching for
 
-`########··` 75% · 3 of 4 done · due 2026-10-15
+`##########` 100% · 4 of 4 done · due 2026-10-15
 
 The things you go to a menu *for*: moving and duplicating notes, folders,
 clipboard, acting on a selection. Enough that the menu is a tool rather than a
 demonstration that menus exist.
-
-### in progress
-
-- [ ] `0009` Act on a selection from the editor's menu <sup>feature · p2 · mouse</sup>
 
 ### done
 
 - [x] `0006` Entries that cannot apply should be shown, not hidden <sup>feature · p3 · mouse</sup>
 - [x] `0007` Copy a note's link, path, or the selection <sup>feature · p2 · mouse</sup>
 - [x] `0008` Move, duplicate, and make folders from the tree <sup>feature · p1 · tree</sup>
+- [x] `0009` Act on a selection from the editor's menu <sup>feature · p2 · mouse</sup>
 
 ## later — Someday
 
-`··········` 0% · 0 of 2 done
+`··········` 0% · 0 of 1 done
 
 Good ideas without a date yet.
 
 ### backlog
 
-- [ ] `0010` Submenus, for lists that do not fit a flat menu <sup>feature · p3 · mouse</sup>
 - [ ] `0011` Open a note in an external application <sup>feature · p3 · mouse</sup>
 
