@@ -2,7 +2,7 @@ use super::note::{relative_id, Note};
 use anyhow::{Context, Result};
 use ignore::WalkBuilder;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 
 /// A reference from one note to another, with the line it appeared on.
 #[derive(Debug, Clone)]
@@ -283,12 +283,7 @@ impl Vault {
 
     /// Create a new note, making parent directories as needed. Returns its id.
     pub fn create_note(&mut self, rel: &str, contents: &str) -> Result<String> {
-        let rel = if rel.ends_with(".md") {
-            rel.to_string()
-        } else {
-            format!("{rel}.md")
-        };
-        let path = self.root.join(&rel);
+        let path = self.resolve_new_path(rel)?;
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("creating {}", parent.display()))?;
@@ -301,6 +296,34 @@ impl Vault {
         Ok(relative_id(&self.root, &path))
     }
 
+    /// Turn a user-supplied name into a path inside the vault, or refuse.
+    ///
+    /// Names reach this from typed prompts and from `[[links]]` — including
+    /// links an assistant wrote — so a name that climbs out of the vault has
+    /// to be rejected rather than followed.
+    fn resolve_new_path(&self, rel: &str) -> Result<PathBuf> {
+        let rel = rel.trim();
+        if rel.is_empty() {
+            anyhow::bail!("note name is empty");
+        }
+        let candidate = Path::new(rel);
+        if candidate.is_absolute() {
+            anyhow::bail!("note names are relative to the vault: {rel}");
+        }
+        for part in candidate.components() {
+            match part {
+                Component::Normal(_) | Component::CurDir => {}
+                _ => anyhow::bail!("note names cannot leave the vault: {rel}"),
+            }
+        }
+        let rel = if rel.ends_with(".md") {
+            rel.to_string()
+        } else {
+            format!("{rel}.md")
+        };
+        Ok(self.root.join(rel))
+    }
+
     /// Rename a note on disk and rewrite every `[[link]]` that pointed at it.
     /// Returns the new id and the number of files whose links were updated.
     pub fn rename_note(&mut self, id: &str, new_rel: &str) -> Result<(String, usize)> {
@@ -309,14 +332,9 @@ impl Vault {
         };
         let old_stem = note.stem().to_string();
         let old_path = note.path.clone();
-        let new_rel = if new_rel.ends_with(".md") {
-            new_rel.to_string()
-        } else {
-            format!("{new_rel}.md")
-        };
-        let new_path = self.root.join(&new_rel);
+        let new_path = self.resolve_new_path(new_rel)?;
         if new_path.exists() {
-            anyhow::bail!("{new_rel} already exists");
+            anyhow::bail!("{} already exists", relative_id(&self.root, &new_path));
         }
         if let Some(parent) = new_path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -327,7 +345,7 @@ impl Vault {
         let new_stem = new_path
             .file_stem()
             .and_then(|s| s.to_str())
-            .unwrap_or(&new_rel)
+            .unwrap_or(new_rel)
             .to_string();
 
         let mut rewritten = 0usize;
@@ -460,6 +478,56 @@ mod tests {
         assert!(a.contains("[[c]]"), "{a}");
         assert!(a.contains("[[c|alias]]"), "{a}");
         assert!(a.contains("[[c#head]]"), "{a}");
+    }
+
+    /// Names reach `create_note` from typed prompts and from `[[links]]`,
+    /// including links an assistant wrote, so one that climbs out of the vault
+    /// must be refused rather than followed.
+    #[test]
+    fn note_names_cannot_escape_the_vault() {
+        let (dir, mut vault) = scratch(&[("n.md", "# n\n")]);
+        let outside = dir.path().parent().unwrap().join("escaped.md");
+        let _ = std::fs::remove_file(&outside);
+
+        for name in ["../escaped", "a/../../escaped", "../../escaped.md"] {
+            let err = vault.create_note(name, "# nope\n").unwrap_err();
+            assert!(
+                err.to_string().contains("cannot leave the vault"),
+                "{name} gave {err}"
+            );
+        }
+        assert!(!outside.exists(), "a note was written outside the vault");
+        assert_eq!(vault.notes.len(), 1);
+    }
+
+    #[test]
+    fn absolute_note_names_are_refused() {
+        let (_d, mut vault) = scratch(&[("n.md", "# n\n")]);
+        let err = vault.create_note("/tmp/absolute", "x").unwrap_err();
+        assert!(err.to_string().contains("relative to the vault"), "{err}");
+    }
+
+    #[test]
+    fn renaming_cannot_escape_the_vault_either() {
+        let (dir, mut vault) = scratch(&[("n.md", "# n\n")]);
+        let err = vault.rename_note("n.md", "../escaped").unwrap_err();
+        assert!(err.to_string().contains("cannot leave the vault"), "{err}");
+        // The original must survive a refused rename.
+        assert!(dir.path().join("n.md").exists());
+    }
+
+    #[test]
+    fn nested_names_still_work() {
+        let (_d, mut vault) = scratch(&[]);
+        let id = vault.create_note("a/b/deep note", "# deep\n").unwrap();
+        assert_eq!(id, "a/b/deep note.md");
+        assert_eq!(vault.notes.len(), 1);
+    }
+
+    #[test]
+    fn a_leading_dot_slash_is_harmless() {
+        let (_d, mut vault) = scratch(&[]);
+        assert_eq!(vault.create_note("./here", "x").unwrap(), "here.md");
     }
 
     #[test]
