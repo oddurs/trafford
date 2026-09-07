@@ -229,6 +229,15 @@ pub struct Chat {
     pub context_ids: Vec<String>,
 }
 
+/// What draining the stream produced this tick.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Drained {
+    /// The chat changed and the UI should redraw.
+    pub changed: bool,
+    /// The turn failed; the message is for the status line.
+    pub error: Option<String>,
+}
+
 impl Chat {
     /// The most recent assistant reply, for inserting into a note.
     pub fn last_answer(&self) -> Option<&str> {
@@ -238,6 +247,53 @@ impl Chat {
             .find(|m| m.role == llm::Role::Assistant)
             .map(|m| m.text.as_str())
             .filter(|t| !t.trim().is_empty())
+    }
+
+    /// Consume whatever the worker thread has produced so far, appending
+    /// deltas to the open assistant message. Never blocks.
+    pub fn drain(&mut self) -> Drained {
+        let Some(rx) = &self.rx else {
+            return Drained::default();
+        };
+        let mut out = Drained::default();
+        loop {
+            match rx.try_recv() {
+                Ok(llm::Event::Delta(text)) => {
+                    if let Some(last) = self.messages.last_mut() {
+                        last.text.push_str(&text);
+                    }
+                    out.changed = true;
+                }
+                Ok(llm::Event::Done) => {
+                    self.finish();
+                    out.changed = true;
+                    break;
+                }
+                Ok(llm::Event::Error(err)) => {
+                    // Drop the placeholder if nothing was streamed into it, so
+                    // a failed turn does not leave an empty bubble behind.
+                    if self.messages.last().is_some_and(|m| m.text.is_empty()) {
+                        self.messages.pop();
+                    }
+                    self.finish();
+                    out.changed = true;
+                    out.error = Some(err);
+                    break;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.finish();
+                    out.changed = true;
+                    break;
+                }
+            }
+        }
+        out
+    }
+
+    fn finish(&mut self) {
+        self.streaming = false;
+        self.rx = None;
     }
 }
 
@@ -662,46 +718,11 @@ impl App {
 
     /// Drain any streamed tokens. Called once per event-loop tick.
     pub fn poll_assistant(&mut self) -> bool {
-        let Some(rx) = &self.chat.rx else {
-            return false;
-        };
-        let mut changed = false;
-        loop {
-            match rx.try_recv() {
-                Ok(llm::Event::Delta(text)) => {
-                    if let Some(last) = self.chat.messages.last_mut() {
-                        last.text.push_str(&text);
-                    }
-                    changed = true;
-                }
-                Ok(llm::Event::Done) => {
-                    self.chat.streaming = false;
-                    self.chat.rx = None;
-                    changed = true;
-                    break;
-                }
-                Ok(llm::Event::Error(err)) => {
-                    if let Some(last) = self.chat.messages.last_mut() {
-                        if last.text.is_empty() {
-                            self.chat.messages.pop();
-                        }
-                    }
-                    self.chat.streaming = false;
-                    self.chat.rx = None;
-                    self.set_status(format!("assistant: {err}"));
-                    changed = true;
-                    break;
-                }
-                Err(std::sync::mpsc::TryRecvError::Empty) => break,
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    self.chat.streaming = false;
-                    self.chat.rx = None;
-                    changed = true;
-                    break;
-                }
-            }
+        let drained = self.chat.drain();
+        if let Some(err) = drained.error {
+            self.set_status(format!("assistant: {err}"));
         }
-        changed
+        drained.changed
     }
 
     pub fn insert_last_answer(&mut self) {
@@ -735,5 +756,99 @@ impl App {
             self.commit_all(&msg);
             self.last_edit = Instant::now();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assistant_turn() -> (Chat, std::sync::mpsc::Sender<llm::Event>) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let chat = Chat {
+            messages: vec![
+                llm::Message {
+                    role: llm::Role::User,
+                    text: "what is here?".into(),
+                },
+                // The empty assistant message deltas stream into.
+                llm::Message {
+                    role: llm::Role::Assistant,
+                    text: String::new(),
+                },
+            ],
+            streaming: true,
+            rx: Some(rx),
+            ..Default::default()
+        };
+        (chat, tx)
+    }
+
+    #[test]
+    fn deltas_accumulate_into_the_open_assistant_message() {
+        let (mut chat, tx) = assistant_turn();
+        tx.send(llm::Event::Delta("Your ".into())).unwrap();
+        tx.send(llm::Event::Delta("vault.".into())).unwrap();
+        let out = chat.drain();
+        assert!(out.changed);
+        assert_eq!(chat.messages[1].text, "Your vault.");
+        // Still streaming: no Done arrived.
+        assert!(chat.streaming);
+    }
+
+    #[test]
+    fn draining_an_empty_channel_changes_nothing() {
+        let (mut chat, _tx) = assistant_turn();
+        assert_eq!(chat.drain(), Drained::default());
+    }
+
+    #[test]
+    fn done_ends_the_turn_and_keeps_the_text() {
+        let (mut chat, tx) = assistant_turn();
+        tx.send(llm::Event::Delta("answer".into())).unwrap();
+        tx.send(llm::Event::Done).unwrap();
+        chat.drain();
+        assert!(!chat.streaming);
+        assert!(chat.rx.is_none());
+        assert_eq!(chat.last_answer(), Some("answer"));
+    }
+
+    #[test]
+    fn an_error_before_any_text_removes_the_empty_bubble() {
+        let (mut chat, tx) = assistant_turn();
+        tx.send(llm::Event::Error("no credit".into())).unwrap();
+        let out = chat.drain();
+        assert_eq!(out.error.as_deref(), Some("no credit"));
+        assert_eq!(chat.messages.len(), 1, "the placeholder should be gone");
+        assert_eq!(chat.messages[0].role, llm::Role::User);
+        assert!(!chat.streaming);
+    }
+
+    #[test]
+    fn an_error_after_partial_text_keeps_what_arrived() {
+        let (mut chat, tx) = assistant_turn();
+        tx.send(llm::Event::Delta("half an ans".into())).unwrap();
+        tx.send(llm::Event::Error("connection reset".into()))
+            .unwrap();
+        let out = chat.drain();
+        assert_eq!(out.error.as_deref(), Some("connection reset"));
+        assert_eq!(chat.messages.len(), 2);
+        assert_eq!(chat.last_answer(), Some("half an ans"));
+    }
+
+    #[test]
+    fn a_worker_that_dies_without_speaking_ends_the_turn() {
+        let (mut chat, tx) = assistant_turn();
+        drop(tx);
+        let out = chat.drain();
+        assert!(out.changed);
+        assert!(out.error.is_none());
+        assert!(!chat.streaming, "a dead worker must not leave a spinner up");
+    }
+
+    #[test]
+    fn last_answer_ignores_a_blank_placeholder() {
+        let (chat, _tx) = assistant_turn();
+        assert_eq!(chat.last_answer(), None);
     }
 }
