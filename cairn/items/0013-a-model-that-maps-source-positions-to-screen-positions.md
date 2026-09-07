@@ -58,6 +58,21 @@ old one.
 - [ ] The existing behaviour is unchanged when nothing wraps and nothing renders,
       proved by the current tests still passing untouched
 
+## Revised by #0012
+
+Smaller than this item assumed. The spike put everything that changes the *drawn
+characters* into preview, so the editor needs **row mapping only**: one buffer
+line becomes several screen rows, and within a row the column is still the
+display width of the source before it.
+
+That means `screen_of` and `source_of` are a fold-point list per visible line
+plus a search through it, not a general two-way translation. The round-trip
+property is unchanged and still the first test to write.
+
+The preview pane needs a separate, weaker thing — "which element is at this
+point", enough to follow a link — built while rendering and discarded on the
+next draw. It is not this item.
+
 ## Notes
 
 Blocked on #0012. If that spike answers **B**, this item shrinks to almost

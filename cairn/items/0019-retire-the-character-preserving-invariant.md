@@ -42,6 +42,16 @@ missing.
 - [ ] The removed test is named in the commit that removes it
 - [ ] The "Obsidian compatibility" section says what is rendered and what is not
 
+## Revised by #0012
+
+Not a retirement — a clarification. The invariant holds on the **editor** path,
+which is the path it was written to protect: the editor still draws the source,
+so the cursor column is still the display width of what precedes it.
+
+What it needs is a scope. It currently reads as though it applies to
+`markdown::Renderer` everywhere, and preview will not honour it. The test stays,
+narrowed to the editor's use of the renderer.
+
 ## Notes
 
 Small, and easy to forget, which is why it is an item. Blocked on #0015 because
