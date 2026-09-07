@@ -189,7 +189,7 @@ fn draw_sidebar(f: &mut Frame, app: &App, area: Rect) {
             let tags = app.vault.all_tags();
             let offset = scroll_offset(app.sidebar_cursor, tags.len(), height.saturating_sub(1));
             lines.push(Line::from(Span::styled(
-                fit(&format!("{} tags", tags.len()), width),
+                fit(&plural(tags.len(), "tag"), width),
                 theme.faded(),
             )));
             for (i, (tag, count)) in tags.iter().enumerate().skip(offset).take(height - 1) {
@@ -214,6 +214,15 @@ fn draw_sidebar(f: &mut Frame, app: &App, area: Rect) {
         }
     }
     f.render_widget(Paragraph::new(lines), inner);
+}
+
+/// "1 note", "3 notes" — an `s` only when it belongs.
+fn plural(n: usize, noun: &str) -> String {
+    if n == 1 {
+        format!("{n} {noun}")
+    } else {
+        format!("{n} {noun}s")
+    }
 }
 
 /// Render a word count compactly: 940, 12.4k, 1.2m.
@@ -712,7 +721,7 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
             ));
         }
         spans.push(Span::styled(
-            format!("   {} notes", app.vault.notes.len()),
+            format!("   {}", plural(app.vault.notes.len(), "note")),
             Style::default().fg(theme.dim).bg(theme.panel),
         ));
     }
@@ -1229,6 +1238,13 @@ mod tests {
         for &(w, h) in SIZES {
             render_every_focus(&mut app, w, h);
         }
+    }
+
+    #[test]
+    fn plural_adds_an_s_only_when_it_belongs() {
+        assert_eq!(plural(1, "tag"), "1 tag");
+        assert_eq!(plural(0, "tag"), "0 tags");
+        assert_eq!(plural(2, "note"), "2 notes");
     }
 
     #[test]
