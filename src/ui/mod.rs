@@ -283,7 +283,7 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     app.editor.sync_scroll(inner.height as usize);
 
     let vault = &app.vault;
-    let resolves = |target: &str| vault.resolve_target(target).is_some();
+    let resolves = |target: &str| vault.resolves(target);
     let renderer = Renderer {
         theme: &theme,
         resolves: &resolves,
@@ -632,7 +632,7 @@ fn draw_assistant(f: &mut Frame, app: &App, area: Rect) {
         }
     }
 
-    let resolves = |target: &str| app.vault.resolve_target(target).is_some();
+    let resolves = |target: &str| app.vault.resolves(target);
     let renderer = Renderer {
         theme: &theme,
         resolves: &resolves,

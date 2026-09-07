@@ -85,7 +85,10 @@ impl Note {
             words += line.split_whitespace().count();
 
             if let Some(h) = parse_heading(line, idx) {
-                if title.is_none() && h.level == 1 {
+                // A template's H1 is a placeholder, not a name. Falling back to
+                // the filename keeps `_templates/` readable instead of listing
+                // three notes all called `<% tp.file.title %>`.
+                if title.is_none() && h.level == 1 && !is_placeholder(&h.text) {
                     title = Some(h.text.clone());
                 }
                 headings.push(h);
@@ -117,6 +120,13 @@ impl Note {
             haystack: text.to_lowercase(),
         }
     }
+}
+
+/// True when a string is a template expression rather than real text —
+/// Templater's `<% ... %>` or Obsidian core's `{{...}}`.
+fn is_placeholder(text: &str) -> bool {
+    let t = text.trim();
+    (t.contains("<%") && t.contains("%>")) || (t.contains("{{") && t.contains("}}"))
 }
 
 pub fn relative_id(root: &Path, path: &Path) -> String {
@@ -308,6 +318,28 @@ mod tests {
         let note = Note::parse(Path::new("/v"), Path::new("/v/n.md"), text);
         assert_eq!(note.title, "Real Title");
         assert_eq!(note.tags, vec!["one".to_string(), "two".to_string()]);
+    }
+
+    #[test]
+    fn a_templated_heading_does_not_become_the_title() {
+        for heading in [
+            "<% tp.file.title %>",
+            "{{title}}",
+            "<% tp.date.now(\"YYYY\") %>",
+        ] {
+            let text = format!("# {heading}\n\nbody\n");
+            let note = Note::parse(Path::new("/v"), Path::new("/v/daily-note.md"), &text);
+            assert_eq!(note.title, "daily-note", "for heading {heading}");
+        }
+    }
+
+    #[test]
+    fn an_ordinary_heading_is_still_the_title() {
+        let note = Note::parse(Path::new("/v"), Path::new("/v/n.md"), "# Real Heading\n");
+        assert_eq!(note.title, "Real Heading");
+        // Percent signs on their own are not a placeholder.
+        let note = Note::parse(Path::new("/v"), Path::new("/v/n.md"), "# 50% Done\n");
+        assert_eq!(note.title, "50% Done");
     }
 
     #[test]

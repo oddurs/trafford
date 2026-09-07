@@ -32,6 +32,10 @@ pub struct Vault {
     by_id_lower: HashMap<String, usize>,
     by_stem: HashMap<String, Vec<usize>>,
     backlinks: HashMap<String, Vec<Backlink>>,
+    /// Non-markdown files in the vault — images, PDFs, anything a note embeds
+    /// with `![[file.jpg]]`. Keyed by lowercased filename and by lowercased
+    /// relative path, since both forms appear in links.
+    attachments: HashMap<String, String>,
     /// Link targets that resolve to nothing — the vault's growing edge.
     pub unresolved: HashMap<String, Vec<Backlink>>,
 }
@@ -53,6 +57,7 @@ impl Vault {
     /// Walk the vault and rebuild every index. Respects `.gitignore`.
     pub fn rescan(&mut self) -> Result<()> {
         let mut notes = Vec::new();
+        let mut attachments = HashMap::new();
         let walker = WalkBuilder::new(&self.root)
             .hidden(true)
             .git_ignore(true)
@@ -65,6 +70,12 @@ impl Vault {
             }
             let path = entry.path();
             if path.extension().and_then(|e| e.to_str()) != Some("md") {
+                // Not a note, but a note may embed it.
+                let rel = relative_id(&self.root, path);
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    attachments.insert(name.to_lowercase(), rel.clone());
+                }
+                attachments.insert(rel.to_lowercase(), rel);
                 continue;
             }
             let text = match std::fs::read_to_string(path) {
@@ -82,8 +93,29 @@ impl Vault {
 
         notes.sort_by(|a, b| a.id.cmp(&b.id));
         self.notes = notes;
+        self.attachments = attachments;
         self.reindex();
         Ok(())
+    }
+
+    /// The vault-relative path of an embedded file, if the vault holds one.
+    ///
+    /// `![[diagram.png]]` is a link to something real; without this it looked
+    /// like a link to a note nobody had written yet, and a vault with images
+    /// showed a list of "unwritten notes" that were all pictures.
+    pub fn attachment(&self, target: &str) -> Option<&str> {
+        let target = target.trim().trim_start_matches("./");
+        if target.is_empty() {
+            return None;
+        }
+        self.attachments
+            .get(&target.to_lowercase())
+            .map(|s| s.as_str())
+    }
+
+    /// Whether a `[[target]]` points at anything in the vault at all.
+    pub fn resolves(&self, target: &str) -> bool {
+        self.resolve_target(target).is_some() || self.attachment(target).is_some()
     }
 
     /// Re-read a single note and rebuild the link indexes, without touching
@@ -140,6 +172,8 @@ impl Vault {
                 };
                 match self.resolve_target(&link.target) {
                     Some(idx) => resolved.push((self.notes[idx].id.clone(), backlink)),
+                    // An embedded image is not a note waiting to be written.
+                    None if self.attachment(&link.target).is_some() => {}
                     None => missing.push((link.target.clone(), backlink)),
                 }
             }
@@ -487,6 +521,54 @@ mod tests {
             ("sub/Deep Note.md", "# Deep\n"),
         ]);
         assert_eq!(vault.backlinks_for("sub/Deep Note.md").len(), 1);
+    }
+
+    /// A vault with images showed a list of "unwritten notes" that were all
+    /// pictures, because only markdown was indexed.
+    #[test]
+    fn embedded_files_are_not_unwritten_notes() {
+        let dir = crate::testing::TempDir::with_files(&[(
+            "trip.md",
+            "# Trip\n\n![[photo.jpg]] and ![[_assets/map.png]]\n",
+        )]);
+        std::fs::write(dir.path().join("photo.jpg"), b"x").unwrap();
+        std::fs::create_dir_all(dir.path().join("_assets")).unwrap();
+        std::fs::write(dir.path().join("_assets/map.png"), b"x").unwrap();
+        let vault = Vault::open(dir.path()).unwrap();
+
+        assert_eq!(vault.notes.len(), 1, "images must not be indexed as notes");
+        assert!(vault.unresolved.is_empty(), "{:?}", vault.unresolved.keys());
+        assert_eq!(vault.attachment("photo.jpg"), Some("photo.jpg"));
+        assert_eq!(vault.attachment("_assets/map.png"), Some("_assets/map.png"));
+        assert!(vault.resolves("photo.jpg"));
+    }
+
+    #[test]
+    fn an_embed_of_a_missing_file_is_still_unresolved() {
+        let (_d, vault) = scratch(&[("n.md", "![[nothere.jpg]]\n")]);
+        assert!(vault.unresolved.contains_key("nothere.jpg"));
+        assert!(!vault.resolves("nothere.jpg"));
+    }
+
+    #[test]
+    fn attachments_match_by_bare_filename_case_insensitively() {
+        let dir = crate::testing::TempDir::with_files(&[("n.md", "![[Photo.JPG]]\n")]);
+        std::fs::create_dir_all(dir.path().join("deep/nested")).unwrap();
+        std::fs::write(dir.path().join("deep/nested/Photo.JPG"), b"x").unwrap();
+        let vault = Vault::open(dir.path()).unwrap();
+        assert_eq!(vault.attachment("photo.jpg"), Some("deep/nested/Photo.JPG"));
+        assert!(vault.unresolved.is_empty());
+    }
+
+    #[test]
+    fn notes_still_win_over_attachments_of_the_same_name() {
+        let dir = crate::testing::TempDir::with_files(&[
+            ("a.md", "[[thing]]\n"),
+            ("thing.md", "# Thing\n"),
+        ]);
+        std::fs::write(dir.path().join("thing.txt"), b"x").unwrap();
+        let vault = Vault::open(dir.path()).unwrap();
+        assert_eq!(vault.backlinks_for("thing.md").len(), 1);
     }
 
     #[test]
