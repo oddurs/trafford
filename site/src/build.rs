@@ -28,6 +28,16 @@ use crate::shell::{self, Assets, NavItem};
 const STYLE: &str = include_str!("../assets/site.css");
 const SCRIPT: &str = include_str!("../assets/site.js");
 
+/// The typeface, subset by `tools/subset-font.py` to the characters the built
+/// site actually draws. Self-hosted because a font service is a request
+/// leaving the origin, which no page here makes.
+const FONT: &[u8] = include_bytes!("../assets/fonts/jetbrains-mono.woff2");
+
+/// What `site.css` writes instead of a font URL, since the URL carries a hash
+/// of the font's own bytes and is only known at build time. Relative to the
+/// stylesheet, which is where a CSS `url()` resolves from.
+const FONT_URL: &str = "FONT_URL";
+
 pub struct Options {
     /// The vault to render.
     pub docs: PathBuf,
@@ -124,10 +134,13 @@ pub fn build(opts: &Options) -> Result<Built> {
         })
         .collect();
 
+    let font = hashed_bytes("assets/fonts/jetbrains-mono", "woff2", FONT);
+    let css = stylesheet(&font)?;
     let assets = Assets {
-        css: hashed("assets/site", "css", &stylesheet()?),
+        css: hashed("assets/site", "css", &css),
         js: hashed("assets/site", "js", SCRIPT),
         icon: "assets/favicon.svg".to_string(),
+        font,
     };
 
     // Navigation is every page but the landing one, in the order the notes ask
@@ -211,8 +224,9 @@ pub fn build(opts: &Options) -> Result<Built> {
         );
     }
 
-    written.push((assets.css.clone(), stylesheet()?.into_bytes()));
+    written.push((assets.css.clone(), css.into_bytes()));
     written.push((assets.js.clone(), SCRIPT.as_bytes().to_vec()));
+    written.push((assets.font.clone(), FONT.to_vec()));
     written.push((assets.icon.clone(), favicon()?.into_bytes()));
     written.push(("404.html".into(), not_found(&assets)?.into_bytes()));
     written.push(("pages.json".into(), manifest(&page_paths).into_bytes()));
@@ -316,8 +330,19 @@ fn inline_or_img(ctx: &Ctx<'_>, root: &Path, rel: &str) -> String {
     )
 }
 
-fn stylesheet() -> Result<String> {
-    Ok(format!("{}\n{STYLE}", crate::palette::stylesheet()?))
+/// The generated palette, then the hand-written rules, with the font URL filled
+/// in. One file: a second request for the palette would be a round trip before
+/// the page has a colour.
+fn stylesheet(font: &str) -> Result<String> {
+    // `assets/fonts/x.woff2` seen from `assets/site.css` is `fonts/x.woff2`.
+    let relative = font
+        .strip_prefix("assets/")
+        .expect("the font is written under assets/");
+    Ok(format!(
+        "{}\n{}",
+        crate::palette::stylesheet()?,
+        STYLE.replace(FONT_URL, relative)
+    ))
 }
 
 /// A favicon in the theme's own accent, so the tab matches the page.
@@ -587,7 +612,11 @@ fn swap(staging: &Path, out: &Path) -> Result<()> {
 /// `assets/site.<hash>.css`. The name changes when the bytes do, which is what
 /// lets the server hand out a year-long cache header without lying.
 fn hashed(stem: &str, ext: &str, body: &str) -> String {
-    format!("{stem}.{}.{ext}", fnv(body.as_bytes()))
+    hashed_bytes(stem, ext, body.as_bytes())
+}
+
+fn hashed_bytes(stem: &str, ext: &str, body: &[u8]) -> String {
+    format!("{stem}.{}.{ext}", fnv(body))
 }
 
 /// FNV-1a, eight hex digits. A cache-busting name, not a checksum — no

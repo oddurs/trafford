@@ -4,10 +4,20 @@
  * themes. A hex literal in this file is a colour that will drift from the
  * screenshots the moment a theme is adjusted, so there are none.
  *
- * Fonts are the system stack. Self-hosting means committing binaries and
- * shipping a hundred kilobytes before a word is readable; a web font service
- * means a request leaving the origin. Neither is worth it for a page whose
- * subject is a terminal. */
+ * One typeface, and it is monospaced. Not mono-for-code-and-sans-for-prose:
+ * mono for everything. For a terminal knowledge base that is a statement
+ * rather than a default, and it costs one file instead of two. It is
+ * self-hosted and subset — a font service would be a request leaving the
+ * origin, which no page here makes. */
+
+@font-face {
+  font-family: "JetBrains Mono";
+  /* Filled in at build time; the URL carries a hash of the font's own bytes. */
+  src: url("FONT_URL") format("woff2");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
 
 *,
 *::before,
@@ -16,15 +26,17 @@
 }
 
 :root {
-  --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo,
-    Consolas, monospace;
-  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
-    sans-serif;
-  --measure: 68ch;
+  /* The fallbacks all advance at 0.6em, like JetBrains Mono, so the swap moves
+     nothing. Anything narrower here would reflow the page as the font lands. */
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, "DejaVu Sans Mono",
+    monospace;
+  --measure: 66ch;
   --gap: 1.5rem;
   --radius: 6px;
   --sidebar: 15rem;
   --rail: 14rem;
+  /* One hairline, everywhere. The grid is this line and nothing else. */
+  --rule: 1px solid var(--border);
 }
 
 html {
@@ -35,9 +47,12 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
-  font-family: var(--sans);
-  font-size: 16px;
-  line-height: 1.65;
+  font-family: var(--mono);
+  /* Monospace reads small. The size is up and the leading is loose, which is
+     most of what makes people say mono is unreadable when it is neither. */
+  font-size: 15px;
+  line-height: 1.75;
+  font-feature-settings: "calt" 1, "liga" 0;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -89,7 +104,6 @@ body > * {
 }
 
 .brand {
-  font-family: var(--mono);
   font-weight: 600;
   font-size: 1.05rem;
   color: var(--fg);
@@ -463,58 +477,98 @@ th.center {
   text-align: center;
 }
 
-/* ── Landing ─────────────────────────────────────────────────────────────── */
+/* ── Landing ────────────────────────────────────────────────────────────── */
+
+/* The page is a grid of cells separated by one hairline, in the colour the app
+   draws its pane borders in. That is the single visual idea the site borrows
+   from the program, and it is the only one it needs. Every rule here separates
+   two things a reader would otherwise have to separate themselves. */
 
 .landing {
   flex: 1;
-  max-width: 62rem;
   width: 100%;
+  max-width: 78rem;
   margin: 0 auto;
-  padding: clamp(2.5rem, 8vw, 5rem) clamp(1rem, 4vw, 2.5rem) 4rem;
+  padding: 0 clamp(1rem, 4vw, 2.5rem) 4rem;
+}
+
+/* The hero is a split, not a stack: the claim on the left, the running program
+   on the right, sharing a rule. A centred column left the right third of a
+   laptop screen doing nothing. */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 24rem) minmax(0, 1fr);
+  grid-template-rows: auto 1fr auto;
+  align-items: start;
+  column-gap: clamp(1.5rem, 4vw, 3rem);
+  padding: clamp(3rem, 8vw, 5.5rem) 0 clamp(2rem, 5vw, 3.5rem);
+  border-bottom: var(--rule);
 }
 
 .hero h1 {
-  font-family: var(--mono);
-  font-size: clamp(2.4rem, 7vw, 3.6rem);
-  letter-spacing: -0.03em;
+  grid-area: 1 / 1;
+}
+
+.hero .tagline {
+  grid-area: 2 / 1;
+}
+
+/* The command gets the full width rather than a quarter of it. It is the one
+   thing on the page a reader is meant to take away, and it was being cut off
+   by the column that held it. */
+.hero .install {
+  grid-area: 3 / 1 / 4 / -1;
+  margin-top: clamp(1.5rem, 4vw, 2.5rem);
+}
+
+.hero h1 {
+  font-size: clamp(2.3rem, 6vw, 3.2rem);
+  letter-spacing: -0.045em;
+  line-height: 1;
   margin: 0;
   color: var(--heading);
 }
 
 .hero .tagline {
-  font-size: clamp(1.05rem, 2.6vw, 1.3rem);
+  font-size: 0.95rem;
+  line-height: 1.7;
   color: var(--muted);
-  max-width: 46ch;
-  margin: 0.75rem 0 1.75rem;
+  margin: 1.1rem 0 1.75rem;
 }
 
 .install {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.75rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  border: var(--rule);
   border-radius: var(--radius);
-  padding: 0.55rem 0.6rem 0.55rem 0.9rem;
-  font-family: var(--mono);
-  font-size: 0.9rem;
+  padding: 0.5rem 0.55rem 0.5rem 0.85rem;
+  font-size: 0.78rem;
+  overflow-x: auto;
 }
 
 .install code {
   background: none;
   padding: 0;
   color: var(--fg);
+  white-space: nowrap;
 }
 
 .copy {
-  font-family: var(--mono);
-  font-size: 0.75rem;
+  font: inherit;
+  font-size: 0.72rem;
   color: var(--muted);
-  background: var(--bg);
-  border: 1px solid var(--border);
+  background: var(--surface);
+  border: var(--rule);
   border-radius: 4px;
-  padding: 0.2rem 0.5rem;
+  padding: 0.15rem 0.5rem;
   cursor: pointer;
+  flex: none;
+  /* The command is wider than the box on a narrow column. The button stays
+     where it is while the text scrolls under it, rather than scrolling off. */
+  position: sticky;
+  right: 0;
 }
 
 .copy:hover {
@@ -522,14 +576,16 @@ th.center {
   border-color: var(--border-focus);
 }
 
-/* The screenshot comes out of the real binary as SVG: real text, a few
-   kilobytes, and legible at any size. */
+/* The screenshot is the right half of the split, and it is deliberately wider
+   than its cell: a terminal is wide, and cropping it to fit would be a
+   different program. It scrolls inside its own box. */
 .shot {
-  margin: 2.5rem 0 0;
-  border: 1px solid var(--border);
+  grid-area: 1 / 2 / 3 / 3;
+  margin: 0;
+  border: var(--rule);
   border-radius: var(--radius);
   background: var(--surface);
-  padding: 0.75rem;
+  padding: 0.6rem;
   overflow-x: auto;
 }
 
@@ -538,17 +594,71 @@ th.center {
   display: block;
   width: 100%;
   height: auto;
-  min-width: 40rem;
+  min-width: 38rem;
 }
 
+/* The body of the landing note becomes a specimen sheet: prose spans the
+   width, and the callouts the note is written with become cells. No build-side
+   transformation — the markdown is ordinary markdown and the grid is CSS. */
 .landing .prose {
   max-width: none;
-  margin-top: 3.5rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 0;
 }
 
-.landing .prose h2 {
+.landing .prose > *:not(.callout) {
+  grid-column: 1 / -1;
+  max-width: var(--measure);
+}
+
+.landing .prose > h2 {
   border-top: none;
   padding-top: 0;
+  margin: 3rem 0 1rem;
+  font-size: 1.25rem;
+}
+
+/* One rule between cells rather than one around each: the right and bottom
+   edges are drawn, and the outer ones come from the section. */
+.landing .prose > .callout {
+  margin: 0;
+  padding: 1.4rem 1.5rem;
+  background: none;
+  border: none;
+  border-top: var(--rule);
+  border-right: var(--rule);
+  border-radius: 0;
+}
+
+.landing .prose > .callout:nth-of-type(2n + 1) {
+  padding-left: 0;
+}
+
+.landing .prose > .callout:nth-of-type(2n) {
+  border-right: none;
+}
+
+.landing .prose > .callout:last-of-type {
+  border-bottom: var(--rule);
+}
+
+.landing .prose > .callout:nth-last-of-type(2):nth-of-type(2n + 1) {
+  border-bottom: var(--rule);
+}
+
+.landing .prose > .callout .callout-title {
+  color: var(--fg);
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  margin-bottom: 0.5rem;
+}
+
+.landing .prose > .callout p:not(.callout-title) {
+  color: var(--muted);
+  font-size: 0.88rem;
+  margin: 0;
 }
 
 /* ── 404 ─────────────────────────────────────────────────────────────────── */
@@ -599,7 +709,7 @@ th.center {
 
 /* ── Narrow ──────────────────────────────────────────────────────────────── */
 
-@media (max-width: 60rem) {
+@media (max-width: 62rem) {
   .layout {
     grid-template-columns: minmax(0, 1fr);
     padding-top: 1.5rem;
@@ -617,14 +727,38 @@ th.center {
 
   .sidebar {
     order: 2;
-    border-top: 1px solid var(--border);
+    border-top: var(--rule);
     padding-top: 1.5rem;
     margin-top: 2rem;
   }
 
+  /* The split collapses; the rule between the halves becomes the rule under
+     the claim, which is the same job in one column. */
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 2rem;
+  }
+
+  .hero .shot,
+  .hero h1,
+  .hero .tagline,
+  .hero .install {
+    grid-area: auto;
+    grid-column: 1;
+  }
+
+  .landing .prose {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .landing .prose > .callout,
+  .landing .prose > .callout:nth-of-type(2n) {
+    border-right: none;
+  }
+
   .shot svg,
   .shot img {
-    min-width: 34rem;
+    min-width: 32rem;
   }
 }
 

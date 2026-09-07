@@ -55,3 +55,18 @@ The index format is the decision that matters, because it is the thing the
 client script and the generator have to agree on. Whatever it is, generate it
 from `vault::Index` rather than re-tokenising the markdown — a second idea of
 what a word is diverges the same way a second heading scanner does.
+
+## It should look like the palette
+
+Added after building the site. The app already has the interface for this and
+it is `ctrl-k`: a list you filter by typing, scored rather than substring
+matched. The website's search should be that, wearing the same clothes —
+`cmd-k`, the same shape, the same ordering.
+
+That is not decoration. A reader who has used the program recognises the box
+immediately, and a reader who has not just met the program's main gesture on a
+web page. Either way it is one idea rather than two.
+
+Scoring should come from `Vault::search` rather than being reimplemented in
+JavaScript — which points at the same wasm seam as #0058 and is a reason to do
+that one first.

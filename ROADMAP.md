@@ -71,9 +71,18 @@ Preview stops being the editor with the syntax hidden. A note's structure folds,
 
 ## v1.0 — Safe to depend on
 
-`##########` 100% · 12 of 12 done · due 2027-03-01
+`#######···` 70% · 14 of 20 done · due 2027-03-01
 
 Documented, packaged, and hardened. Someone who is not the author can install
+
+### backlog
+
+- [ ] `0057` The hero plays, and it is the real program <sup>feature · p1 · site</sup>
+- [ ] `0058` Paste a Ghostty theme and watch the site wear it <sup>feature · p2 · site</sup>
+- [ ] `0059` Links to the site unfurl as something <sup>chore · p2 · site</sup>
+- [ ] `0060` The roadmap is a page, built from the items <sup>feature · p2 · site</sup>
+- [ ] `0061` Why trafford exists, as its own page <sup>docs · p2 · docs</sup>
+- [ ] `0062` Moving between pages feels like one page <sup>chore · p3 · site</sup>
 
 ### done
 
@@ -89,10 +98,12 @@ Documented, packaged, and hardened. Someone who is not the author can install
 - [x] `0051` Publish rustdoc under /api as part of the same build <sup>chore · p2 · docs</sup>
 - [x] `0052` Smoke-test the site by serving it on a random port <sup>chore · p1 · site</sup>
 - [x] `0053` The landing page is one screen, and the screenshot is real <sup>feature · p1 · site</sup>
+- [x] `0055` Give the site a typeface <sup>chore · p1 · site</sup>
+- [x] `0056` The landing page has a grid, not a column <sup>feature · p1 · site</sup>
 
 ## later — Someday
 
-`##········` 13% · 1 of 8 done
+`##········` 11% · 1 of 9 done
 
 Good ideas without a date yet.
 
@@ -105,6 +116,7 @@ Good ideas without a date yet.
 - [ ] `0030` Should the editor render in place, the way Obsidian does? <sup>spike · p2 · editor</sup>
 - [ ] `0031` Inline images and dataview, and why not yet <sup>docs · p3 · docs</sup>
 - [ ] `0054` Search the docs from an index the build produces <sup>feature · p2 · site</sup>
+- [ ] `0063` trafford, running in the browser <sup>feature · p2 · site</sup>
 
 ### done
 

@@ -100,8 +100,15 @@ jobs:
       - name: The screenshots match what trafford draws
         run: |
           python3 -m venv .venv
-          .venv/bin/pip install --quiet pyte
+          .venv/bin/pip install --quiet pyte "fonttools[woff]" brotli
           .venv/bin/python tools/shots.py --check
+
+      # The quiet failure: prose gains a character the subset does not have,
+      # the browser falls back mid-word, and it reads as one broken glyph.
+      - name: The typeface covers what the site draws
+        run: |
+          cargo run -p trafford-site -- build
+          .venv/bin/python tools/subset-font.py --check
 
       # Broken internal links, missing anchors and links into a renamed type
       # all fail the build itself. This is where that is enforced on a branch

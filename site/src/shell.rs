@@ -42,6 +42,7 @@ pub struct Assets {
     pub css: String,
     pub js: String,
     pub icon: String,
+    pub font: String,
 }
 
 /// The whole document for a documentation page.
@@ -132,6 +133,7 @@ fn document(ctx: &Ctx<'_>, page: &Page<'_>, content: &str, kind: &str) -> String
 <meta property="og:description" content="{description}">
 <meta property="og:type" content="website">{canonical}
 <link rel="icon" href="{icon}" type="image/svg+xml">
+<link rel="preload" href="{font}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{css}">
 {theme_script}
 </head>
@@ -148,6 +150,7 @@ fn document(ctx: &Ctx<'_>, page: &Page<'_>, content: &str, kind: &str) -> String
         og_title = escape_attr(&title),
         description = escape_attr(&page.description),
         icon = escape_attr(&ctx.href(&page.assets.icon)),
+        font = escape_attr(&ctx.href(&page.assets.font)),
         css = escape_attr(&ctx.href(&page.assets.css)),
         js = escape_attr(&ctx.href(&page.assets.js)),
         theme_script = THEME_SCRIPT,
