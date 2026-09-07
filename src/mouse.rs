@@ -943,7 +943,7 @@ fn wikilink(id: &str) -> String {
 }
 
 /// The last path segment, which is what a menu title should say.
-fn short_name(id: &str) -> String {
+pub fn short_name(id: &str) -> String {
     id.trim_end_matches(".md")
         .rsplit('/')
         .next()

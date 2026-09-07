@@ -500,6 +500,13 @@ impl App {
             // The event loop performs this: it owns the terminal, and taking
             // it back is the half that must not be got wrong.
             A::Suspend { program, args } => self.pending_suspend = Some((program, args)),
+            A::SaveAsConflictCopy(id) => self.save_as_conflict_copy(&id),
+            A::ReloadFromDisk(id) => self.reload_from_disk(&id),
+            A::OverwriteOnDisk(_) => {
+                // The reader was shown what they are doing and chose it.
+                self.loaded_from_disk = None;
+                self.save();
+            }
             A::MoveNote(id) => self.open_move_picker(&id),
             A::DuplicateNote(id) => match self.vault.duplicate_note(&id) {
                 Ok(copy) => {
