@@ -1140,6 +1140,14 @@ pub const HELP: &[(&str, &str)] = &[
         "right-click",
         "a menu of what can be done to the thing under it",
     ),
+    (
+        "",
+        "  works in the tree, the editor, the context pane, the git",
+    ),
+    (
+        "",
+        "  panel, the tags, search, the switcher and the assistant",
+    ),
     ("wheel", "scrolls whatever is under the pointer"),
     ("shift-drag", "select text, as your terminal normally would"),
     ("", ""),
