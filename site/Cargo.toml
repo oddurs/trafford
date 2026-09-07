@@ -13,6 +13,9 @@ publish = false
 trafford = { path = "../trafford" }
 anyhow = "1"
 
+[dev-dependencies]
+trafford = { path = "../trafford", features = ["testing"] }
+
 [[bin]]
 name = "site"
 path = "src/main.rs"

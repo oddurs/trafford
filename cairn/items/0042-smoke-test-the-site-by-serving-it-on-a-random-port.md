@@ -2,7 +2,7 @@
 id: 42
 title: Smoke-test the site by serving it on a random port
 type: chore
-status: backlog
+status: done
 milestone: v1.0
 depends_on:
 - 35

@@ -2,7 +2,7 @@
 id: 36
 title: Reload the open page on save, over one connection
 type: feature
-status: backlog
+status: done
 milestone: v1.0
 depends_on:
 - 35

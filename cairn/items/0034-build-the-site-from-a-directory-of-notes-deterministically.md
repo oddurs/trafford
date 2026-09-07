@@ -2,7 +2,7 @@
 id: 34
 title: Build the site from a directory of notes, deterministically
 type: feature
-status: backlog
+status: done
 milestone: v1.0
 depends_on:
 - 33

@@ -613,7 +613,10 @@ pub fn scan(text: &str) -> Vec<Piece> {
 }
 
 /// Split a leading list marker (`- `, `* `, `1. `, `- [ ] `) from a line.
-fn split_list_marker(line: &str) -> Option<(&str, &str)> {
+///
+/// Public because it is a rule about the document, not about the terminal:
+/// the docs site has to agree with the editor on what a list item is.
+pub fn split_list_marker(line: &str) -> Option<(&str, &str)> {
     let indent = line.len() - line.trim_start().len();
     let rest = &line[indent..];
     for marker in ["- [ ] ", "- [x] ", "- ", "* ", "+ "] {

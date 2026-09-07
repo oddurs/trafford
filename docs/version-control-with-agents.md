@@ -1,3 +1,9 @@
+---
+order: 200
+section: Contributing
+description: Two kinds of history live near this project, and they want different things.
+---
+
 # Version control with agents
 
 Two kinds of history live near this project, and they want different things.

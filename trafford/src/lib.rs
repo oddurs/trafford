@@ -23,5 +23,11 @@ pub mod tree;
 pub mod ui;
 pub mod vault;
 
-#[cfg(test)]
-mod testing;
+/// Test helpers, shared with the workspace's other member.
+///
+/// Behind a feature rather than `#[cfg(test)]`: `cfg(test)` only exists while
+/// *this* crate's tests build, and `site` links the ordinary library. Nothing
+/// enables the feature except a dev-dependency, so the shipped binary does not
+/// carry it.
+#[cfg(any(test, feature = "testing"))]
+pub mod testing;

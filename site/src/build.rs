@@ -1,0 +1,625 @@
+//! Turning `docs/` — which is a vault — into a directory of HTML.
+//!
+//! Three properties are worth more here than any feature, because they are
+//! what let everything downstream trust the output:
+//!
+//!   * **Deterministic.** Same commit, byte-identical tree. Every iteration is
+//!     over a sorted collection and nothing writes a timestamp, which is what
+//!     lets CI regenerate and `git diff --exit-code`.
+//!   * **Atomic.** The tree is built beside the live one and swapped into
+//!     place, so a failed build leaves the last good site standing and the
+//!     development server never serves a half-written page.
+//!   * **Loud.** A link that resolves to nothing fails the build with a file
+//!     and a line. A 404 found by a reader is a bug that got all the way out.
+
+use std::collections::BTreeMap;
+use std::fmt::Write as _;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use anyhow::{anyhow, bail, Context, Result};
+use trafford::vault::note::{frontmatter_block, slug};
+use trafford::vault::{Note, Vault};
+
+use crate::html::{self, Ctx, PageLink, Problem, ASSET_DIR};
+use crate::shell::{self, Assets, NavItem};
+
+/// The stylesheet and behaviour, checked into the repo and read at build time.
+const STYLE: &str = include_str!("../assets/site.css");
+const SCRIPT: &str = include_str!("../assets/site.js");
+
+pub struct Options {
+    /// The vault to render.
+    pub docs: PathBuf,
+    /// Where the finished tree goes. Replaced atomically.
+    pub out: PathBuf,
+    /// Absolute origin, for canonical links and the sitemap. A local build has
+    /// none, and a canonical tag pointing at a random port is worse than none.
+    pub site_url: Option<String>,
+    /// Inject the live-reload client. Only `serve` sets this.
+    pub reload: bool,
+}
+
+impl Options {
+    pub fn new(docs: impl Into<PathBuf>, out: impl Into<PathBuf>) -> Options {
+        Options {
+            docs: docs.into(),
+            out: out.into(),
+            site_url: None,
+            reload: false,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Built {
+    /// Root-relative page paths, sorted. The smoke tests walk this.
+    pub pages: Vec<String>,
+    pub bytes: u64,
+}
+
+/// What a note said about itself in its frontmatter.
+struct Meta {
+    layout: String,
+    section: String,
+    order: i64,
+    description: Option<String>,
+    tagline: Option<String>,
+    install: Option<String>,
+    screenshot: Option<String>,
+}
+
+fn meta(note: &Note) -> Meta {
+    let lines: Vec<String> = note.text.lines().map(str::to_string).collect();
+    let pairs: BTreeMap<String, String> = frontmatter_block(&lines)
+        .map(|(p, _)| p.into_iter().collect())
+        .unwrap_or_default();
+    let get = |k: &str| pairs.get(k).map(|v| v.trim().trim_matches('"').to_string());
+    Meta {
+        layout: get("layout").unwrap_or_else(|| "doc".into()),
+        section: get("section").unwrap_or_else(|| "Documentation".into()),
+        order: get("order").and_then(|v| v.parse().ok()).unwrap_or(100),
+        description: get("description"),
+        tagline: get("tagline"),
+        install: get("install"),
+        screenshot: get("screenshot"),
+    }
+}
+
+/// Build the site. Returns what was written, or every problem found.
+pub fn build(opts: &Options) -> Result<Built> {
+    let vault =
+        Vault::open(&opts.docs).with_context(|| format!("reading {}", opts.docs.display()))?;
+    if vault.notes.is_empty() {
+        bail!("{} holds no notes", opts.docs.display());
+    }
+
+    // Sorted by id, so page order — and therefore every byte downstream — does
+    // not depend on the order the filesystem handed the files back.
+    let mut notes: Vec<&Note> = vault.notes.iter().collect();
+    notes.sort_by(|a, b| a.id.cmp(&b.id));
+
+    let mut pages: BTreeMap<String, PageLink> = BTreeMap::new();
+    for note in &notes {
+        pages.insert(
+            note.id.clone(),
+            PageLink {
+                url: url_for(note),
+                title: note.title.clone(),
+            },
+        );
+    }
+
+    let assets = Assets {
+        css: hashed("assets/site", "css", &stylesheet()?),
+        js: hashed("assets/site", "js", SCRIPT),
+        icon: "assets/favicon.svg".to_string(),
+    };
+
+    // Navigation is every page but the landing one, in the order the notes ask
+    // for and then alphabetically — a stable order rather than a lucky one.
+    let mut nav_source: Vec<(&Note, Meta)> = notes
+        .iter()
+        .map(|n| (*n, meta(n)))
+        .filter(|(_, m)| m.layout != "landing")
+        .collect();
+    nav_source
+        .sort_by(|(a, ma), (b, mb)| (ma.order, &a.title, &a.id).cmp(&(mb.order, &b.title, &b.id)));
+
+    let staging = staging_dir(&opts.out);
+    if staging.exists() {
+        fs::remove_dir_all(&staging).ok();
+    }
+    fs::create_dir_all(&staging).with_context(|| format!("creating {}", staging.display()))?;
+
+    let mut problems: Vec<Problem> = Vec::new();
+    let mut written: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut page_paths: Vec<String> = Vec::new();
+
+    for note in &notes {
+        let m = meta(note);
+        let url = url_for(note);
+        let depth = url.matches('/').count();
+        let ctx = Ctx {
+            vault: &vault,
+            pages: &pages,
+            depth,
+        };
+        let rendered = html::render(note, &ctx, &mut problems);
+        let nav: Vec<NavItem> = nav_source
+            .iter()
+            .map(|(n, nm)| NavItem {
+                title: n.title.clone(),
+                url: url_for(n),
+                section: nm.section.clone(),
+                current: n.id == note.id,
+            })
+            .collect();
+        let page = shell::Page {
+            title: note.title.clone(),
+            description: m
+                .description
+                .clone()
+                .or_else(|| m.tagline.clone())
+                .unwrap_or_else(|| rendered.summary.clone()),
+            url: url.clone(),
+            body: rendered.html,
+            toc: &rendered.toc,
+            nav: &nav,
+            assets: &assets,
+            site_url: opts.site_url.as_deref(),
+            reload: opts.reload,
+        };
+        let doc = if m.layout == "landing" {
+            let hero = hero(&ctx, note, &m, &vault, &mut problems);
+            shell::landing(&ctx, &page, &hero)
+        } else {
+            shell::doc(&ctx, &page)
+        };
+        written.push((format!("{url}index.html"), doc.into_bytes()));
+        page_paths.push(url);
+    }
+
+    if !problems.is_empty() {
+        problems.sort_by(|a, b| (&a.file, a.line).cmp(&(&b.file, b.line)));
+        let list = problems
+            .iter()
+            .map(|p| format!("  {p}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        // Nothing has been swapped into place, so the last good site is still
+        // there and the reader sees no part of this.
+        fs::remove_dir_all(&staging).ok();
+        bail!(
+            "{} problem(s) in {}:\n{list}",
+            problems.len(),
+            opts.docs.display()
+        );
+    }
+
+    written.push((assets.css.clone(), stylesheet()?.into_bytes()));
+    written.push((assets.js.clone(), SCRIPT.as_bytes().to_vec()));
+    written.push((assets.icon.clone(), favicon()?.into_bytes()));
+    written.push(("404.html".into(), not_found(&assets)?.into_bytes()));
+    written.push(("pages.json".into(), manifest(&page_paths).into_bytes()));
+    if let Some(origin) = &opts.site_url {
+        written.push((
+            "sitemap.xml".into(),
+            sitemap(origin, &page_paths).into_bytes(),
+        ));
+        written.push((
+            "robots.txt".into(),
+            format!("User-agent: *\nAllow: /\nSitemap: {origin}/sitemap.xml\n").into_bytes(),
+        ));
+    }
+
+    for (rel, body) in &written {
+        write_file(&staging.join(rel), body)?;
+    }
+    let copied = copy_attachments(&opts.docs, &staging.join(ASSET_DIR))?;
+
+    swap(&staging, &opts.out)?;
+
+    page_paths.sort();
+    let bytes = written.iter().map(|(_, b)| b.len() as u64).sum::<u64>() + copied;
+    Ok(Built {
+        pages: page_paths,
+        bytes,
+    })
+}
+
+/// Where a note lands. The landing page is the root; everything else is a
+/// directory with an `index.html`, so its URL ends in a slash and relative
+/// links from it are predictable.
+fn url_for(note: &Note) -> String {
+    if meta(note).layout == "landing" {
+        String::new()
+    } else {
+        format!("docs/{}/", slug(note.stem()))
+    }
+}
+
+/// The one screen a reader gets before they decide.
+fn hero(
+    ctx: &Ctx<'_>,
+    note: &Note,
+    m: &Meta,
+    vault: &Vault,
+    problems: &mut Vec<Problem>,
+) -> String {
+    let mut out = String::from("<section class=\"hero\">\n");
+    let _ = writeln!(out, "<h1>{}</h1>", html::escape(&note.title));
+    if let Some(tagline) = &m.tagline {
+        let _ = writeln!(out, "<p class=\"tagline\">{}</p>", html::escape(tagline));
+    }
+    if let Some(cmd) = &m.install {
+        // The command is the call to action, so it is one click to take.
+        let _ = writeln!(
+            out,
+            "<div class=\"install\"><code>{cmd}</code><button type=\"button\" class=\"copy\" data-copy=\"{attr}\" hidden>Copy</button></div>",
+            cmd = html::escape(cmd),
+            attr = html::escape_attr(cmd),
+        );
+    }
+    if let Some(shot) = &m.screenshot {
+        match vault.attachment(shot) {
+            Some(rel) => {
+                let _ = writeln!(
+                    out,
+                    "<figure class=\"shot\">{}</figure>",
+                    inline_or_img(ctx, &vault.root, rel)
+                );
+            }
+            None => problems.push(Problem {
+                file: note.id.clone(),
+                line: 1,
+                message: format!("screenshot: {shot} is not in the vault"),
+            }),
+        }
+    }
+    out.push_str("</section>\n");
+    out
+}
+
+/// An SVG screenshot goes into the page rather than beside it: it is a few
+/// kilobytes, it scales to any display, and inlining it means the first paint
+/// needs no second request. Anything else is an `<img>`.
+fn inline_or_img(ctx: &Ctx<'_>, root: &Path, rel: &str) -> String {
+    if rel.to_lowercase().ends_with(".svg") {
+        if let Ok(body) = fs::read_to_string(root.join(rel)) {
+            return body
+                .lines()
+                .filter(|l| !l.trim_start().starts_with("<?xml"))
+                .collect::<Vec<_>>()
+                .join("\n");
+        }
+    }
+    format!(
+        "<img src=\"{}\" alt=\"trafford, running\">",
+        html::escape_attr(&ctx.href(&format!("{ASSET_DIR}/{rel}")))
+    )
+}
+
+fn stylesheet() -> Result<String> {
+    Ok(format!("{}\n{STYLE}", crate::palette::stylesheet()?))
+}
+
+/// A favicon in the theme's own accent, so the tab matches the page.
+fn favicon() -> Result<String> {
+    let (_, theme) = crate::palette::translatable()?
+        .into_iter()
+        .find(|(_, t)| t.dark)
+        .ok_or_else(|| anyhow!("no dark theme for the favicon"))?;
+    let accent = crate::palette::hex_of(theme.accent)?;
+    let bg = crate::palette::hex_of(theme.bg)?;
+    Ok(format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\">\
+<rect width=\"32\" height=\"32\" rx=\"6\" fill=\"{bg}\"/>\
+<rect x=\"8\" y=\"7\" width=\"4\" height=\"18\" fill=\"{accent}\"/>\
+<rect x=\"15\" y=\"7\" width=\"9\" height=\"3\" fill=\"{accent}\" opacity=\".8\"/>\
+<rect x=\"15\" y=\"14\" width=\"9\" height=\"3\" fill=\"{accent}\" opacity=\".55\"/>\
+<rect x=\"15\" y=\"21\" width=\"6\" height=\"3\" fill=\"{accent}\" opacity=\".35\"/>\
+</svg>\n"
+    ))
+}
+
+/// GitHub Pages serves this for anything it cannot find.
+fn not_found(assets: &Assets) -> Result<String> {
+    // Absolute asset paths, because a 404 is served at a URL nobody planned
+    // and a relative path from `/a/b/c/nope` would climb out of the site.
+    Ok(format!(
+        r#"<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Not found — trafford</title>
+<link rel="stylesheet" href="/{css}">
+</head>
+<body>
+<main id="content" class="notfound">
+<h1>404</h1>
+<p>There is no page at that address.</p>
+<p><a href="/">Back to the start</a></p>
+</main>
+</body>
+</html>
+"#,
+        css = assets.css
+    ))
+}
+
+/// The pages, for our own tooling. Sorted, so it diffs cleanly.
+fn manifest(pages: &[String]) -> String {
+    let mut sorted: Vec<&String> = pages.iter().collect();
+    sorted.sort();
+    let list = sorted
+        .iter()
+        .map(|p| format!("  \"/{p}\""))
+        .collect::<Vec<_>>()
+        .join(",\n");
+    format!("[\n{list}\n]\n")
+}
+
+fn sitemap(origin: &str, pages: &[String]) -> String {
+    let origin = origin.trim_end_matches('/');
+    let mut sorted: Vec<&String> = pages.iter().collect();
+    sorted.sort();
+    let mut out = String::from(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
+    );
+    for page in sorted {
+        // No `lastmod`: it would be a timestamp, and a timestamp is the end of
+        // a byte-identical rebuild.
+        let _ = writeln!(out, "  <url><loc>{origin}/{page}</loc></url>");
+    }
+    out.push_str("</urlset>\n");
+    out
+}
+
+/// Copy everything that is not a note: images, casts, anything embedded.
+fn copy_attachments(from: &Path, to: &Path) -> Result<u64> {
+    let mut bytes = 0;
+    let mut stack = vec![from.to_path_buf()];
+    let mut files: Vec<PathBuf> = Vec::new();
+    while let Some(dir) = stack.pop() {
+        let mut entries: Vec<_> = fs::read_dir(&dir)
+            .with_context(|| format!("reading {}", dir.display()))?
+            .collect::<std::io::Result<Vec<_>>>()?;
+        entries.sort_by_key(|e| e.path());
+        for entry in entries {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with('.') {
+                continue;
+            }
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().and_then(|e| e.to_str()) != Some("md") {
+                files.push(path);
+            }
+        }
+    }
+    files.sort();
+    for path in files {
+        let rel = path.strip_prefix(from).unwrap_or(&path);
+        let body = fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
+        bytes += body.len() as u64;
+        write_file(&to.join(rel), &body)?;
+    }
+    Ok(bytes)
+}
+
+fn write_file(path: &Path, body: &[u8]) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
+    }
+    fs::write(path, body).with_context(|| format!("writing {}", path.display()))
+}
+
+fn staging_dir(out: &Path) -> PathBuf {
+    let mut name = out.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(".next-{}", std::process::id()));
+    out.with_file_name(name)
+}
+
+/// Move `staging` onto `out`, keeping the old tree until the new one is in
+/// place.
+///
+/// `rename` onto a non-empty directory fails, so the old tree steps aside
+/// first. The window where neither is at `out` is two renames wide; a reader
+/// hitting it gets one 404 rather than a page assembled from both.
+fn swap(staging: &Path, out: &Path) -> Result<()> {
+    if let Some(parent) = out.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut previous = out.file_name().unwrap_or_default().to_os_string();
+    previous.push(format!(".prev-{}", std::process::id()));
+    let previous = out.with_file_name(previous);
+    let had_old = out.exists();
+    if had_old {
+        fs::rename(out, &previous)
+            .with_context(|| format!("moving the previous {} aside", out.display()))?;
+    }
+    match fs::rename(staging, out) {
+        Ok(()) => {
+            if had_old {
+                fs::remove_dir_all(&previous).ok();
+            }
+            Ok(())
+        }
+        Err(e) => {
+            // Put the old site back rather than leaving nothing at all.
+            if had_old {
+                fs::rename(&previous, out).ok();
+            }
+            Err(e).with_context(|| format!("moving the new tree to {}", out.display()))
+        }
+    }
+}
+
+/// `assets/site.<hash>.css`. The name changes when the bytes do, which is what
+/// lets the server hand out a year-long cache header without lying.
+fn hashed(stem: &str, ext: &str, body: &str) -> String {
+    format!("{stem}.{}.{ext}", fnv(body.as_bytes()))
+}
+
+/// FNV-1a, eight hex digits. A cache-busting name, not a checksum — no
+/// dependency is worth taking for this.
+fn fnv(bytes: &[u8]) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in bytes {
+        hash ^= *b as u64;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{:08x}", (hash >> 32) as u32)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use trafford::testing::TempDir;
+
+    fn vault_with(files: &[(&str, &str)]) -> TempDir {
+        TempDir::with_files(files)
+    }
+
+    const LANDING: &str =
+        "---\nlayout: landing\ntagline: notes in a terminal\n---\n\n# trafford\n\nbody\n";
+
+    #[test]
+    fn a_build_writes_a_page_per_note() {
+        let src = vault_with(&[
+            ("index.md", LANDING),
+            ("getting-started.md", "# Getting started\n\ntext\n"),
+        ]);
+        let out = TempDir::new();
+        let built = build(&Options::new(src.path(), out.path().join("site"))).unwrap();
+        assert_eq!(
+            built.pages,
+            vec!["".to_string(), "docs/getting-started/".to_string()]
+        );
+        assert!(out.path().join("site/index.html").exists());
+        assert!(out
+            .path()
+            .join("site/docs/getting-started/index.html")
+            .exists());
+        assert!(out.path().join("site/404.html").exists());
+    }
+
+    /// Same input, same bytes. Everything downstream — the CI check that the
+    /// generated assets are current, a cache header, a diff in a pull request
+    /// — rests on this one property.
+    #[test]
+    fn two_builds_of_the_same_source_agree_byte_for_byte() {
+        let src = vault_with(&[
+            ("index.md", LANDING),
+            ("a.md", "# A\n\nsee [[b]]\n"),
+            ("b.md", "# B\n\ntext\n"),
+        ]);
+        let out = TempDir::new();
+        build(&Options::new(src.path(), out.path().join("site"))).unwrap();
+        let first = read_tree(&out.path().join("site"));
+        build(&Options::new(src.path(), out.path().join("site"))).unwrap();
+        let second = read_tree(&out.path().join("site"));
+        assert_eq!(first, second);
+        assert!(!first.is_empty());
+    }
+
+    #[test]
+    fn a_broken_link_fails_the_build_and_names_the_line() {
+        let src = vault_with(&[("index.md", LANDING), ("a.md", "# A\n\nsee [[Gone]]\n")]);
+        let out = TempDir::new();
+        let err = build(&Options::new(src.path(), out.path().join("site")))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("a.md:3"), "{err}");
+        assert!(err.contains("Gone"), "{err}");
+    }
+
+    /// The previous site stays up. Anything else means one typo takes the docs
+    /// down until it is found.
+    #[test]
+    fn a_failed_build_leaves_the_last_good_tree_in_place() {
+        let good = vault_with(&[("index.md", LANDING), ("a.md", "# A\n\nfine\n")]);
+        let out = TempDir::new();
+        let target = out.path().join("site");
+        build(&Options::new(good.path(), &target)).unwrap();
+        let before = read_tree(&target);
+
+        let bad = vault_with(&[("index.md", LANDING), ("a.md", "# A\n\n[[Gone]]\n")]);
+        assert!(build(&Options::new(bad.path(), &target)).is_err());
+        assert_eq!(read_tree(&target), before);
+    }
+
+    #[test]
+    fn assets_are_named_by_their_contents() {
+        let src = vault_with(&[("index.md", LANDING)]);
+        let out = TempDir::new();
+        build(&Options::new(src.path(), out.path().join("site"))).unwrap();
+        let index = fs::read_to_string(out.path().join("site/index.html")).unwrap();
+        let name = index
+            .split("href=\"")
+            .find(|s| s.starts_with("assets/site."))
+            .and_then(|s| s.split('"').next())
+            .expect("a stylesheet link");
+        assert!(out.path().join("site").join(name).exists(), "{name}");
+        assert_eq!(name.matches('.').count(), 2, "no hash in {name}");
+    }
+
+    /// A build never writes development code. The reload client is injected by
+    /// the server and by nothing else, and this is what pins it.
+    #[test]
+    fn nothing_a_build_writes_mentions_the_reload_channel() {
+        let src = vault_with(&[("index.md", LANDING), ("a.md", "# A\n\ntext\n")]);
+        let out = TempDir::new();
+        build(&Options::new(src.path(), out.path().join("site"))).unwrap();
+        for (_, body) in read_tree(&out.path().join("site")) {
+            let text = String::from_utf8_lossy(&body).to_string();
+            assert!(!text.contains("_reload"), "a build wrote the reload client");
+        }
+    }
+
+    #[test]
+    fn a_sitemap_appears_only_when_there_is_an_origin_to_put_in_it() {
+        let src = vault_with(&[("index.md", LANDING)]);
+        let out = TempDir::new();
+        let target = out.path().join("site");
+        build(&Options::new(src.path(), &target)).unwrap();
+        assert!(!target.join("sitemap.xml").exists());
+
+        let mut opts = Options::new(src.path(), &target);
+        opts.site_url = Some("https://example.com/trafford".into());
+        build(&opts).unwrap();
+        let map = fs::read_to_string(target.join("sitemap.xml")).unwrap();
+        assert!(
+            map.contains("<loc>https://example.com/trafford/</loc>"),
+            "{map}"
+        );
+    }
+
+    fn read_tree(root: &Path) -> Vec<(String, Vec<u8>)> {
+        let mut out = Vec::new();
+        let mut stack = vec![root.to_path_buf()];
+        while let Some(dir) = stack.pop() {
+            let Ok(entries) = fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else {
+                    let rel = path
+                        .strip_prefix(root)
+                        .unwrap()
+                        .to_string_lossy()
+                        .to_string();
+                    out.push((rel, fs::read(&path).unwrap()));
+                }
+            }
+        }
+        out.sort();
+        out
+    }
+}

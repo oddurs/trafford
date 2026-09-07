@@ -13,6 +13,12 @@ static COUNTER: AtomicU64 = AtomicU64::new(0);
 /// something this small.
 pub struct TempDir(PathBuf);
 
+impl Default for TempDir {
+    fn default() -> TempDir {
+        TempDir::new()
+    }
+}
+
 impl TempDir {
     pub fn new() -> TempDir {
         let mut base = std::env::temp_dir();

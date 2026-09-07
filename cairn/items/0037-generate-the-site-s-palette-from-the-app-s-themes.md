@@ -2,7 +2,7 @@
 id: 37
 title: Generate the site's palette from the app's themes
 type: chore
-status: backlog
+status: done
 milestone: v1.0
 depends_on:
 - 34

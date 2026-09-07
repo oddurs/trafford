@@ -1,0 +1,37 @@
+# What the website's screenshots are of.
+#
+# One entry is one image. `tools/shots.py` drives the real binary against an
+# emulated terminal and writes the screen out as SVG — real text, selectable,
+# a few kilobytes, and diffable in a pull request the way a PNG is not.
+#
+# The vault is the committed fixture beside this file, and it is deliberately
+# not a git repository: a fresh `git init` picks up whoever's
+# `init.defaultBranch` ran it, and the branch name would then appear in the
+# status bar and differ between a laptop and CI.
+
+vault = "fixture"
+out = "../docs/img"
+
+[[shot]]
+name = "screenshot"
+title = "trafford, reading a vault"
+cols = 120
+rows = 24
+# The note is opened by name rather than left to whatever the app picks: the
+# default is the first note it finds, which is a property of the fixture's
+# filenames rather than a choice anyone made.
+keys = ["ctrl-p", "w", "e", "l", "c", "o", "m", "e", "enter"]
+
+[[shot]]
+name = "reading"
+title = "The reading view, with a table drawn as a table"
+cols = 120
+rows = 24
+keys = ["ctrl-p", "l", "i", "n", "k", "i", "n", "g", "enter", "ctrl-e"]
+
+[[shot]]
+name = "palette"
+title = "The command palette"
+cols = 120
+rows = 24
+keys = ["ctrl-k"]
