@@ -2,8 +2,9 @@
 id: 15
 title: Show links as links, and the source where the cursor is
 type: feature
-status: backlog
+status: doing
 milestone: v0.4
+assignee: Oddur Sigurdsson
 depends_on:
 - 13
 created: 2026-09-07
