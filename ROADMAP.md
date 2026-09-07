@@ -6,24 +6,21 @@ A terminal knowledge base — an Obsidian-shaped markdown vault with modal editi
 
 ## v0.2 — Usable without the manual
 
-`######····` 60% · 3 of 5 done · due 2026-09-20
+`########··` 80% · 4 of 5 done · due 2026-09-20
 
 The interface explains itself. A file tree instead of a flat list, the mouse
 working everywhere, a right-click menu on every surface that has actions, and
 themes you can see before you choose. The milestone that answers "I do not
 understand how to use this".
 
-### planned
-
-- [ ] `0004` Open the context menu from the keyboard <sup>feature · p2 · mouse</sup>
-
 ### in progress
 
-- [ ] `0002` Right-click every surface that has actions <sup>feature · p1 · mouse</sup>
+- [ ] `0004` Open the context menu from the keyboard <sup>feature · p2 · mouse</sup>
 
 ### done
 
 - [x] `0001` Mouse support, and a right-click menu <sup>feature · p1 · mouse</sup>
+- [x] `0002` Right-click every surface that has actions <sup>feature · p1 · mouse</sup>
 - [x] `0003` Show the keyboard shortcut beside each menu entry <sup>feature · p2 · mouse</sup>
 - [x] `0005` Menus that are taller than the terminal <sup>bug · p2 · mouse</sup>
 

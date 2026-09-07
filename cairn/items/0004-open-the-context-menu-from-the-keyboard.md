@@ -2,8 +2,9 @@
 id: 4
 title: Open the context menu from the keyboard
 type: feature
-status: planned
+status: doing
 milestone: v0.2
+assignee: Oddur Sigurdsson
 created: 2026-09-07
 updated: 2026-09-07
 priority: p2
