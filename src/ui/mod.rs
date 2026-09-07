@@ -833,10 +833,30 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
         Span::styled("  ", Style::default().bg(theme.panel)),
     ];
 
+    // A focused pane explains itself here, so its keys are discoverable
+    // without going to the help screen first.
+    let hint = match app.focus {
+        Focus::Sidebar if app.overlay.is_none() => Some(match app.sidebar_tab {
+            SidebarTab::Notes => {
+                "l open · h back · space toggle · E/C expand all · . reveal · t tags"
+            }
+            SidebarTab::Tags => "enter filter by tag · t back to the tree",
+        }),
+        Focus::Assistant if app.overlay.is_none() => {
+            Some("type a question · enter sends · ctrl-y inserts the answer · esc leaves")
+        }
+        _ => None,
+    };
+
     if let Some(status) = app.status_text() {
         spans.push(Span::styled(
             status.to_string(),
             Style::default().fg(theme.fg).bg(theme.panel),
+        ));
+    } else if let Some(hint) = hint {
+        spans.push(Span::styled(
+            hint.to_string(),
+            Style::default().fg(theme.dim).bg(theme.panel),
         ));
     } else {
         let git = &app.git_status;
