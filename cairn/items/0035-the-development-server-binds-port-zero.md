@@ -82,3 +82,13 @@ generator bug and costs an hour to find.
 
 This is the item that makes #0042 possible: a smoke test can boot a real
 server per test, in parallel, precisely because no test names a port.
+
+## What changed on the way
+
+**No Ctrl-C handler.** The criteria asked for one that removes the record, and
+for a stale record to be detected rather than trusted. Only the second is worth
+having: a handler needs unsafe FFI or a dependency, and it does not run for
+`kill -9` — so the file can always be stale and must never be believed on its
+own. `serve::alive` asks the port, which is the thing that actually matters,
+and the next server overwrites the file regardless. The graceful path still
+removes it, from `Drop`.

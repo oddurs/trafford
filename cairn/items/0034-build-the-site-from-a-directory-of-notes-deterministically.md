@@ -74,3 +74,22 @@ The output directory is `target/site` because `target/` is already ignored and
 already the place a build result goes. The deployed artifact is what CI uploads
 from there; nothing generated is committed except assets that must be diffable,
 which is #0038.
+
+## What changed on the way
+
+**No `--base-url`.** The plan assumed the base path had to be a build input.
+Making every href relative to its own page removes the input entirely: one
+build is correct at a domain root, under the Pages project subpath, and over
+`file://` with no server. `--site-url` survives, for the canonical tags and the
+sitemap, which have to be absolute or they are not those things.
+
+**`[text](other.md)` is checked as hard as `[[wikilink]]`.** Not in the plan,
+and necessary the moment the docs were written: markdown that has to read well
+on GitHub uses the second form, and a docs tree with two link syntaxes and one
+link checker is a docs tree with unchecked links. Both resolve through
+`vault::Index`, so both follow the app's resolution order.
+
+**`pages.json` rather than an always-present sitemap.** The acceptance criteria
+wanted a machine-readable list of pages for the smoke tests; a sitemap needs an
+absolute origin, which a local build has no honest answer for. They are two
+things, so they are two files, and the sitemap only appears with `--site-url`.

@@ -9,8 +9,19 @@ modal editor, git integration, and a note-grounded assistant.
 cargo test                  # unit tests live beside the code they cover
 cargo clippy --all-targets -- -D warnings   # CI fails on any warning
 cargo fmt --all --check     # CI checks this exact form
-cargo run -- init /tmp/v    # scaffold a throwaway vault
-cargo run -- /tmp/v         # open it
+cargo run -p trafford -- init /tmp/v        # scaffold a throwaway vault
+cargo run -p trafford -- /tmp/v             # open it
+```
+
+The repository is a Cargo workspace. `trafford/` is the application; `site/`
+builds the documentation and landing page and is never a dependency of the
+binary — `cargo tree -p trafford` is the check, and it is in CI.
+
+```sh
+cargo run -p trafford-site -- serve   # build the site, watch, and serve it
+cargo run -p trafford-site -- build   # write it to target/site
+cargo run -p trafford-site -- sync    # regenerate docs/keys.md from the keymap
+.venv/bin/python tools/shots.py       # regenerate the screenshots
 ```
 
 CI runs the **latest stable** toolchain, which knows lints yours may not. A
@@ -32,6 +43,13 @@ first, or run `cargo +<version> clippy` with the version CI reports. Two
 | `trafford/src/keymap.rs` | Key routing, the command palette, the help table |
 | `trafford/src/ui/` | Theme, markdown-to-spans renderer, tables, and all drawing |
 | `trafford/src/main.rs` | CLI, terminal setup, event loop |
+| `trafford/src/lib.rs` | What the site can reach: `vault`, `ui::fold`, `ui::table`, `ui::callout`, `ui::markdown::scan`, `ui::theme` |
+| `site/src/html.rs` | Notes to HTML, through the app's scanners. No markdown parser |
+| `site/src/build.rs` | The build: pages, assets, link checking, the atomic swap |
+| `site/src/serve.rs` | The development server. Binds `127.0.0.1:0` |
+| `site/src/palette.rs` | `ui::theme` to CSS custom properties |
+| `docs/` | The documentation, which is a vault the app can open |
+| `tools/shots.py` | The website's screenshots, driven out of the real binary |
 
 The dependency direction is one-way: `vault` and `editor` know nothing about
 the UI; `ui` reads `App` but never mutates it except for viewport bookkeeping.
@@ -73,6 +91,46 @@ the UI; `ui` reads `App` but never mutates it except for viewport bookkeeping.
 - **Only the mouse modes we use are enabled.** `MOUSE_ON` in `main.rs`
   deliberately omits 1003 (all-motion): the loop redraws per event and nothing
   reacts to a hover, so hover tracking would be pure cost.
+
+## The docs site
+
+`site/` renders `docs/` — which is a vault, opened by `vault::Index` exactly as
+a user's is. Five things about it are load-bearing.
+
+- **There is no markdown parser in `site/`.** Headings come from
+  `ui::fold::headings`, tables from `ui::table::parse`, callouts from
+  `ui::callout::parse`, frontmatter from `note::frontmatter_block`, inline
+  markup from `ui::markdown::scan`. The HTML renderer is a second *backend*,
+  not a second parser — which is why `[[wikilinks]]`, `> [!note]` and
+  `[[Note\|alias]]` inside a table work on the website. A generator with its own
+  parser is the "second heading scanner" failure, shipped deliberately.
+- **The development server binds port zero.** Work here happens in several
+  worktrees at once. A fixed port does not usually fail loudly — the second
+  server does not start, the browser keeps showing the first worktree's build,
+  and you review a change that is not there. The port is read *after* binding;
+  probing for a free one and then binding it is a race. `target/.serve.json`
+  carries the URL for anything that would rather not scrape stdout, and is
+  never trusted on its own — a killed process leaves one behind, so ask the
+  port with `serve::alive`.
+- **Every href is relative to the page that holds it.** That is what makes one
+  build correct at a domain root, under the GitHub Pages project subpath, and
+  over `file://` with no server. There is no `--base-url`; `--site-url` exists
+  only for the canonical tags and the sitemap, which have to be absolute.
+- **Anything generated is checked by regenerating it.** `docs/keys.md` comes
+  from `keymap::HELP` via `site sync`; the screenshots come from the real
+  binary via `tools/shots.py`; the palette comes from `ui::theme`. CI
+  regenerates and diffs. A generated file edited by hand is reverted by the
+  next sync, and CI says so first.
+- **The reload client exists only in `serve`.** `build` never writes it, and a
+  test asserts that of every page. A deployed page carrying a livereload script
+  is the standard way this leaks.
+
+Two smaller things that cost time to find. The screenshots run against a *copy*
+of `site/fixture` in a temp directory: in place, trafford walks up, finds this
+repository, and puts its dirty-file count in the status bar — so every shot
+changed whenever anything else did. And `mono` is not offered as a site theme,
+because it sets its background and foreground to `reset`, meaning "whatever the
+terminal already is", which a browser cannot answer.
 
 ## Obsidian compatibility
 

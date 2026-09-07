@@ -2,7 +2,7 @@
 id: 41
 title: Publish rustdoc under /api as part of the same build
 type: chore
-status: backlog
+status: done
 milestone: v1.0
 depends_on:
 - 34

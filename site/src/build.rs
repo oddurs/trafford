@@ -38,6 +38,12 @@ pub struct Options {
     pub site_url: Option<String>,
     /// Inject the live-reload client. Only `serve` sets this.
     pub reload: bool,
+    /// Build the API documentation and publish it under `/api`.
+    ///
+    /// Off by default, and deliberately: `cargo doc` over the workspace is
+    /// tens of seconds, and the watch loop in `serve` lives or dies on the
+    /// rebuild staying under a second. CI and the deploy turn it on.
+    pub api: bool,
 }
 
 impl Options {
@@ -47,6 +53,7 @@ impl Options {
             out: out.into(),
             site_url: None,
             reload: false,
+            api: false,
         }
     }
 }
@@ -217,11 +224,13 @@ pub fn build(opts: &Options) -> Result<Built> {
         write_file(&staging.join(rel), body)?;
     }
     let copied = copy_attachments(&opts.docs, &staging.join(ASSET_DIR))?;
+    let api = if opts.api { build_api(&staging)? } else { 0 };
+    check_api_links(&written, &staging, opts.api)?;
 
     swap(&staging, &opts.out)?;
 
     page_paths.sort();
-    let bytes = written.iter().map(|(_, b)| b.len() as u64).sum::<u64>() + copied;
+    let bytes = written.iter().map(|(_, b)| b.len() as u64).sum::<u64>() + copied + api;
     Ok(Built {
         pages: page_paths,
         bytes,
@@ -406,6 +415,116 @@ fn copy_attachments(from: &Path, to: &Path) -> Result<u64> {
         let body = fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
         bytes += body.len() as u64;
         write_file(&to.join(rel), &body)?;
+    }
+    Ok(bytes)
+}
+
+/// Run `cargo doc` and put its output under `/api`.
+///
+/// Shelling out to cargo rather than linking rustdoc, for the same reason git
+/// is shelled out to: it is the tool the reader already has, with their
+/// toolchain and their flags. `RUSTDOCFLAGS=-D warnings` is CI's business, not
+/// this function's.
+fn build_api(staging: &Path) -> Result<u64> {
+    let workspace = workspace_root();
+    let status = std::process::Command::new(std::env::var("CARGO").unwrap_or("cargo".into()))
+        .args(["doc", "--no-deps", "--workspace", "--quiet"])
+        .current_dir(&workspace)
+        .status()
+        .context("running `cargo doc`")?;
+    if !status.success() {
+        bail!("`cargo doc` failed");
+    }
+    let from = workspace.join("target").join("doc");
+    let to = staging.join("api");
+    let bytes = copy_tree(&from, &to)?;
+    // rustdoc's own entry point is a path nobody types.
+    write_file(
+        &to.join("index.html"),
+        b"<!doctype html><meta charset=\"utf-8\">\
+<title>trafford API</title>\
+<meta http-equiv=\"refresh\" content=\"0; url=trafford/index.html\">\
+<a href=\"trafford/index.html\">trafford</a>\n",
+    )?;
+    Ok(bytes)
+}
+
+/// The workspace root, found from this crate rather than from the working
+/// directory — `site build` should work from anywhere.
+fn workspace_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap_or(Path::new("."))
+        .to_path_buf()
+}
+
+/// Every prose link into `/api` points at a page rustdoc actually wrote.
+///
+/// This is what makes a renamed type a build failure rather than a 404 for a
+/// reader. Without `--api` there is nothing to check against, so the links are
+/// reported rather than silently believed.
+fn check_api_links(written: &[(String, Vec<u8>)], staging: &Path, api: bool) -> Result<()> {
+    let mut missing = Vec::new();
+    let mut skipped = 0;
+    for (rel, body) in written {
+        if !rel.ends_with(".html") {
+            continue;
+        }
+        let html = String::from_utf8_lossy(body);
+        for part in html.split("href=\"").skip(1) {
+            let value = part.split('"').next().unwrap_or("");
+            let Some(target) = value.split('#').next() else {
+                continue;
+            };
+            let Some(at) = target.find("api/") else {
+                continue;
+            };
+            if target.starts_with("http") {
+                continue;
+            }
+            if !api {
+                skipped += 1;
+                continue;
+            }
+            if !staging.join(&target[at..]).exists() {
+                missing.push(format!("  {rel} -> {target}"));
+            }
+        }
+    }
+    if !missing.is_empty() {
+        bail!(
+            "{} link(s) into /api point at pages rustdoc did not write:\n{}",
+            missing.len(),
+            missing.join("\n")
+        );
+    }
+    if skipped > 0 {
+        eprintln!("note: {skipped} link(s) into /api not checked — build with --api to check them");
+    }
+    Ok(())
+}
+
+/// Copy a directory verbatim. Sorted, so the walk is deterministic even though
+/// nothing downstream depends on the order.
+fn copy_tree(from: &Path, to: &Path) -> Result<u64> {
+    let mut bytes = 0;
+    let mut stack = vec![from.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let mut entries: Vec<PathBuf> = fs::read_dir(&dir)
+            .with_context(|| format!("reading {}", dir.display()))?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .collect();
+        entries.sort();
+        for path in entries {
+            if path.is_dir() {
+                stack.push(path);
+            } else {
+                let rel = path.strip_prefix(from).unwrap_or(&path);
+                let body = fs::read(&path)?;
+                bytes += body.len() as u64;
+                write_file(&to.join(rel), &body)?;
+            }
+        }
     }
     Ok(bytes)
 }

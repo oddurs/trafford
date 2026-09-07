@@ -43,6 +43,15 @@ body {
   min-height: 100vh;
 }
 
+/* A flex item's default `min-width: auto` refuses to shrink below its content,
+   which is how a page acquires a horizontal scrollbar from one wide child. The
+   screenshot is deliberately wider than a phone and scrolls inside its own box;
+   this is what keeps that from becoming the page's problem. */
+body > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
 /* ── Focus and skip link ─────────────────────────────────────────────────── */
 
 :focus-visible {
@@ -294,6 +303,22 @@ body {
   color: var(--bg);
   padding: 0 0.15em;
   border-radius: 2px;
+}
+
+/* A screenshot in the prose is the same SVG the hero inlines, dropped in as an
+   image. Wider than the column on purpose, and scrolling inside its own box. */
+.prose img {
+  display: block;
+  width: 100%;
+  min-width: 34rem;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin: 0 0 1.3rem;
+}
+
+.prose p:has(> img) {
+  overflow-x: auto;
 }
 
 .tag {

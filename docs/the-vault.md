@@ -47,7 +47,10 @@ Resolution goes in one fixed order:
 2. case-insensitive path
 3. filename stem
 
-Changing that order changes which note a link opens, so it does not change.
+Changing that order changes which note a link opens, so it does not change. It
+is [Vault::resolve_target](api/trafford/vault/index/struct.Vault.html#method.resolve_target)
+in the source, and the website you are reading resolves its own links through
+the same function.
 
 `enter` follows the link under the cursor. If it points at nothing yet, you
 get a prompt to write that note — which is how a vault grows. Renaming a note

@@ -44,7 +44,8 @@ accent     = "#d29922"
 link       = "#58a6ff"
 ```
 
-The full set of roles is in `trafford/themes/gotham.toml`, which is an
+Every role is a field on [Theme](api/trafford/ui/theme/struct.Theme.html). The
+full set is in `trafford/themes/gotham.toml`, which is an
 ordinary theme file — the built-ins are compiled in and parsed by the same
 code you would use, so the format cannot drift from the documentation.
 

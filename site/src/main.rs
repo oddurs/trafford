@@ -21,6 +21,7 @@ OPTIONS
     --site-url <URL>   absolute origin, for canonical links and the sitemap
     --port <N>         serve on this port instead of one the OS chooses
     --open             open a browser at the served URL
+    --api              also build rustdoc and publish it under /api
 
     `serve` with no --port binds 127.0.0.1:0 and reports what it got, so any
     number of these can run at once — one per worktree, one per agent — without
@@ -95,6 +96,10 @@ fn parse(args: &[String]) -> Result<(Options, Flags)> {
                 flags.open = true;
                 i += 1;
             }
+            "--api" => {
+                opts.api = true;
+                i += 1;
+            }
             other => bail!("unknown option `{other}`\n\n{USAGE}"),
         }
     }
@@ -150,6 +155,9 @@ fn serve_it(mut opts: Options, flags: Flags) -> Result<()> {
             out: opts.out.clone(),
             site_url: opts.site_url.clone(),
             reload: true,
+            // Never in the watch loop: `cargo doc` is tens of seconds and the
+            // reason to have a watch loop is that it is not.
+            api: false,
         };
         let state = Arc::clone(&state);
         let stopping = Arc::clone(&stopping);

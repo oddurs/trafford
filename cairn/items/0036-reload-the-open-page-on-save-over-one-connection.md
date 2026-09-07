@@ -65,3 +65,14 @@ Full rebuild first. Incremental rebuilds are an optimisation with a correctness
 cost — a stale page that only appears when a link's target changes — and the
 threshold to justify one is a build slow enough to notice, which a docs tree is
 not yet.
+
+## What changed on the way
+
+**Polling, not `notify`.** The notes above said `notify` was the one dependency
+worth taking here. It is not, for two reasons found while writing it: a docs
+tree is dozens of files and a walk every 200 ms is free; and without it the
+site crate adds *no* dependency the workspace did not already have, which turns
+"site tooling never ships in the binary" from an argument into something
+`cargo tree -p trafford` shows. A snapshot comparison also has one event per
+settled state by construction, which is the debouncing the plan listed as
+separate work.

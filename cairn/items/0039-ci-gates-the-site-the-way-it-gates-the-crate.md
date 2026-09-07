@@ -2,7 +2,7 @@
 id: 39
 title: CI gates the site the way it gates the crate
 type: chore
-status: backlog
+status: done
 milestone: v1.0
 depends_on:
 - 34

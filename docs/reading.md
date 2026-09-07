@@ -10,6 +10,11 @@ description: The reading view — folding, properties, callouts, tables, and wha
 same view with a flag: the editor draws the file, and the reading view draws
 what the file *means*.
 
+![[reading.svg|The reading view: properties, fold markers, and a table drawn as a table]]
+
+Frontmatter has become two rows of properties, the sections have fold markers,
+and the table is a table. The gutter still numbers the lines it came from.
+
 ## What is concealed
 
 Wikilink and markdown-link syntax, `**bold**`, `*italic*`, `==highlight==`,

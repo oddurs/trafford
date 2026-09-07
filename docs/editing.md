@@ -43,3 +43,8 @@ than the editor with the syntax hidden — see [Reading](reading.md).
 
 `f1` lists every key, in the same table the palette searches. `ctrl-k` opens
 the command palette, which is the same list by name rather than by key.
+
+![[palette.svg|The command palette, listing every command by name]]
+
+Both of those and [the keys page](keys.md) are written from one list in the
+source, so they cannot disagree with each other or with the program.

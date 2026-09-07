@@ -2,7 +2,7 @@
 id: 43
 title: The landing page is one screen, and the screenshot is real
 type: feature
-status: backlog
+status: done
 milestone: v1.0
 depends_on:
 - 34

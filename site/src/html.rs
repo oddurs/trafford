@@ -656,6 +656,17 @@ impl<'a, 'b> Writer<'a, 'b> {
         }
         let external =
             url.starts_with("http://") || url.starts_with("https://") || url.starts_with("mailto:");
+        // `api/...` is the rustdoc tree, which is a build product rather than a
+        // note. Root-relative, then made relative to this page like everything
+        // else. `build::check_api_links` is what makes a renamed type a build
+        // failure rather than a 404.
+        if let Some(rest) = url.strip_prefix("api/") {
+            return format!(
+                "<a href=\"{}\"><code>{}</code></a>",
+                escape_attr(&self.ctx.href(&format!("api/{rest}"))),
+                escape(label)
+            );
+        }
         if !external && !url.starts_with('/') {
             let (path, anchor) = match url.split_once('#') {
                 Some((p, a)) => (p, Some(a)),

@@ -8,7 +8,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 /// Every command reachable from the palette. The third field is the shortcut
 /// shown alongside it, and is documentation only — the binding lives in
-/// [`global_key`].
+/// `global_key`, which is private to this module.
 pub const COMMANDS: &[(&str, &str, &str)] = &[
     ("open", "Open note", "ctrl-p"),
     ("search", "Search vault", "ctrl-f"),
