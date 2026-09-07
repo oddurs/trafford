@@ -5,7 +5,7 @@ type: feature
 status: done
 milestone: v1.0
 depends_on:
-- 45
+- 67
 created: 2026-09-07
 updated: 2026-09-07
 priority: p1
@@ -18,7 +18,7 @@ area: site
 The loop that matters when writing docs is save, look, adjust. Without a
 reload, every iteration costs a rebuild command and a manual refresh, and the
 refresh is the part that gets forgotten — you read the old page and conclude
-the edit did nothing, the same failure as serving the wrong worktree in #0045
+the edit did nothing, the same failure as serving the wrong worktree in #0067
 and just as quiet.
 
 ## Proposal

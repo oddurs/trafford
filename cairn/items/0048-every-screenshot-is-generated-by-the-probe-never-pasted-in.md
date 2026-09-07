@@ -5,7 +5,7 @@ type: chore
 status: done
 milestone: v1.0
 depends_on:
-- 44
+- 66
 created: 2026-09-07
 updated: 2026-09-07
 priority: p1
@@ -61,5 +61,5 @@ carries that branch name into the page.
 
 An asciinema cast of the file tree opening is worth more than any still, and it
 is the same mechanism with the frames kept. Not now: one still pipeline that
-works beats two half-built ones, and #0045 needs `Range` support before a
+works beats two half-built ones, and #0067 needs `Range` support before a
 cast player is comfortable anyway.

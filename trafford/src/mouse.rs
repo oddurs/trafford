@@ -584,7 +584,15 @@ impl App {
         // were actually drawn. The link it lands on is the one the renderer
         // recorded: the syntax is gone from the screen and cannot be re-parsed.
         if let Some(view) = self.preview_view.take() {
-            let column = c.saturating_sub(text_x) as usize;
+            // Each drawn line centres itself, so the pointer's column has to
+            // come back off that before it means anything to the layout.
+            let offset = view
+                .layout
+                .row(visual)
+                .and_then(|r| view.lines.get(r.line))
+                .map(|r| r.offset)
+                .unwrap_or(0);
+            let column = (c.saturating_sub(text_x) as usize).saturating_sub(offset);
             let (line, col) = view.layout.source_of(&view.texts(), visual, column);
             let source = view.source(line);
             // Clicking is also a way of saying where you are reading.
@@ -935,7 +943,7 @@ fn wikilink(id: &str) -> String {
 }
 
 /// The last path segment, which is what a menu title should say.
-fn short_name(id: &str) -> String {
+pub fn short_name(id: &str) -> String {
     id.trim_end_matches(".md")
         .rsplit('/')
         .next()

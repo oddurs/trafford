@@ -262,6 +262,8 @@ fn rule(widths: &[usize], edges: (&str, &str, &str), style: Style) -> Rendered {
     text.push_str(right);
     Rendered {
         spans: vec![Span::styled(text.clone(), style)],
+        offset: 0,
+        rigid: true,
         rail: None,
         text,
         links: Vec::new(),
@@ -330,6 +332,10 @@ pub fn render(table: &Table, renderer: &Renderer<'_>, width: usize) -> Option<Ve
         false,
         rule(&widths, ("└", "┴", "┘"), frame),
     ));
+    // Every line of a table is already the width it should be.
+    for drawn in &mut out {
+        drawn.rendered.rigid = true;
+    }
     Some(out)
 }
 

@@ -81,6 +81,14 @@ the UI; `ui` reads `App` but never mutates it except for viewport bookkeeping.
   Match on `haystack`, display from `text`, or you will show mangled case.
 - **Link resolution order** is exact relative path, then case-insensitive path,
   then filename stem. Changing it changes which note a `[[link]]` opens.
+- **A save never writes over a change nobody has seen.** `App::save` compares
+  the file's mtime and length against what they were when the note was loaded.
+  If they moved, it compares the *content* — identical bytes are not a
+  disagreement, whoever wrote them — and only then asks. The three answers are
+  keep both, load theirs, overwrite; "keep both" exists because a prompt offering
+  only overwrite and cancel pushes people towards overwrite, which is the thing
+  being prevented. This matters because the vault is meant to be edited by an
+  assistant in another window.
 - **The editor owns no I/O.** `App::save` writes and then re-indexes; the
   editor never touches the filesystem.
 - **Hit-testing shares the renderer's geometry.** `trafford/src/mouse.rs` resolves a
@@ -198,12 +206,45 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
 - **`#tags` are clickable wherever they are drawn.** `markdown::Target` says
   what a run of text points at — a note, a URL, or a tag — and a tag click sets
   the vault filter, which is what the sidebar's tags tab already did.
+<<<<<<< HEAD
+<<<<<<< HEAD
+- **A measure is a rule about prose, and a table is not prose.** Reading holds
+  paragraphs to `READING_MEASURE` because prose stretched wide is unreadable.
+  Applying that to a table does not wrap it — the cells are already sized — it
+  *cuts* them, losing data the editor showed fine. `Rendered.rigid` marks a line
+  whose width is already decided; rigid lines get the pane, prose gets the
+  measure, via `Layout::with_widths`.
+- **Prose shares a left edge; a rigid block centres on the same axis.**
+  `Rendered.offset` carries it, so `mouse.rs` subtracts it before asking the
+  layout anything. Centring every line individually turns a paragraph into a
+  poem; centring none of them puts a wide table off to one side.
+- **The position rail draws at the pane's edge, not the measure's.** Reading
+  narrows the text to `READING_MEASURE` and centres it; drawing the rail at
+  `inner.right()` put it inside that column, over the last character of a line.
+  It draws against `pane`, and the measure gives up one column for it.
+||||||| fa26704
+=======
+<<<<<<< HEAD
+- **The position rail draws at the pane's edge, not the measure's.** Reading
+  narrows the text to `READING_MEASURE` and centres it; drawing the rail at
+  `inner.right()` put it inside that column, over the last character of a line.
+  It draws against `pane`, and the measure gives up one column for it.
+>>>>>>> origin/main
 - **Anything that jumps to a line goes through `App::jump_to`.** It opens the
   folds hiding that line first — a destination the reader cannot see is not a
   destination, and search used to land on the right line inside a collapsed
   section and leave them looking at nothing. Only the folds in the way open;
   ones closed elsewhere stay closed. Ordinary motion does *not* use it, or `za`
   would be undone by the next keystroke.
+||||||| 28fc557
+=======
+- **Anything that jumps to a line goes through `App::jump_to`.** It opens the
+  folds hiding that line first — a destination the reader cannot see is not a
+  destination, and search used to land on the right line inside a collapsed
+  section and leave them looking at nothing. Only the folds in the way open;
+  ones closed elsewhere stay closed. Ordinary motion does *not* use it, or `za`
+  would be undone by the next keystroke.
+>>>>>>> origin/main
 - **Preview has its own cursor, and it is authoritative.** `app.preview_row` is
   a row of `PreviewView.layout` — not a buffer line. Preview draws a different
   document from the one the buffer holds (concealment shortens lines,

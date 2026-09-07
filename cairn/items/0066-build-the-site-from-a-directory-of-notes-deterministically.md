@@ -1,11 +1,11 @@
 ---
-id: 44
+id: 66
 title: Build the site from a directory of notes, deterministically
 type: feature
 status: done
 milestone: v1.0
 depends_on:
-- 43
+- 65
 created: 2026-09-07
 updated: 2026-09-07
 priority: p0
@@ -66,7 +66,7 @@ Rules that make the output trustworthy rather than merely present:
 
 ## Notes
 
-Shape depends on the answer to #0042; the acceptance criteria above do not.
+Shape depends on the answer to #0064; the acceptance criteria above do not.
 They are properties of a build, not of a generator, and hold whether the HTML
 comes from mdBook or from this workspace.
 

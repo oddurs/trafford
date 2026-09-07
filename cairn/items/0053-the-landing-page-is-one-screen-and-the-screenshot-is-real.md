@@ -5,7 +5,7 @@ type: feature
 status: done
 milestone: v1.0
 depends_on:
-- 44
+- 66
 - 48
 created: 2026-09-07
 updated: 2026-09-07

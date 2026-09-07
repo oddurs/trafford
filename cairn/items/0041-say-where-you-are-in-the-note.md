@@ -2,8 +2,9 @@
 id: 41
 title: Say where you are in the note
 type: feature
-status: backlog
+status: done
 milestone: v0.5
+assignee: Oddur Sigurdsson
 created: 2026-09-07
 updated: 2026-09-07
 priority: p1
@@ -34,7 +35,7 @@ a long note constantly raises.
 
 ## Acceptance criteria
 
-- [ ] Preview shows how far through the note the view is
-- [ ] A rail down the pane's edge shows the same thing at a glance
-- [ ] It reflects the drawn rows, so a folded note is honest about being short
-- [ ] The editor's line:column is unchanged
+- [x] Preview shows how far through the note the view is
+- [x] A rail down the pane's edge shows the same thing at a glance
+- [x] It reflects the drawn rows, so a folded note is honest about being short
+- [x] The editor's line:column is unchanged

@@ -528,6 +528,7 @@ pub fn rewrite_links(text: &str, old_stem: &str, new_stem: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     fn scratch(files: &[(&str, &str)]) -> (crate::testing::TempDir, Vault) {

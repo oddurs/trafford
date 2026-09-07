@@ -64,6 +64,15 @@ impl Link {
 #[derive(Debug, Clone, Default)]
 pub struct Rendered {
     pub spans: Vec<Span<'static>>,
+    /// Columns this line is pushed right by when drawn, so that a block wider
+    /// than the prose measure still sits on the same centre line.
+    pub offset: usize,
+    /// This line's width is already decided and must not be folded again.
+    ///
+    /// A table's cells are measured and padded when it is drawn; folding one at
+    /// the prose measure does not wrap it, it cuts it in half. Prose is not
+    /// rigid — it is *meant* to fold, which is how a measure works at all.
+    pub rigid: bool,
     /// Drawn at the start of every row this line wraps onto.
     ///
     /// A callout's bar is part of the line's text, so it appears on the first
@@ -95,6 +104,8 @@ impl Rendered {
         spans.extend(self.spans.iter().cloned());
         Rendered {
             spans,
+            offset: self.offset,
+            rigid: self.rigid,
             rail: self.rail.clone(),
             text: format!("{text}{}", self.text),
             links: self
@@ -222,6 +233,8 @@ impl Out {
     fn finish(self) -> Rendered {
         Rendered {
             spans: self.spans,
+            offset: 0,
+            rigid: false,
             rail: None,
             text: self.text,
             links: self.links,

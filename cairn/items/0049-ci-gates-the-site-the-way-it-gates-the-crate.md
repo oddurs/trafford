@@ -5,7 +5,7 @@ type: chore
 status: done
 milestone: v1.0
 depends_on:
-- 44
+- 66
 created: 2026-09-07
 updated: 2026-09-07
 priority: p1
@@ -27,7 +27,7 @@ A `site` job in `.github/workflows/ci.yml`, held to the same standard as the
 crate.
 
 - **Build it.** `site build` with warnings as errors. Broken internal links
-  already fail the build per #0044; CI is where that is enforced on a
+  already fail the build per #0066; CI is where that is enforced on a
   branch nobody ran locally.
 - **Check the anchors, not just the pages.** A link to `page#section` where
   that heading was renamed is a link that lands at the top of the page and

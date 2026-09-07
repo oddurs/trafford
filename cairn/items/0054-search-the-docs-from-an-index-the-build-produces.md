@@ -5,7 +5,7 @@ type: feature
 status: backlog
 milestone: later
 depends_on:
-- 44
+- 66
 created: 2026-09-07
 updated: 2026-09-07
 priority: p2
@@ -31,7 +31,7 @@ snippet per section — and ship a small script that queries it.
 
 - The index is a build product, so it cannot fall out of date
 - Section-level results, not page-level: a hit lands on the heading, which the
-  anchors from #0044 already provide
+  anchors from #0066 already provide
 - Loaded on first keystroke, not on page load; a reader who never searches pays
   nothing
 - Degrades to a link to a full index page with JavaScript off
