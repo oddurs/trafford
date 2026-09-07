@@ -113,6 +113,12 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
 - **`#tags` are clickable wherever they are drawn.** `markdown::Target` says
   what a run of text points at — a note, a URL, or a tag — and a tag click sets
   the vault filter, which is what the sidebar's tags tab already did.
+- **Reading is a posture, not a rendering.** `ctrl-e` hides the side panes, drops
+  the line-number gutter, and holds prose to `READING_MEASURE` (72) centred —
+  `wrap_column` defaults to the pane, which is right for an editor and wrong for
+  a reading view. `reading_focus = false` keeps the editor's chrome. Toggling a
+  pane by hand clears `chrome_before_preview`, so leaving preview does not argue
+  with a choice the reader just made.
 - **Peek never touches the network.** A `[text](https://…)` link peeks as the URL
   and nothing else. Fetching a page to summarise it would turn reading a note
   into an outbound request, which is not something this program starts doing

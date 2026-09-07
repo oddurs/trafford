@@ -180,6 +180,19 @@ impl App {
             "peek" => self.peek(),
             "toggle-preview" => {
                 self.preview = !self.preview;
+                // Reading is a posture, not just a rendering. The panes step
+                // aside and come back with the frame they were in.
+                if self.config.reading_focus {
+                    if self.preview {
+                        self.chrome_before_preview =
+                            Some((self.sidebar_visible, self.context_visible));
+                        self.sidebar_visible = false;
+                        self.context_visible = false;
+                    } else if let Some((sidebar, context)) = self.chrome_before_preview.take() {
+                        self.sidebar_visible = sidebar;
+                        self.context_visible = context;
+                    }
+                }
                 self.set_status(if self.preview { "preview" } else { "source" });
             }
             "expand-all" => {
@@ -216,8 +229,17 @@ impl App {
                 }
                 self.set_status("tag filter cleared");
             }
-            "toggle-sidebar" => self.sidebar_visible = !self.sidebar_visible,
-            "toggle-context" => self.context_visible = !self.context_visible,
+            // Toggling a pane by hand ends the arrangement preview made: the
+            // reader has said what they want, and restoring over it on the way
+            // out would be this program arguing.
+            "toggle-sidebar" => {
+                self.sidebar_visible = !self.sidebar_visible;
+                self.chrome_before_preview = None;
+            }
+            "toggle-context" => {
+                self.context_visible = !self.context_visible;
+                self.chrome_before_preview = None;
+            }
             "theme" => {
                 let items: Vec<PickItem> = Theme::available(&self.vault.root)
                     .into_iter()

@@ -26,6 +26,9 @@ pub struct Config {
     /// Where to wrap. 0 means the pane width; a number holds prose to a
     /// readable measure on a wide terminal. Ignored when `wrap` is false.
     pub wrap_column: u16,
+    /// While previewing, hide the side panes and the line-number gutter and
+    /// hold prose to a measure. Set false to keep the editor's chrome.
+    pub reading_focus: bool,
     /// Show the sidebar on startup.
     pub sidebar: bool,
     /// Sidebar width in columns. A deep vault wants more room for the tree.
@@ -49,6 +52,7 @@ impl Default for Config {
             // and prose is what this is for.
             wrap: true,
             wrap_column: 0,
+            reading_focus: true,
             sidebar: true,
             sidebar_width: 32,
             context_pane: true,

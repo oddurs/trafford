@@ -699,6 +699,11 @@ pub struct App {
     /// and the note line it names — recorded at draw time so a click can find
     /// it without a second idea of the geometry.
     pub sticky: Vec<(u16, u16, usize)>,
+    /// Which panes were open before preview hid them, so leaving preview puts
+    /// the frame back. Cleared when a pane is toggled by hand: at that point
+    /// the reader has said what they want and it is not this program's to
+    /// undo.
+    pub chrome_before_preview: Option<(bool, bool)>,
     /// True after `z`, waiting for the key that says what to fold.
     pub pending_fold: bool,
     /// Which sections are collapsed, per note.
@@ -760,6 +765,7 @@ impl App {
             editor_height: 20,
             panes: Panes::default(),
             folded: crate::ui::fold::Folds::default(),
+            chrome_before_preview: None,
             sticky: Vec::new(),
             pending_fold: false,
             preview_view: None,

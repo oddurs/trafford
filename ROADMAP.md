@@ -58,17 +58,13 @@ a line of screen — so the model underneath them comes first.
 
 ## v0.5 — Reading is its own posture
 
-`#########·` 83% · 5 of 6 done · due 2026-12-20
+`##########` 100% · 6 of 6 done · due 2026-12-20
 
 Preview stops being the editor with the syntax hidden. A note's structure folds,
 its properties stop being seven lines of YAML, its callouts look like callouts,
 and you can look at a link without leaving the page. Measured against the vault
 rather than guessed at: a heading every six lines of body means these notes are
 reference material, and reference material is navigated, not read through.
-
-### backlog
-
-- [ ] `0025` Let the chrome recede while reading <sup>feature · p2 · chrome</sup>
 
 ### done
 
@@ -77,6 +73,7 @@ reference material, and reference material is navigated, not read through.
 - [x] `0022` Draw callouts as callouts <sup>feature · p1 · markdown</sup>
 - [x] `0023` Keep the current section's heading on screen <sup>feature · p1 · chrome</sup>
 - [x] `0024` Peek at a link without leaving the note <sup>feature · p1 · chrome</sup>
+- [x] `0025` Let the chrome recede while reading <sup>feature · p2 · chrome</sup>
 
 ## later — Someday
 

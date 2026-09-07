@@ -2,8 +2,9 @@
 id: 25
 title: Let the chrome recede while reading
 type: feature
-status: backlog
+status: done
 milestone: v0.5
+assignee: Oddur Sigurdsson
 depends_on:
 - 20
 - 23
