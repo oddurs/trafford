@@ -25,6 +25,8 @@ pub struct Config {
     pub wrap_column: u16,
     /// Show the sidebar on startup.
     pub sidebar: bool,
+    /// Sidebar width in columns. A deep vault wants more room for the tree.
+    pub sidebar_width: u16,
     /// Show the right-hand context pane on startup.
     pub context_pane: bool,
 }
@@ -41,6 +43,7 @@ impl Default for Config {
             autocommit_secs: 0,
             wrap_column: 0,
             sidebar: true,
+            sidebar_width: 32,
             context_pane: true,
         }
     }

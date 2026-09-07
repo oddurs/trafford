@@ -397,7 +397,9 @@ impl App {
     fn sidebar_key(&mut self, key: KeyEvent) {
         match self.sidebar_tab {
             SidebarTab::Notes => {
-                let len = self.listed_notes().len();
+                let rows = self.tree_rows();
+                let len = rows.len();
+                let current = rows.get(self.sidebar_cursor);
                 match key.code {
                     KeyCode::Char('j') | KeyCode::Down => {
                         if len > 0 {
@@ -411,13 +413,62 @@ impl App {
                     }
                     KeyCode::Char('g') => self.sidebar_cursor = 0,
                     KeyCode::Char('G') => self.sidebar_cursor = len.saturating_sub(1),
-                    KeyCode::Enter | KeyCode::Char('l') => {
-                        if let Some(id) = self
-                            .listed_notes()
-                            .get(self.sidebar_cursor)
-                            .map(|n| n.id.clone())
-                        {
-                            self.open_note(&id, true);
+                    // Right descends: a closed folder opens, an open one is
+                    // stepped into, a note loads. Holding `l` walks you down
+                    // to the first note without ever undoing itself.
+                    KeyCode::Char('l') | KeyCode::Right => {
+                        match current.map(|r| r.entry.clone()) {
+                            Some(crate::tree::Entry::Dir { path, expanded, .. }) => {
+                                if expanded {
+                                    // The child row is always the next one.
+                                    if self.sidebar_cursor + 1 < len {
+                                        self.sidebar_cursor += 1;
+                                    }
+                                } else {
+                                    self.expanded.insert(path);
+                                }
+                            }
+                            Some(crate::tree::Entry::Note { id, .. }) => self.open_note(&id, true),
+                            None => {}
+                        }
+                    }
+                    // Enter and space toggle a folder in place, for when you
+                    // want to fold something away without moving.
+                    KeyCode::Enter | KeyCode::Char(' ') => match current.map(|r| r.entry.clone()) {
+                        Some(crate::tree::Entry::Dir { path, expanded, .. }) => {
+                            if expanded {
+                                self.expanded.remove(&path);
+                            } else {
+                                self.expanded.insert(path);
+                            }
+                        }
+                        Some(crate::tree::Entry::Note { id, .. }) => self.open_note(&id, true),
+                        None => {}
+                    },
+                    // Left closes: an open directory folds, anything else
+                    // jumps to the directory that contains it. Holding `h`
+                    // walks you back out to the root.
+                    KeyCode::Char('h') | KeyCode::Left => {
+                        let fold = current.map(|r| r.is_expanded_dir()).unwrap_or(false);
+                        match (fold, current.map(|r| r.entry.clone())) {
+                            (true, Some(crate::tree::Entry::Dir { path, .. })) => {
+                                self.expanded.remove(&path);
+                            }
+                            _ => {
+                                if let Some(pos) =
+                                    crate::tree::parent_row(&rows, self.sidebar_cursor)
+                                {
+                                    self.sidebar_cursor = pos;
+                                }
+                            }
+                        }
+                    }
+                    KeyCode::Char('E') => self.expand_all(),
+                    KeyCode::Char('C') => self.collapse_all(),
+                    // Jump the cursor to the note that is open.
+                    KeyCode::Char('.') => {
+                        if let Some(id) = self.current.clone() {
+                            self.reveal_in_tree(&id);
                         }
                     }
                     KeyCode::Char('t') => {
@@ -427,10 +478,13 @@ impl App {
                     KeyCode::Char('c') if self.tag_filter.is_some() => {
                         self.tag_filter = None;
                         self.sidebar_cursor = 0;
+                        if let Some(id) = self.current.clone() {
+                            self.reveal_in_tree(&id);
+                        }
                         self.set_status("tag filter cleared");
                     }
                     KeyCode::Char('/') => self.open_switcher(),
-                    KeyCode::Esc | KeyCode::Char('h') => self.focus = Focus::Editor,
+                    KeyCode::Esc => self.focus = Focus::Editor,
                     _ => {}
                 }
             }
@@ -448,18 +502,25 @@ impl App {
                             self.sidebar_cursor = (self.sidebar_cursor + len - 1) % len;
                         }
                     }
-                    KeyCode::Enter | KeyCode::Char('l') => {
+                    KeyCode::Enter | KeyCode::Char('l') | KeyCode::Right | KeyCode::Char(' ') => {
                         if let Some((tag, _)) = tags.get(self.sidebar_cursor) {
                             self.tag_filter = Some(tag.clone());
                             self.sidebar_tab = SidebarTab::Notes;
                             self.sidebar_cursor = 0;
+                            // A filtered tree is only useful open.
+                            self.expand_all();
                             self.set_status(format!("filtering by #{tag}"));
                         }
                     }
-                    KeyCode::Char('t') | KeyCode::Esc => {
+                    KeyCode::Char('t') | KeyCode::Esc | KeyCode::Char('h') | KeyCode::Left => {
                         self.sidebar_tab = SidebarTab::Notes;
                         self.sidebar_cursor = 0;
+                        if let Some(id) = self.current.clone() {
+                            self.reveal_in_tree(&id);
+                        }
                     }
+                    KeyCode::Char('g') => self.sidebar_cursor = 0,
+                    KeyCode::Char('G') => self.sidebar_cursor = len.saturating_sub(1),
                     _ => {}
                 }
             }
@@ -866,11 +927,20 @@ pub const HELP: &[(&str, &str)] = &[
     ("enter", "follow the [[link]] under the cursor"),
     ("ctrl-o", "back to the previous note"),
     ("", ""),
-    ("", "SIDEBAR"),
-    ("j k g G", "move"),
-    ("enter", "open"),
-    ("t", "switch between notes and tags"),
+    ("", "SIDEBAR — a tree of the vault"),
+    ("j k ↑ ↓", "move"),
+    (
+        "l →",
+        "open a folder, step into an open one, or open a note",
+    ),
+    ("h ←", "close a folder, or jump to the one holding it"),
+    ("enter space", "toggle a folder, or open a note"),
+    ("g G", "first and last row"),
+    ("E C", "expand all, collapse all"),
+    (".", "jump to the note that is open"),
+    ("t", "switch between the tree and tags"),
     ("c", "clear the tag filter"),
+    ("/", "quick switcher"),
     ("", ""),
     ("", "GIT PANEL"),
     ("space", "stage or unstage"),

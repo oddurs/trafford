@@ -41,6 +41,28 @@ from anywhere.
 
 ## What's in it
 
+**The sidebar is a tree.** Your folders are how you know what a note *is*, so
+the sidebar shows them: collapsible, counted, and opened to reveal whatever
+note you have in front of you.
+
+```
+▸ 00-inbox                   5
+▸ 01-projects               69
+▾ 03-resources              22
+  ▾ ai-ml                    9
+  │   AI/ML Learning Roadmap
+  │ ▌ Karpathy's LLM Wiki
+  ▸ calculators              6
+  Dashboard
+```
+
+`l` opens a folder, then steps into it, then opens a note — hold it and you
+walk down to the first note. `h` closes a folder, or jumps to the one holding
+it; hold it and you walk back out. `enter` and `space` toggle a folder without
+moving. `E` and `C` expand and collapse everything, and `.` jumps back to the
+note you have open. `t` swaps the tree for the tag list; picking a tag filters
+the tree down to the notes carrying it.
+
 **Notes.** Markdown files in a folder, nested however you like. Frontmatter
 `title:` and `tags:` are read; so are inline `#tags`.
 
@@ -81,6 +103,7 @@ cursor. Needs `ANTHROPIC_API_KEY`.
 ```toml
 theme = "night"          # night | paper | mono
 new_note_dir = ""        # where ctrl-n puts notes
+sidebar_width = 32       # columns; a deep vault wants more
 daily_note_dir = "journal"
 daily_note_format = "%Y-%m-%d"
 model = "claude-sonnet-5"
