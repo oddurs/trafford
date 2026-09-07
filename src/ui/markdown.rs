@@ -63,6 +63,40 @@ impl Rendered {
         self.links.iter().find(|l| l.covers(column))
     }
 
+    /// A copy with `text` in front of it, moving the links along.
+    ///
+    /// The offsets in `links` index the drawn text, so anything put in front of
+    /// that text has to move them or a click resolves against the wrong
+    /// column. Folding puts a marker in front of every heading, which is why
+    /// this exists.
+    pub fn prefixed(&self, text: &str, style: Style) -> Rendered {
+        let shift = text.chars().count();
+        let mut spans = Vec::with_capacity(self.spans.len() + 1);
+        spans.push(Span::styled(text.to_string(), style));
+        spans.extend(self.spans.iter().cloned());
+        Rendered {
+            spans,
+            text: format!("{text}{}", self.text),
+            links: self
+                .links
+                .iter()
+                .map(|l| Link {
+                    start: l.start + shift,
+                    ..l.clone()
+                })
+                .collect(),
+        }
+    }
+
+    /// A copy with `text` after it. Links are unaffected: they are all in front
+    /// of anything appended.
+    pub fn suffixed(&self, text: &str, style: Style) -> Rendered {
+        let mut out = self.clone();
+        out.text.push_str(text);
+        out.spans.push(Span::styled(text.to_string(), style));
+        out
+    }
+
     /// The spans covering drawn characters `start..start + len`.
     ///
     /// A folded row is a slice of a line, and the spans have to be cut to
@@ -579,6 +613,33 @@ mod tests {
                 "concealing {source:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_prefix_moves_the_links_it_pushes_along() {
+        let theme = Theme::default();
+        let rendered = concealing(&theme).render("see [[Note|alias]]", false);
+        let before = rendered.link_at(4).unwrap().clone();
+        let marked = rendered.prefixed("▸ ", theme.faded());
+        assert_eq!(marked.text, "▸ see alias");
+        let after = marked
+            .link_at(before.start + 2)
+            .expect("link moved with it");
+        assert_eq!(after.target, before.target);
+        assert_eq!(after.len, before.len);
+        assert!(
+            marked.link_at(before.start).is_none(),
+            "and is no longer where it was"
+        );
+    }
+
+    #[test]
+    fn a_suffix_leaves_the_links_where_they_are() {
+        let theme = Theme::default();
+        let rendered = concealing(&theme).render("[[Note]]", false);
+        let tail = rendered.suffixed("   4 lines", theme.faded());
+        assert_eq!(tail.text, "Note   4 lines");
+        assert_eq!(tail.link_at(0).unwrap().target, "Note");
     }
 
     #[test]

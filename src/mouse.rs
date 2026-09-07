@@ -568,11 +568,24 @@ impl App {
             self.editor.buf.row = source.min(self.editor.buf.len().saturating_sub(1));
             self.editor.buf.col = 0;
             self.editor.buf.goal_col = 0;
-            let hit = (c >= text_x)
+            // The fold marker occupies the first two drawn columns of a
+            // heading. Clicking it opens or shuts the section, which is the
+            // mouse's half of `za`.
+            let on_marker = c >= text_x
+                && col < 2
+                && view
+                    .lines
+                    .get(line)
+                    .is_some_and(|r| r.text.starts_with('▸') || r.text.starts_with('▾'));
+            let hit = (c >= text_x && !on_marker)
                 .then(|| view.link_at(line, col))
                 .flatten()
                 .cloned();
             self.preview_view = Some(view);
+            if on_marker {
+                self.toggle_fold_at(source);
+                return;
+            }
             if let Some(link) = hit {
                 if link.wiki {
                     self.open_target(&link.target, link.heading);

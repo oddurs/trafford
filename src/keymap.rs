@@ -676,6 +676,11 @@ impl App {
     }
 
     fn editor_key(&mut self, key: KeyEvent) {
+        // Folding belongs to the reading view, so `z` is only a prefix there.
+        // In the editor it is still free for whatever wants it later.
+        if self.preview && self.fold_key(key) {
+            return;
+        }
         self.last_edit = std::time::Instant::now();
         match self.editor.on_key(key) {
             EditorAction::Save => self.save(),
@@ -685,6 +690,35 @@ impl App {
             EditorAction::Status(msg) => self.set_status(msg),
             EditorAction::None => {}
         }
+    }
+
+    /// The `z` prefix and what follows it. Returns true when the key was used.
+    ///
+    /// A prefix of its own rather than a use of the editor's pending-operator
+    /// state: that state belongs to `d`, `c` and `y`, which act on the buffer,
+    /// and folding does not touch the buffer at all.
+    fn fold_key(&mut self, key: KeyEvent) -> bool {
+        if key.modifiers.contains(KeyModifiers::CONTROL) {
+            self.pending_fold = false;
+            return false;
+        }
+        if !self.pending_fold {
+            if key.code == KeyCode::Char('z') {
+                self.pending_fold = true;
+                return true;
+            }
+            return false;
+        }
+        self.pending_fold = false;
+        match key.code {
+            KeyCode::Char('a') => self.toggle_fold_at(self.editor.buf.row),
+            KeyCode::Char('R') | KeyCode::Char('r') => self.unfold_all(),
+            KeyCode::Char('M') | KeyCode::Char('m') => self.fold_all(),
+            // An unrecognised second key cancels rather than falling through to
+            // the editor, so a mistyped `zx` cannot delete anything.
+            _ => {}
+        }
+        true
     }
 
     fn sidebar_key(&mut self, key: KeyEvent) {
@@ -1258,6 +1292,7 @@ pub const HELP: &[(&str, &str)] = &[
     ("menu key", "the context menu, without a mouse"),
     ("ctrl-s", "save"),
     ("ctrl-e", "toggle rendered preview"),
+    ("za zR zM", "in preview: fold a section, open all, fold all"),
     ("ctrl-b", "toggle sidebar"),
     ("ctrl-g", "git panel"),
     ("ctrl-j", "toggle the assistant"),
@@ -1286,6 +1321,7 @@ pub const HELP: &[(&str, &str)] = &[
     ("click a folder", "opens or closes it"),
     ("click a note", "opens it, in the tree or in any list"),
     ("click the outline", "jumps to that heading"),
+    ("click a ▸ or ▾", "opens or shuts that section"),
     (
         "click a backlink",
         "opens that note at the line that mentions this one",

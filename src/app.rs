@@ -595,6 +595,13 @@ pub struct App {
     pub editor_height: usize,
     /// Where the panes were drawn, for hit-testing the mouse.
     pub panes: Panes,
+    /// True after `z`, waiting for the key that says what to fold.
+    pub pending_fold: bool,
+    /// Which sections are collapsed, per note.
+    ///
+    /// Lives here rather than on `PreviewView`, which is rebuilt on every draw
+    /// and would forget a fold between one keystroke and the next.
+    pub folded: crate::ui::fold::Folds,
     /// The note as preview draws it: concealed text, and where its links are.
     /// Rebuilt each draw while preview is on, `None` otherwise.
     ///
@@ -648,6 +655,8 @@ impl App {
             should_quit: false,
             editor_height: 20,
             panes: Panes::default(),
+            folded: crate::ui::fold::Folds::default(),
+            pending_fold: false,
             preview_view: None,
             pending_suspend: None,
             context_targets: Vec::new(),
@@ -890,6 +899,58 @@ impl App {
         self.open_target(&link.target, heading);
     }
 
+    /// Collapse or open the section a note line belongs to.
+    ///
+    /// The line need not be the heading: folding is a thing you do to the
+    /// section you are in, so a cursor anywhere inside one folds it. That is
+    /// what `za` means in an outliner, and pressing it on body text and having
+    /// nothing happen would be the wrong answer.
+    pub fn toggle_fold_at(&mut self, row: usize) {
+        let Some(id) = self.current.clone() else {
+            return;
+        };
+        let heads = crate::ui::fold::headings(&self.editor.buf.lines);
+        let total = self.editor.buf.len();
+        // The innermost heading at or above this line whose section still
+        // contains it — the one you would point at if asked "which section?".
+        let target = heads
+            .iter()
+            .rfind(|h| h.row <= row && crate::ui::fold::section_end(&heads, h.row, total) > row)
+            .map(|h| h.row);
+        let Some(row) = target else {
+            self.set_status("no section here");
+            return;
+        };
+        if crate::ui::fold::section_end(&heads, row, total) <= row + 1 {
+            self.set_status("nothing under this heading");
+            return;
+        }
+        let shut = self.folded.toggle(&id, row);
+        // Keep the cursor on the heading when its section closes underneath it,
+        // or it is left pointing at text that is no longer drawn.
+        if shut {
+            self.editor.buf.goto_line(row);
+        }
+    }
+
+    pub fn fold_all(&mut self) {
+        let Some(id) = self.current.clone() else {
+            return;
+        };
+        let heads = crate::ui::fold::headings(&self.editor.buf.lines);
+        let total = self.editor.buf.len();
+        self.folded.fold_all(&id, &heads, total);
+        self.set_status("folded everything");
+    }
+
+    pub fn unfold_all(&mut self) {
+        let Some(id) = self.current.clone() else {
+            return;
+        };
+        self.folded.unfold_all(&id);
+        self.set_status("opened everything");
+    }
+
     /// Open what a wikilink names, jumping to its heading if it named one.
     ///
     /// Shared with preview, where the syntax has been concealed and there is no
@@ -1126,6 +1187,12 @@ impl App {
     /// user never agreed to give up.
     pub fn reload_after_external(&mut self) -> anyhow::Result<()> {
         self.vault.rescan()?;
+        // Folds are keyed by line number, and another program may have moved
+        // every line. Keeping them would collapse whatever now happens to sit
+        // where a heading used to.
+        if let Some(id) = self.current.clone() {
+            self.folded.forget(&id);
+        }
         self.refresh_git();
         if self.editor.buf.dirty {
             self.set_status("reloaded the vault; this note has unsaved changes and was kept");

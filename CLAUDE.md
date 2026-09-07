@@ -95,6 +95,15 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
   `.trash/` stays out of the index without a special case.
 - **Frontmatter** `title:` and `tags:` are read, including the `- item` list
   form. Nested tags like `type/reference` are ordinary tags.
+- **There is one heading scanner.** `ui::fold::headings` is it — the outline in
+  the context pane, the fold state, and the reading view all read it. A second
+  idea of the document's structure diverges exactly the way a second idea of the
+  layout does.
+- **Fold state lives on `App`, not on `PreviewView`.** The view is rebuilt every
+  draw and would forget a fold between one keystroke and the next. It is keyed
+  by line number, so `reload_after_external` throws it away — another program
+  may have moved every line, and a stale fold collapses whatever now sits where
+  a heading used to.
 - **A table is a block, not a line.** `ui::table` parses a header, a separator
   and its rows together, and draws two more lines than the block occupies — so
   preview cannot assume one drawn line per source line. `PreviewView.sources`

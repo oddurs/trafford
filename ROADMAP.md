@@ -58,7 +58,7 @@ a line of screen — so the model underneath them comes first.
 
 ## v0.5 — Reading is its own posture
 
-`··········` 0% · 0 of 6 done · due 2026-12-20
+`##········` 17% · 1 of 6 done · due 2026-12-20
 
 Preview stops being the editor with the syntax hidden. A note's structure folds,
 its properties stop being seven lines of YAML, its callouts look like callouts,
@@ -68,12 +68,15 @@ reference material, and reference material is navigated, not read through.
 
 ### backlog
 
-- [ ] `0020` Fold a note's sections in the reading view <sup>feature · p0 · markdown</sup>
 - [ ] `0021` Show frontmatter as properties, not as seven lines of YAML <sup>feature · p1 · markdown</sup>
 - [ ] `0022` Draw callouts as callouts <sup>feature · p1 · markdown</sup>
 - [ ] `0023` Keep the current section's heading on screen <sup>feature · p1 · chrome</sup>
 - [ ] `0024` Peek at a link without leaving the note <sup>feature · p1 · chrome</sup>
 - [ ] `0025` Let the chrome recede while reading <sup>feature · p2 · chrome</sup>
+
+### done
+
+- [x] `0020` Fold a note's sections in the reading view <sup>feature · p0 · markdown</sup>
 
 ## later — Someday
 

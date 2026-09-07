@@ -1,3 +1,4 @@
+pub mod fold;
 pub mod markdown;
 pub mod table;
 pub mod theme;
@@ -373,15 +374,46 @@ impl PreviewView {
         source: &[String],
         renderer: &markdown::Renderer<'_>,
         width: usize,
+        folded: Option<&std::collections::HashSet<usize>>,
     ) -> PreviewView {
         let mut lines = Vec::with_capacity(source.len());
         let mut sources = Vec::with_capacity(source.len());
         let mut numbered = Vec::with_capacity(source.len());
+        let heads = fold::headings(source);
+        let theme = renderer.theme;
         let mut in_code = false;
         let mut i = 0;
         while i < source.len() {
             let raw = &source[i];
             let opens = markdown::is_fence(raw);
+
+            // A heading carries a marker saying whether it can be opened, and
+            // what is behind it when it is shut. Rendered first so the marker
+            // sits outside the concealment and the link offsets move with it.
+            if !in_code && !opens && heads.iter().any(|h| h.row == i) {
+                let end = fold::section_end(&heads, i, source.len());
+                let hidden = end - i - 1;
+                let shut = hidden > 0 && folded.is_some_and(|f| f.contains(&i));
+                let marker = if hidden == 0 {
+                    "  "
+                } else if shut {
+                    "▸ "
+                } else {
+                    "▾ "
+                };
+                let mut drawn = renderer
+                    .render(raw, false)
+                    .prefixed(marker, Style::default().fg(theme.accent));
+                if shut {
+                    let plural = if hidden == 1 { "" } else { "s" };
+                    drawn = drawn.suffixed(&format!("  {hidden} line{plural}"), theme.faded());
+                }
+                lines.push(drawn);
+                sources.push(i);
+                numbered.push(true);
+                i = if shut { end } else { i + 1 };
+                continue;
+            }
 
             // A table is a block, not a line. Inside a fence it is text like
             // anything else — pipes in a code sample are not a table.
@@ -538,9 +570,19 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
         conceal: app.preview,
     };
 
-    let view = app
-        .preview
-        .then(|| PreviewView::build(&app.editor.buf.lines, &renderer, text_width));
+    let folded: Option<std::collections::HashSet<usize>> = app
+        .current
+        .as_deref()
+        .and_then(|id| app.folded.of(id))
+        .cloned();
+    let view = app.preview.then(|| {
+        PreviewView::build(
+            &app.editor.buf.lines,
+            &renderer,
+            text_width,
+            folded.as_ref(),
+        )
+    });
 
     // Scroll against whichever rows are actually on screen. In preview that is
     // the rendered fold, so the top of the cursor's line is the anchor — there
@@ -691,40 +733,9 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
 // Context pane: outline, outgoing links, backlinks
 // ---------------------------------------------------------------------------
 
-/// A heading picked out of the open buffer, for the outline.
-struct OutlineEntry {
-    text: String,
-    level: usize,
-    row: usize,
-}
-
 /// Headings in the live buffer, so the outline updates as you type.
-fn outline_of(buf: &crate::editor::Buffer) -> Vec<OutlineEntry> {
-    let mut out = Vec::new();
-    let mut in_code = false;
-    for (row, raw) in buf.lines.iter().enumerate() {
-        if markdown::is_fence(raw) {
-            in_code = !in_code;
-            continue;
-        }
-        if in_code {
-            continue;
-        }
-        let trimmed = raw.trim_start();
-        if !trimmed.starts_with('#') {
-            continue;
-        }
-        let level = trimmed.chars().take_while(|c| *c == '#').count();
-        if level > 6 || trimmed.chars().nth(level) != Some(' ') {
-            continue;
-        }
-        out.push(OutlineEntry {
-            text: trimmed[level..].trim().to_string(),
-            level,
-            row,
-        });
-    }
-    out
+fn outline_of(buf: &crate::editor::Buffer) -> Vec<fold::Heading> {
+    fold::headings(&buf.lines)
 }
 
 /// How many rows the outline may use, given the pane height and how much the
@@ -811,10 +822,16 @@ fn draw_context(f: &mut Frame, app: &App, area: Rect) -> Vec<Option<ContextTarge
                 .get(current)
                 .map(|c| c.row == entry.row)
                 .unwrap_or(false);
+            // A folded section is marked here too, so the outline says the same
+            // thing about the note as the note does.
+            let shut = app.folded.is_folded(&id, entry.row);
+            let marker = if shut { "▸ " } else { "" };
+            let used = indent.len() + marker.len();
             lines.push(Line::from(vec![
                 Span::styled(indent.clone(), theme.faded()),
+                Span::styled(marker, Style::default().fg(theme.accent)),
                 Span::styled(
-                    fit(&entry.text, width.saturating_sub(indent.len())),
+                    fit(&entry.text, width.saturating_sub(used)),
                     if here {
                         Style::default()
                             .fg(theme.accent)
@@ -1698,6 +1715,11 @@ mod tests {
     use ratatui::Terminal;
 
     fn preview_of(lines: &[&str], width: usize) -> (Theme, PreviewView) {
+        folded_preview_of(lines, width, &[])
+    }
+
+    /// A preview with the headings on `shut` collapsed.
+    fn folded_preview_of(lines: &[&str], width: usize, shut: &[usize]) -> (Theme, PreviewView) {
         let theme = Theme::default();
         let owned: Vec<String> = lines.iter().map(|s| s.to_string()).collect();
         let resolves = |t: &str| t != "Nowhere";
@@ -1706,7 +1728,8 @@ mod tests {
             resolves: &resolves,
             conceal: true,
         };
-        let view = PreviewView::build(&owned, &renderer, width);
+        let set: std::collections::HashSet<usize> = shut.iter().copied().collect();
+        let view = PreviewView::build(&owned, &renderer, width, Some(&set));
         (theme, view)
     }
 
@@ -1770,6 +1793,80 @@ mod tests {
         let (_t, view) = preview_of(&["```", "**not bold**", "```", "**bold**"], 40);
         assert_eq!(view.lines[1].text, "**not bold**", "inside the fence");
         assert_eq!(view.lines[3].text, "bold", "after it");
+    }
+
+    const SECTIONED: [&str; 9] = [
+        "# Title",
+        "intro",
+        "## One",
+        "a",
+        "b",
+        "### One A",
+        "c",
+        "## Two",
+        "d",
+    ];
+
+    #[test]
+    fn every_heading_says_whether_it_can_be_opened() {
+        let (_t, view) = preview_of(&SECTIONED, 40);
+        assert_eq!(view.lines[0].text, "▾ Title");
+        assert_eq!(view.lines[2].text, "▾ One");
+        assert_eq!(view.lines[5].text, "▾ One A");
+        assert_eq!(
+            view.lines[7].text, "▾ Two",
+            "a section with one line under it"
+        );
+        // A heading with nothing under it gets no marker, because there is
+        // nothing behind it to promise.
+        let (_t, empty) = preview_of(&["## Nothing"], 40);
+        assert_eq!(empty.lines[0].text, "  Nothing");
+    }
+
+    #[test]
+    fn a_folded_section_draws_as_one_line_and_says_what_it_hides() {
+        let (_t, view) = folded_preview_of(&SECTIONED, 40, &[2]);
+        let drawn: Vec<&str> = view.lines.iter().map(|r| r.text.as_str()).collect();
+        assert_eq!(drawn, ["▾ Title", "intro", "▸ One  4 lines", "▾ Two", "d"]);
+        assert_eq!(
+            view.sources,
+            vec![0, 1, 2, 7, 8],
+            "the lines that survived still name their own rows"
+        );
+    }
+
+    #[test]
+    fn folding_an_outer_heading_takes_the_inner_ones_with_it() {
+        let (_t, view) = folded_preview_of(&SECTIONED, 40, &[0]);
+        assert_eq!(
+            view.lines
+                .iter()
+                .map(|r| r.text.as_str())
+                .collect::<Vec<_>>(),
+            ["▸ Title  8 lines"]
+        );
+    }
+
+    #[test]
+    fn one_hidden_line_is_not_reported_as_lines() {
+        let (_t, view) = folded_preview_of(&["## Two", "d"], 40, &[0]);
+        assert_eq!(view.lines[0].text, "▸ Two  1 line");
+    }
+
+    #[test]
+    fn a_fold_marker_does_not_move_a_link_out_from_under_the_pointer() {
+        let (_t, view) = preview_of(&["## See [[Note|alias]]", "body"], 40);
+        assert_eq!(view.lines[0].text, "▾ See alias");
+        // "alias" starts at drawn column 6, two of which are the marker.
+        assert_eq!(view.link_at(0, 6).map(|l| l.target.as_str()), Some("Note"));
+        assert!(view.link_at(0, 0).is_none(), "the marker is not the link");
+    }
+
+    #[test]
+    fn a_hash_inside_a_fence_does_not_become_a_foldable_section() {
+        let (_t, view) = preview_of(&["```sh", "# not a heading", "```", "after"], 40);
+        assert_eq!(view.lines[1].text, "# not a heading");
+        assert_eq!(view.lines.len(), 4);
     }
 
     #[test]
