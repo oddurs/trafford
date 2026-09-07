@@ -15,6 +15,7 @@ cursor drifting on CJK text, and a stall on saving in a large vault.
     python3 tools/probe.py cursor   <vault>   # where the cursor actually lands
     python3 tools/probe.py sizes    <vault>   # panic-hunt across terminal sizes
     python3 tools/probe.py timings  <vault>   # latency of startup, save, search
+    python3 tools/probe.py html     <vault>   # the screen as HTML, to look at
 
 Pass --bin to point at a binary other than target/release/trafford.
 
@@ -25,6 +26,7 @@ which is a mistake that costs an afternoon if you make it silently.
 
 import argparse
 import fcntl
+import html
 import os
 import pty
 import select
@@ -189,6 +191,81 @@ def cmd_sizes(args):
     return 1 if bad else 0
 
 
+def cmd_html(args):
+    """Write the screen out as standalone HTML, colours and all.
+
+    A theme cannot be judged from a list of hex values, and a terminal
+    screenshot cannot be pasted into a review. This produces something you can
+    open, and something a reviewer can see.
+    """
+    shots = [
+        ("The vault", b""),
+        ("Command palette", b"\x0b"),
+        ("Theme picker", b"\x0btheme\r"),
+    ]
+    blocks = []
+    for title, keys in shots:
+        session = Session(args.bin, args.vault)
+        session.until(lambda s: "notes" in "\n".join(s.display), 30)
+        if keys:
+            session.send(keys, 0.6)
+        session.pump(0.4)
+        rows = [
+            [session.screen.buffer[y][x] for x in range(session.screen.columns)]
+            for y in range(session.screen.lines)
+        ]
+        session.close()
+        blocks.append(f"<h2>{html.escape(title)}</h2><pre>{_grid_to_html(rows)}</pre>")
+
+    dest = args.out or "trafford.html"
+    with open(dest, "w") as f:
+        f.write(_HTML_PAGE.format(body="".join(blocks)))
+    print(f"wrote {dest}")
+
+
+def _grid_to_html(rows):
+    out = []
+    for row in rows:
+        line, run, style = [], [], None
+
+        def flush():
+            if run:
+                fg, bg, bold, italic, under = style
+                css = f"color:#{fg};background:#{bg}"
+                if bold:
+                    css += ";font-weight:700"
+                if italic:
+                    css += ";font-style:italic"
+                if under:
+                    css += ";text-decoration:underline"
+                line.append(f'<span style="{css}">{html.escape("".join(run))}</span>')
+            run.clear()
+
+        for ch in row:
+            fg = ch.fg if ch.fg != "default" else "cccccc"
+            bg = ch.bg if ch.bg != "default" else "111111"
+            here = (fg, bg, ch.bold, ch.italics, ch.underscore)
+            if here != style:
+                flush()
+                style = here
+            run.append(ch.data or " ")
+        flush()
+        out.append("".join(line))
+    return "\n".join(out)
+
+
+_HTML_PAGE = """<title>trafford</title>
+<style>
+  body {{ background:#0b0b0d; color:#9aa; margin:0; padding:32px;
+         font-family:ui-monospace,Menlo,monospace }}
+  h2 {{ font:600 12px/1 ui-sans-serif,system-ui; letter-spacing:.09em;
+       text-transform:uppercase; opacity:.7; margin:30px 0 10px }}
+  pre {{ font-size:12.5px; line-height:1.35; margin:0; padding:14px;
+        border-radius:10px; overflow-x:auto }}
+</style>
+{body}"""
+
+
 def cmd_timings(args):
     """Latency of the things a user waits on."""
     session = Session(args.bin, args.vault)
@@ -218,9 +295,10 @@ def fmt(seconds):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("mode", choices=["screens", "cursor", "sizes", "timings"])
+    parser.add_argument("mode", choices=["screens", "cursor", "sizes", "timings", "html"])
     parser.add_argument("vault", help="path to a vault to open")
     parser.add_argument("--bin", default=DEFAULT_BIN, help=f"binary to run (default {DEFAULT_BIN})")
+    parser.add_argument("--out", help="where html mode writes (default trafford.html)")
     args = parser.parse_args()
     if not os.path.exists(args.bin):
         sys.exit(f"{args.bin} not found — cargo build --release first")
@@ -229,6 +307,7 @@ def main():
         "cursor": cmd_cursor,
         "sizes": cmd_sizes,
         "timings": cmd_timings,
+        "html": cmd_html,
     }[args.mode](args) or 0
 
 
