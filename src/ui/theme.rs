@@ -653,6 +653,52 @@ palette = 15=#d3ebe9
         assert_eq!(theme.name, "Paper");
     }
 
+    /// A role that comes out the same colour as the ground is invisible, and
+    /// the derivation makes that easy to do by accident on a light theme.
+    #[test]
+    fn nothing_a_theme_derives_is_invisible_against_its_ground() {
+        let cases = [
+            // Dark and light, each stating only the two required colours.
+            "background = \"#0a0f14\"\ntext = \"#98d1ce\"\n".to_string(),
+            "background = \"#eff1f5\"\ntext = \"#4c4f69\"\n".to_string(),
+            "background = \"#ffffff\"\ntext = \"#000000\"\n".to_string(),
+        ];
+        for body in cases {
+            let t = Theme::from_toml(&body).unwrap();
+            for (name, colour) in [
+                ("text", t.fg),
+                ("muted", t.muted),
+                ("faint", t.faint),
+                ("heading", t.heading),
+                ("link", t.link),
+                ("code", t.code),
+                ("tag", t.tag),
+                ("border_focus", t.border_focus),
+            ] {
+                assert_ne!(rgb(colour), rgb(t.bg), "{name} is invisible in {body:?}");
+            }
+            // The lifted grounds must differ from the page, or panes and
+            // popups stop reading as separate surfaces.
+            assert_ne!(rgb(t.surface), rgb(t.bg), "surface in {body:?}");
+            assert_ne!(rgb(t.overlay), rgb(t.bg), "overlay in {body:?}");
+        }
+    }
+
+    #[test]
+    fn a_light_ghostty_theme_stays_light() {
+        let body = "\
+background = #eff1f5
+foreground = #4c4f69
+palette = 3=#df8e1d
+palette = 7=#4c4f69
+palette = 15=#5c5f77
+";
+        let t = Theme::from_ghostty(body).unwrap();
+        let (br, _, _) = rgb(t.bg);
+        let (fr, _, _) = rgb(t.fg);
+        assert!(br > fr, "a light ground must stay lighter than its text");
+    }
+
     #[test]
     fn loose_matching_ignores_case_and_separators() {
         assert_eq!(loose("Catppuccin Mocha"), "catppuccinmocha");
