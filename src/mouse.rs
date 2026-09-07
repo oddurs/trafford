@@ -556,6 +556,42 @@ impl App {
         }
 
         let text_x = inner.x + gutter;
+
+        // Preview draws rendered text, which folds at different places from the
+        // source, so a click there has to be resolved against the rows that
+        // were actually drawn. The link it lands on is the one the renderer
+        // recorded: the syntax is gone from the screen and cannot be re-parsed.
+        if let Some(view) = self.preview_view.take() {
+            let column = c.saturating_sub(text_x) as usize;
+            let (line, col) = view.layout.source_of(&view.texts(), visual, column);
+            self.editor.buf.row = line.min(self.editor.buf.len().saturating_sub(1));
+            self.editor.buf.col = 0;
+            self.editor.buf.goal_col = 0;
+            let hit = (c >= text_x)
+                .then(|| view.link_at(line, col))
+                .flatten()
+                .cloned();
+            self.preview_view = Some(view);
+            if let Some(link) = hit {
+                if link.wiki {
+                    self.open_target(&link.target, link.heading);
+                } else if let Some(anchor) = link.target.strip_prefix('#') {
+                    match self.heading_line_here(anchor) {
+                        Some(row) => self.editor.buf.goto_line(row),
+                        None => {
+                            self.set_status(format!("no heading called \"{anchor}\" in this note"))
+                        }
+                    }
+                } else {
+                    self.run_menu_action(crate::app::MenuAction::Spawn {
+                        program: opener().to_string(),
+                        args: vec![link.target.clone()],
+                    });
+                }
+            }
+            return;
+        }
+
         if c < text_x {
             // The gutter: the start of the line this row belongs to.
             let line = self.editor.layout.row(visual).map(|v| v.line).unwrap_or(0);

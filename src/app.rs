@@ -595,6 +595,14 @@ pub struct App {
     pub editor_height: usize,
     /// Where the panes were drawn, for hit-testing the mouse.
     pub panes: Panes,
+    /// The note as preview draws it: concealed text, and where its links are.
+    /// Rebuilt each draw while preview is on, `None` otherwise.
+    ///
+    /// It is separate from `editor.layout` on purpose. Concealed text folds
+    /// differently from the source, so preview needs its own rows — but the
+    /// cursor still lives in the buffer, and letting a motion resolve against
+    /// rendered columns would move it somewhere the file does not agree with.
+    pub preview_view: Option<crate::ui::PreviewView>,
     /// A program to hand the terminal to, performed by the event loop —
     /// `App` does not own the terminal and must not try to.
     pub pending_suspend: Option<(String, Vec<String>)>,
@@ -640,6 +648,7 @@ impl App {
             should_quit: false,
             editor_height: 20,
             panes: Panes::default(),
+            preview_view: None,
             pending_suspend: None,
             context_targets: Vec::new(),
             tag_filter: None,
@@ -821,7 +830,7 @@ impl App {
     /// Reads the live buffer rather than the index: the heading may have been
     /// typed a moment ago and not saved, and a link that works only after a
     /// save would be a puzzle.
-    fn heading_line_here(&self, anchor: &str) -> Option<usize> {
+    pub fn heading_line_here(&self, anchor: &str) -> Option<usize> {
         let wanted = crate::vault::note::slug(anchor);
         let mut in_code = false;
         for (row, raw) in self.editor.buf.lines.iter().enumerate() {
@@ -877,12 +886,19 @@ impl App {
             self.set_status("no link under cursor");
             return;
         };
-        match self.vault.resolve_target(&link.target) {
+        let heading = link.heading.clone();
+        self.open_target(&link.target, heading);
+    }
+
+    /// Open what a wikilink names, jumping to its heading if it named one.
+    ///
+    /// Shared with preview, where the syntax has been concealed and there is no
+    /// cursor to parse a link out from under — only a target the renderer kept.
+    pub fn open_target(&mut self, target: &str, heading: Option<String>) {
+        match self.vault.resolve_target(target) {
             Some(idx) => {
                 let id = self.vault.notes[idx].id.clone();
-                let heading = link.heading.clone();
                 self.open_note(&id, true);
-                // Jump to the heading when the link named one.
                 if let Some(h) = heading {
                     // By slug or by text: a link may be written either way.
                     match self.vault.get(&id).and_then(|n| n.heading_line(&h)) {
@@ -893,7 +909,7 @@ impl App {
                     }
                 }
             }
-            None => self.prompt_new_note_from_link(&link.target),
+            None => self.prompt_new_note_from_link(target),
         }
     }
 

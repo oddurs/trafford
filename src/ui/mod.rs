@@ -342,6 +342,55 @@ pub fn gutter_width(line_count: usize) -> u16 {
 
 /// How far the editor is scrolled sideways. Source mode follows the cursor;
 /// preview soft-wraps and never scrolls.
+/// The note as preview draws it.
+///
+/// Concealed text is shorter than its source, so it folds at different places
+/// and cannot borrow the editor's rows. It carries its own layout over the
+/// rendered lines, which is what the drawing walks and what a click resolves
+/// against — the same one-model rule as the editor, applied to the other view.
+pub struct PreviewView {
+    pub lines: Vec<markdown::Rendered>,
+    pub layout: crate::layout::Layout,
+}
+
+impl PreviewView {
+    /// Always folds, whatever `wrap` is set to.
+    ///
+    /// That setting is about the editor, where scrolling sideways through a
+    /// line you are editing is a defensible preference. Preview is for
+    /// reading, and a reading view that runs its text off the right edge is
+    /// not a preference, it is a truncation.
+    pub fn build(
+        source: &[String],
+        renderer: &markdown::Renderer<'_>,
+        width: usize,
+    ) -> PreviewView {
+        let mut lines = Vec::with_capacity(source.len());
+        let mut in_code = false;
+        for raw in source {
+            let opens = markdown::is_fence(raw);
+            lines.push(renderer.render(raw, in_code || opens));
+            if opens {
+                in_code = !in_code;
+            }
+        }
+        let texts: Vec<String> = lines.iter().map(|r| r.text.clone()).collect();
+        let layout = crate::layout::Layout::new(&texts, width, true);
+        PreviewView { lines, layout }
+    }
+
+    /// The link under a drawn position, if there is one.
+    pub fn link_at(&self, line: usize, column: usize) -> Option<&markdown::Link> {
+        self.lines.get(line)?.link_at(column)
+    }
+
+    /// The drawn text, which is what the layout was built over and what a
+    /// click has to be resolved against.
+    pub fn texts(&self) -> Vec<String> {
+        self.lines.iter().map(|r| r.text.clone()).collect()
+    }
+}
+
 /// How wide text may be before it folds.
 ///
 /// `wrap_column` of 0 means the pane, which is the default and what most
@@ -407,16 +456,14 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     let pane_width = inner.width.saturating_sub(gutter) as usize;
     let wrap = app.config.wrap;
     let text_width = wrap_width(pane_width, app.config.wrap_column);
+    // The source layout is kept current whichever view is showing: the cursor
+    // lives in the buffer, and a motion that resolved against rendered columns
+    // would put it somewhere the file does not agree with.
     app.editor.relayout(text_width, wrap);
     let cursor_visual = app.editor.layout.visual_of(
         &app.editor.buf.lines,
         app.editor.buf.row,
         app.editor.buf.col,
-    );
-    app.editor.sync_scroll_visual(
-        cursor_visual.0,
-        app.editor.layout.len(),
-        inner.height as usize,
     );
 
     let vault = &app.vault;
@@ -424,7 +471,22 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     let renderer = Renderer {
         theme: &theme,
         resolves: &resolves,
+        conceal: app.preview,
     };
+
+    let view = app
+        .preview
+        .then(|| PreviewView::build(&app.editor.buf.lines, &renderer, text_width));
+
+    // Scroll against whichever rows are actually on screen. In preview that is
+    // the rendered fold, so the top of the cursor's line is the anchor — there
+    // is no caret there to keep any finer promise to.
+    let (top_row, total_rows) = match &view {
+        Some(v) => (v.layout.first_of(app.editor.buf.row), v.layout.len()),
+        None => (cursor_visual.0, app.editor.layout.len()),
+    };
+    app.editor
+        .sync_scroll_visual(top_row, total_rows, inner.height as usize);
 
     // Nothing runs off the right edge when it folds, so there is nothing to
     // scroll to. Sideways scrolling survives only as what `wrap = false` gets.
@@ -434,86 +496,116 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
         editor_hscroll(&app.editor, inner.width, gutter, app.preview)
     };
 
-    // A fence opened before the viewport must still colour the visible lines.
-    let first_line = app
-        .editor
-        .layout
-        .row(app.editor.scroll)
-        .map(|r| r.line)
-        .unwrap_or(0);
-    let mut in_code = app
-        .editor
-        .buf
-        .lines
-        .iter()
-        .take(first_line)
-        .filter(|l| markdown::is_fence(l))
-        .count()
-        % 2
-        == 1;
-
     let selection = app.editor.selection_rows();
     let mut lines: Vec<Line> = Vec::new();
 
-    for visual in app.editor.scroll..app.editor.layout.len() {
-        if lines.len() >= inner.height as usize {
-            break;
-        }
-        let Some(vrow) = app.editor.layout.row(visual) else {
-            break;
-        };
-        let row = vrow.line;
-        let raw = app.editor.buf.line(row);
-        let opens_fence = markdown::is_fence(raw);
-        let render_as_code = in_code;
-        if opens_fence {
-            in_code = !in_code;
-        }
-
-        let is_cursor_row = row == app.editor.buf.row;
-        let selected = selection
-            .map(|(a, b)| row >= a && row <= b)
-            .unwrap_or(false);
-
-        // A continuation row leaves the gutter blank: the number belongs to
-        // the line, not to each row it folds onto.
-        let number = Span::styled(
-            if vrow.is_first() {
+    // The gutter carries the buffer line number, blank on a continuation row:
+    // the number belongs to the line, not to each row it folds onto.
+    let gutter_span = |row: usize, first: bool, cursor: bool| {
+        Span::styled(
+            if first {
                 format!("{:>width$} ", row + 1, width = gutter as usize - 1)
             } else {
                 " ".repeat(gutter as usize)
             },
-            if is_cursor_row {
+            if cursor {
                 Style::default().fg(theme.accent)
             } else {
                 theme.faded()
             },
-        );
-
-        let visible: String = raw
-            .chars()
-            .skip(vrow.start + hscroll)
-            .take(vrow.len.saturating_sub(hscroll))
-            .collect();
-        let visible = format!("{}{visible}", " ".repeat(vrow.indent));
-        let mut spans = vec![number];
-        spans.extend(renderer.line(&visible, render_as_code || opens_fence));
-
-        let mut line = Line::from(spans);
+        )
+    };
+    let highlight = |line: Line<'static>, row: usize| {
+        let selected = selection
+            .map(|(a, b)| row >= a && row <= b)
+            .unwrap_or(false);
         if selected {
-            line = line.style(Style::default().bg(theme.selection));
-        } else if is_cursor_row && focused {
-            line = line.style(Style::default().bg(theme.cursorline));
+            line.style(Style::default().bg(theme.selection))
+        } else if row == app.editor.buf.row && focused {
+            line.style(Style::default().bg(theme.cursorline))
+        } else {
+            line
         }
-        lines.push(line);
+    };
+
+    if let Some(view) = &view {
+        // Preview walks its own rows, over text that has already been rendered
+        // once. Slicing the spans rather than re-rendering a substring is what
+        // keeps a link that straddles a fold looking like one link.
+        for visual in app.editor.scroll..view.layout.len() {
+            if lines.len() >= inner.height as usize {
+                break;
+            }
+            let Some(vrow) = view.layout.row(visual) else {
+                break;
+            };
+            let Some(rendered) = view.lines.get(vrow.line) else {
+                break;
+            };
+            let mut spans = vec![gutter_span(
+                vrow.line,
+                vrow.is_first(),
+                vrow.line == app.editor.buf.row,
+            )];
+            if vrow.indent > 0 {
+                spans.push(Span::raw(" ".repeat(vrow.indent)));
+            }
+            spans.extend(rendered.slice(vrow.start, vrow.len));
+            lines.push(highlight(Line::from(spans), vrow.line));
+        }
+    } else {
+        // A fence opened before the viewport must still colour the visible lines.
+        let first_line = app
+            .editor
+            .layout
+            .row(app.editor.scroll)
+            .map(|r| r.line)
+            .unwrap_or(0);
+        let mut in_code = app
+            .editor
+            .buf
+            .lines
+            .iter()
+            .take(first_line)
+            .filter(|l| markdown::is_fence(l))
+            .count()
+            % 2
+            == 1;
+
+        for visual in app.editor.scroll..app.editor.layout.len() {
+            if lines.len() >= inner.height as usize {
+                break;
+            }
+            let Some(vrow) = app.editor.layout.row(visual) else {
+                break;
+            };
+            let row = vrow.line;
+            let raw = app.editor.buf.line(row);
+            let opens_fence = markdown::is_fence(raw);
+            let render_as_code = in_code;
+            if opens_fence {
+                in_code = !in_code;
+            }
+
+            let visible: String = raw
+                .chars()
+                .skip(vrow.start + hscroll)
+                .take(vrow.len.saturating_sub(hscroll))
+                .collect();
+            let visible = format!("{}{visible}", " ".repeat(vrow.indent));
+            let mut spans = vec![gutter_span(row, vrow.is_first(), row == app.editor.buf.row)];
+            spans.extend(renderer.line(&visible, render_as_code || opens_fence));
+            lines.push(highlight(Line::from(spans), row));
+        }
     }
 
-    let paragraph = if app.preview {
-        Paragraph::new(lines).wrap(Wrap { trim: false })
-    } else {
-        Paragraph::new(lines)
-    };
-    f.render_widget(paragraph, inner);
+    // Both views fold their own text, with a hanging indent ratatui has no
+    // idea about, so nothing here may wrap a second time.
+    f.render_widget(Paragraph::new(lines), inner);
+
+    // Kept for the mouse: a click in preview lands on drawn characters, and
+    // only this knows what they were before they were drawn.
+    app.preview_view = view;
 
     // Place the real terminal cursor so the terminal's own caret is used.
     // The offset is in display columns: a line of CJK is twice as wide as it
@@ -818,6 +910,7 @@ fn draw_assistant(f: &mut Frame, app: &App, area: Rect) -> (Rect, Rect) {
     let renderer = Renderer {
         theme: &theme,
         resolves: &resolves,
+        conceal: false,
     };
 
     for message in &app.chat.messages {
@@ -1538,6 +1631,81 @@ mod tests {
     use crate::vault::Vault;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
+
+    fn preview_of(lines: &[&str], width: usize) -> (Theme, PreviewView) {
+        let theme = Theme::default();
+        let owned: Vec<String> = lines.iter().map(|s| s.to_string()).collect();
+        let resolves = |t: &str| t != "Nowhere";
+        let renderer = Renderer {
+            theme: &theme,
+            resolves: &resolves,
+            conceal: true,
+        };
+        let view = PreviewView::build(&owned, &renderer, width);
+        (theme, view)
+    }
+
+    #[test]
+    fn preview_folds_what_it_draws_not_what_was_written() {
+        // The source is 44 characters and would take two rows at this width;
+        // rendered it is 24 and takes one. Folding the source would leave a
+        // ragged break in the middle of a line that fits.
+        let (_t, view) = preview_of(&["see [[Some/Long/Path/Note|a note]] there"], 30);
+        assert_eq!(view.lines[0].text, "see a note there");
+        assert_eq!(view.layout.len(), 1, "it fits once the syntax is gone");
+    }
+
+    #[test]
+    fn a_click_in_preview_finds_the_link_that_was_drawn() {
+        let (_t, view) = preview_of(&["see [[Note|alias]] there"], 40);
+        let texts = view.texts();
+        // Column 5 is inside "alias" as drawn.
+        let (line, col) = view.layout.source_of(&texts, 0, 5);
+        let link = view.link_at(line, col).expect("a link there");
+        assert_eq!(link.target, "Note");
+        // And column 0 is not.
+        let (line, col) = view.layout.source_of(&texts, 0, 0);
+        assert!(view.link_at(line, col).is_none());
+    }
+
+    #[test]
+    fn a_link_split_across_a_fold_is_clickable_on_both_rows() {
+        // Narrow enough that the link's own text has to break.
+        let (_t, view) = preview_of(&["x [[Note|a rather long alias here]] y"], 14);
+        assert!(view.layout.len() > 1, "it has to actually fold");
+        let texts = view.texts();
+        let mut found = 0;
+        for visual in 0..view.layout.len() {
+            let row = view.layout.row(visual).unwrap();
+            for column in 0..row.len {
+                let (line, col) = view.layout.source_of(&texts, visual, column + row.indent);
+                if view.link_at(line, col).map(|l| l.target.as_str()) == Some("Note") {
+                    found += 1;
+                }
+            }
+        }
+        assert_eq!(
+            found,
+            "a rather long alias here".chars().count(),
+            "every drawn character of the link answers to it, on whichever row it landed"
+        );
+    }
+
+    #[test]
+    fn a_heading_link_keeps_the_heading_concealment_threw_away() {
+        let (_t, view) = preview_of(&["[[Note#Some Section|go]]"], 40);
+        assert_eq!(view.lines[0].text, "go");
+        let link = view.link_at(0, 0).unwrap();
+        assert_eq!(link.target, "Note");
+        assert_eq!(link.heading.as_deref(), Some("Some Section"));
+    }
+
+    #[test]
+    fn a_fenced_block_keeps_its_syntax_in_preview() {
+        let (_t, view) = preview_of(&["```", "**not bold**", "```", "**bold**"], 40);
+        assert_eq!(view.lines[1].text, "**not bold**", "inside the fence");
+        assert_eq!(view.lines[3].text, "bold", "after it");
+    }
 
     #[test]
     fn wrap_column_is_a_measure_not_a_promise() {
