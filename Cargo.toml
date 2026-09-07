@@ -15,7 +15,6 @@ toml = "0.8"
 dirs = "5"
 ignore = "0.4"
 unicode-width = "0.2"
-unicode-segmentation = "1"
 chrono = "0.4"
 ureq = { version = "2", features = ["json", "tls"] }
 
