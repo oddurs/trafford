@@ -1,7 +1,7 @@
 pub mod markdown;
 pub mod theme;
 
-use crate::app::{App, Focus, Overlay, Picker, SidebarTab};
+use crate::app::{App, ContextTarget, Focus, Overlay, Picker, SidebarTab};
 use crate::editor::Mode;
 use crate::keymap::HELP;
 use crate::llm;
@@ -47,47 +47,71 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         .constraints(cols)
         .split(rows[0]);
 
+    // Every draw re-records where the panes landed, so a click can be
+    // resolved against the frame the user is actually looking at.
+    app.panes = crate::app::Panes::default();
     let mut i = 0;
     if app.sidebar_visible {
         draw_sidebar(f, app, panes[i]);
+        app.panes.sidebar = inner_of(panes[i]);
         i += 1;
     }
     let editor_area = panes[i];
     i += 1;
     draw_editor(f, app, editor_area);
+    app.panes.editor = inner_of(editor_area);
     if right_width > 0 {
         if app.assistant_visible {
-            draw_assistant(f, app, panes[i]);
+            let (body, input) = draw_assistant(f, app, panes[i]);
+            app.panes.assistant = body;
+            app.panes.assistant_input = input;
         } else {
-            draw_context(f, app, panes[i]);
+            let targets = draw_context(f, app, panes[i]);
+            app.context_targets = targets;
+            app.panes.context = inner_of(panes[i]);
         }
     }
 
     draw_status(f, app, rows[1]);
 
-    match &app.overlay {
+    let overlay_area = match &app.overlay {
         Some(Overlay::Palette(p))
         | Some(Overlay::Switcher(p))
         | Some(Overlay::LinkPicker(p))
         | Some(Overlay::Backlinks(p)) => draw_picker(f, &theme, p, area),
         Some(Overlay::Search(pane)) => draw_search(f, &theme, pane, area),
-        Some(Overlay::Prompt(prompt)) => draw_prompt(f, &theme, prompt, area),
+        Some(Overlay::Prompt(prompt)) => {
+            draw_prompt(f, &theme, prompt, area);
+            Rect::default()
+        }
         Some(Overlay::Git(pane)) => draw_git(f, &theme, pane, area),
         Some(Overlay::History(log)) => draw_history(f, &theme, log, area),
-        Some(Overlay::Confirm(c)) => draw_confirm(f, &theme, c, area),
+        Some(Overlay::Confirm(c)) => {
+            draw_confirm(f, &theme, c, area);
+            Rect::default()
+        }
         Some(Overlay::Diff {
             title,
             body,
             scroll,
         }) => draw_diff(f, &theme, title, body, *scroll, area),
-        Some(Overlay::Help) => draw_help(f, &theme, area),
-        None => {}
-    }
+        Some(Overlay::Help) => {
+            draw_help(f, &theme, area);
+            Rect::default()
+        }
+        None => Rect::default(),
+    };
+    app.panes.overlay = overlay_area;
 }
 
 // ---------------------------------------------------------------------------
 // Chrome
 // ---------------------------------------------------------------------------
+
+/// The drawable area inside a bordered pane.
+fn inner_of(area: Rect) -> Rect {
+    Block::default().borders(Borders::ALL).inner(area)
+}
 
 fn pane_block<'a>(theme: &Theme, title: &'a str, focused: bool) -> Block<'a> {
     Block::default()
@@ -306,8 +330,50 @@ fn compact(n: usize) -> String {
     }
 }
 
+/// Width of the line-number gutter, including its trailing space. Shared with
+/// the mouse handler: a click has to be measured against the same geometry the
+/// renderer drew, or it lands on the wrong column.
+pub fn gutter_width(line_count: usize) -> u16 {
+    (line_count.to_string().len() + 1).max(4) as u16
+}
+
+/// How far the editor is scrolled sideways. Source mode follows the cursor;
+/// preview soft-wraps and never scrolls.
+pub fn editor_hscroll(
+    editor: &crate::editor::Editor,
+    inner_width: u16,
+    gutter: u16,
+    preview: bool,
+) -> usize {
+    if preview {
+        return 0;
+    }
+    let text_width = inner_width.saturating_sub(gutter) as usize;
+    editor
+        .buf
+        .col
+        .saturating_sub(text_width.saturating_sub(4).max(1))
+}
+
+/// The character index in `line` drawn at display column `target`, counting
+/// from `hscroll`. The inverse of [`width_of_prefix`], and wide characters
+/// mean the two are not the same number.
+pub fn column_at(line: &str, hscroll: usize, target: usize) -> usize {
+    let mut col = hscroll;
+    let mut used = 0usize;
+    for c in line.chars().skip(hscroll) {
+        let w = c.width().unwrap_or(0);
+        if used + w > target {
+            break;
+        }
+        used += w;
+        col += 1;
+    }
+    col
+}
+
 /// Keep `cursor` visible inside a window `height` tall over `len` items.
-fn scroll_offset(cursor: usize, len: usize, height: usize) -> usize {
+pub fn scroll_offset(cursor: usize, len: usize, height: usize) -> usize {
     if height == 0 || len <= height {
         return 0;
     }
@@ -344,18 +410,8 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     };
 
     // Gutter width scales with the line count so wide files stay aligned.
-    let gutter = (app.editor.buf.len().to_string().len() + 1).max(4) as u16;
-    let text_width = inner.width.saturating_sub(gutter) as usize;
-
-    // Horizontal scroll follows the cursor in source mode; preview soft-wraps.
-    let hscroll = if app.preview {
-        0
-    } else {
-        app.editor
-            .buf
-            .col
-            .saturating_sub(text_width.saturating_sub(4).max(1))
-    };
+    let gutter = gutter_width(app.editor.buf.len());
+    let hscroll = editor_hscroll(&app.editor, inner.width, gutter, app.preview);
 
     // A fence opened before the viewport must still colour the visible lines.
     let mut in_code = app
@@ -490,22 +546,25 @@ fn outline_budget(pane_height: usize, below: usize) -> usize {
     for_outline.max(3).min(available)
 }
 
-fn draw_context(f: &mut Frame, app: &App, area: Rect) {
+/// Draws the context pane and returns, for each rendered row, what a click on
+/// it should do — `None` for labels and blank lines.
+fn draw_context(f: &mut Frame, app: &App, area: Rect) -> Vec<Option<ContextTarget>> {
     let theme = app.theme;
     let block = pane_block(&theme, "context", false);
     let inner = block.inner(area);
     f.render_widget(block, area);
     if inner.height == 0 {
-        return;
+        return Vec::new();
     }
     let width = inner.width as usize;
     let height = inner.height as usize;
     let mut lines: Vec<Line> = Vec::new();
+    let mut targets: Vec<Option<ContextTarget>> = Vec::new();
 
     let Some(id) = app.current.clone() else {
         lines.push(Line::from(Span::styled("no note open", theme.faded())));
         f.render_widget(Paragraph::new(lines), inner);
-        return;
+        return targets;
     };
 
     let outgoing = app.vault.outgoing(&id);
@@ -534,8 +593,10 @@ fn draw_context(f: &mut Frame, app: &App, area: Rect) {
     let budget = outline_budget(height, below);
 
     lines.push(section(&theme, "outline"));
+    targets.push(None);
     if entries.is_empty() {
         lines.push(Line::from(Span::styled("  no headings", theme.faded())));
+        targets.push(None);
     } else {
         // Keep the heading the cursor is under in view, the way the sidebar
         // keeps its selection in view.
@@ -566,6 +627,7 @@ fn draw_context(f: &mut Frame, app: &App, area: Rect) {
                     },
                 ),
             ]));
+            targets.push(Some(ContextTarget::Heading(entry.row)));
         }
         let hidden = entries.len().saturating_sub(budget);
         if hidden > 0 {
@@ -573,13 +635,17 @@ fn draw_context(f: &mut Frame, app: &App, area: Rect) {
                 fit(&format!("  … {hidden} more"), width),
                 theme.faded(),
             )));
+            targets.push(None);
         }
     }
 
     lines.push(Line::from(""));
     lines.push(section(&theme, &format!("links out · {}", outgoing.len())));
+    targets.push(None);
+    targets.push(None);
     if outgoing.is_empty() {
         lines.push(Line::from(Span::styled("  none", theme.faded())));
+        targets.push(None);
     }
     for target in outgoing.iter().take(out_shown) {
         let title = app
@@ -594,12 +660,16 @@ fn draw_context(f: &mut Frame, app: &App, area: Rect) {
                 Style::default().fg(theme.link),
             ),
         ]));
+        targets.push(Some(ContextTarget::Note(target.clone())));
     }
 
     lines.push(Line::from(""));
     lines.push(section(&theme, &format!("backlinks · {}", backlinks.len())));
+    targets.push(None);
+    targets.push(None);
     if backlinks.is_empty() {
         lines.push(Line::from(Span::styled("  none yet", theme.faded())));
+        targets.push(None);
     }
     for bl in backlinks.iter().take(back_shown) {
         let title = app
@@ -614,11 +684,16 @@ fn draw_context(f: &mut Frame, app: &App, area: Rect) {
                 Style::default().fg(theme.link),
             ),
         ]));
+        let jump = Some(ContextTarget::Backlink(bl.from.clone(), bl.line));
+        targets.push(jump.clone());
         if !bl.context.is_empty() {
             lines.push(Line::from(Span::styled(
                 format!("     {}", fit(&bl.context, width.saturating_sub(5))),
                 theme.faded(),
             )));
+            // The quoted line is part of the same target, so clicking either
+            // half goes to the same place.
+            targets.push(jump);
         }
     }
 
@@ -626,6 +701,8 @@ fn draw_context(f: &mut Frame, app: &App, area: Rect) {
     if !orphans.is_empty() {
         lines.push(Line::from(""));
         lines.push(section(&theme, &format!("unwritten · {}", orphans.len())));
+        targets.push(None);
+        targets.push(None);
         for target in orphans.iter().take(orphan_shown) {
             lines.push(Line::from(vec![
                 Span::styled("  ○ ", theme.faded()),
@@ -634,17 +711,26 @@ fn draw_context(f: &mut Frame, app: &App, area: Rect) {
                     Style::default().fg(theme.link_broken),
                 ),
             ]));
+            targets.push(Some(ContextTarget::Unwritten((*target).clone())));
         }
     }
 
+    debug_assert_eq!(
+        lines.len(),
+        targets.len(),
+        "every context row needs a click target, even if it is None"
+    );
     f.render_widget(Paragraph::new(lines), inner);
+    targets
 }
 
 // ---------------------------------------------------------------------------
 // Assistant
 // ---------------------------------------------------------------------------
 
-fn draw_assistant(f: &mut Frame, app: &App, area: Rect) {
+/// Draws the assistant and returns its transcript and input areas, so a
+/// click in either can focus it.
+fn draw_assistant(f: &mut Frame, app: &App, area: Rect) -> (Rect, Rect) {
     let theme = app.theme;
     let focused = app.focus == Focus::Assistant;
     let title = format!("assistant · {}", app.config.model);
@@ -652,7 +738,7 @@ fn draw_assistant(f: &mut Frame, app: &App, area: Rect) {
     let inner = block.inner(area);
     f.render_widget(block, area);
     if inner.height < 4 {
-        return;
+        return (Rect::default(), Rect::default());
     }
 
     let split = Layout::default()
@@ -762,12 +848,13 @@ fn draw_assistant(f: &mut Frame, app: &App, area: Rect) {
         input_inner,
     );
     if focused && app.overlay.is_none() {
-        // The pane can be squeezed to nothing on a narrow terminal, so this
-        // must not assume there is a column to put the cursor in.
-        let cx = input_inner.x
-            + (prompt.chars().count() as u16).min(input_inner.width.saturating_sub(1));
+        // Display columns, not characters, or the caret drifts left of the
+        // text as soon as anything wide is typed. The pane can also be
+        // squeezed to nothing, so there may be no column to sit in.
+        let cx = input_inner.x + (prompt.width() as u16).min(input_inner.width.saturating_sub(1));
         f.set_cursor_position((cx, input_inner.y));
     }
+    (split[0], input_inner)
 }
 
 /// Break `text` into lines no wider than `width`, on word boundaries.
@@ -845,6 +932,10 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
         Focus::Assistant if app.overlay.is_none() => {
             Some("type a question · enter sends · ctrl-y inserts the answer · esc leaves")
         }
+        // The editor is where you start, so it has to say how to leave.
+        Focus::Editor if app.overlay.is_none() && app.editor.mode == Mode::Normal => {
+            Some("tab or click for the file tree · ctrl-k commands · f1 keys")
+        }
         _ => None,
     };
 
@@ -854,9 +945,16 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
             Style::default().fg(theme.fg).bg(theme.panel),
         ));
     } else if let Some(hint) = hint {
+        if app.focus == Focus::Editor && app.repo.is_some() {
+            // Branch first: it is state, and the hint is only a reminder.
+            spans.push(Span::styled(
+                format!("⎇ {}   ", app.git_status.branch),
+                Style::default().fg(theme.link).bg(theme.panel),
+            ));
+        }
         spans.push(Span::styled(
             hint.to_string(),
-            Style::default().fg(theme.dim).bg(theme.panel),
+            Style::default().fg(theme.faint).bg(theme.panel),
         ));
     } else {
         let git = &app.git_status;
@@ -944,14 +1042,14 @@ fn overlay_block<'a>(theme: &Theme, title: String) -> Block<'a> {
         .style(Style::default().bg(theme.panel))
 }
 
-fn draw_picker(f: &mut Frame, theme: &Theme, picker: &Picker, area: Rect) {
+fn draw_picker(f: &mut Frame, theme: &Theme, picker: &Picker, area: Rect) -> Rect {
     let rect = centred(area, 60, 20);
     f.render_widget(Clear, rect);
     let block = overlay_block(theme, picker.title.clone());
     let inner = block.inner(rect);
     f.render_widget(block, rect);
     if inner.height < 2 {
-        return;
+        return inner;
     }
 
     let mut lines = vec![Line::from(vec![
@@ -996,16 +1094,17 @@ fn draw_picker(f: &mut Frame, theme: &Theme, picker: &Picker, area: Rect) {
         lines.push(Line::from(Span::styled("  no matches", theme.faded())));
     }
     f.render_widget(Paragraph::new(lines), inner);
+    inner
 }
 
-fn draw_search(f: &mut Frame, theme: &Theme, pane: &crate::app::SearchPane, area: Rect) {
+fn draw_search(f: &mut Frame, theme: &Theme, pane: &crate::app::SearchPane, area: Rect) -> Rect {
     let rect = centred(area, 74, 22);
     f.render_widget(Clear, rect);
     let block = overlay_block(theme, format!("search · {} hits", pane.hits.len()));
     let inner = block.inner(rect);
     f.render_widget(block, rect);
     if inner.height < 2 {
-        return;
+        return inner;
     }
     let width = inner.width as usize;
     let mut lines = vec![Line::from(vec![
@@ -1056,9 +1155,10 @@ fn draw_search(f: &mut Frame, theme: &Theme, pane: &crate::app::SearchPane, area
         lines.push(Line::from(Span::styled("  nothing found", theme.faded())));
     }
     f.render_widget(Paragraph::new(lines), inner);
+    inner
 }
 
-fn draw_prompt(f: &mut Frame, theme: &Theme, prompt: &crate::app::Prompt, area: Rect) {
+fn draw_prompt(f: &mut Frame, theme: &Theme, prompt: &crate::app::Prompt, area: Rect) -> Rect {
     let rect = centred(area, 50, 5);
     f.render_widget(Clear, rect);
     let block = overlay_block(theme, prompt.title.clone());
@@ -1073,9 +1173,10 @@ fn draw_prompt(f: &mut Frame, theme: &Theme, prompt: &crate::app::Prompt, area: 
         Line::from(Span::styled(prompt.hint.clone(), theme.faded())),
     ];
     f.render_widget(Paragraph::new(lines), inner);
+    inner
 }
 
-fn draw_git(f: &mut Frame, theme: &Theme, pane: &crate::app::GitPane, area: Rect) {
+fn draw_git(f: &mut Frame, theme: &Theme, pane: &crate::app::GitPane, area: Rect) -> Rect {
     let rect = centred(area, 74, 24);
     f.render_widget(Clear, rect);
     let snap = &pane.snapshot;
@@ -1162,10 +1263,18 @@ fn draw_git(f: &mut Frame, theme: &Theme, pane: &crate::app::GitPane, area: Rect
         }
     }
     f.render_widget(Paragraph::new(lines), inner);
+    inner
 }
 
 /// A unified diff, coloured the way `git diff` does.
-fn draw_diff(f: &mut Frame, theme: &Theme, title: &str, body: &str, scroll: u16, area: Rect) {
+fn draw_diff(
+    f: &mut Frame,
+    theme: &Theme,
+    title: &str,
+    body: &str,
+    scroll: u16,
+    area: Rect,
+) -> Rect {
     let rect = centred(area, 84, 28);
     f.render_widget(Clear, rect);
     let block = overlay_block(theme, title.to_string());
@@ -1193,9 +1302,10 @@ fn draw_diff(f: &mut Frame, theme: &Theme, title: &str, body: &str, scroll: u16,
     // Never scroll past the last screenful.
     let max = lines.len().saturating_sub(inner.height as usize) as u16;
     f.render_widget(Paragraph::new(lines).scroll((scroll.min(max), 0)), inner);
+    inner
 }
 
-fn draw_history(f: &mut Frame, theme: &Theme, log: &[crate::git::Commit], area: Rect) {
+fn draw_history(f: &mut Frame, theme: &Theme, log: &[crate::git::Commit], area: Rect) -> Rect {
     let rect = centred(area, 70, 20);
     f.render_widget(Clear, rect);
     let block = overlay_block(theme, format!("history · {} commits", log.len()));
@@ -1216,9 +1326,10 @@ fn draw_history(f: &mut Frame, theme: &Theme, log: &[crate::git::Commit], area: 
         })
         .collect();
     f.render_widget(Paragraph::new(lines), inner);
+    inner
 }
 
-fn draw_confirm(f: &mut Frame, theme: &Theme, confirm: &crate::app::Confirm, area: Rect) {
+fn draw_confirm(f: &mut Frame, theme: &Theme, confirm: &crate::app::Confirm, area: Rect) -> Rect {
     let rect = centred(area, 50, 5);
     f.render_widget(Clear, rect);
     let block = overlay_block(theme, "confirm".into());
@@ -1244,6 +1355,7 @@ fn draw_confirm(f: &mut Frame, theme: &Theme, confirm: &crate::app::Confirm, are
         ]),
     ];
     f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: true }), inner);
+    inner
 }
 
 fn draw_help(f: &mut Frame, theme: &Theme, area: Rect) {

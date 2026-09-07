@@ -4,6 +4,7 @@ mod editor;
 mod git;
 mod keymap;
 mod llm;
+mod mouse;
 #[cfg(test)]
 mod testing;
 mod tree;
@@ -14,7 +15,7 @@ use anyhow::{Context, Result};
 use app::App;
 use config::Config;
 use crossterm::cursor::SetCursorStyle;
-use crossterm::event::{self, Event, KeyEventKind};
+use crossterm::event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyEventKind};
 use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -170,7 +171,9 @@ type Term = Terminal<CrosstermBackend<Stdout>>;
 fn setup_terminal() -> Result<Term> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    // Mouse capture takes the terminal's own selection away; holding shift
+    // gives it back in every terminal worth using, which the help says.
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let terminal = Terminal::new(CrosstermBackend::new(stdout))?;
     Ok(terminal)
 }
@@ -179,6 +182,7 @@ fn restore_terminal() -> Result<()> {
     disable_raw_mode()?;
     execute!(
         io::stdout(),
+        DisableMouseCapture,
         LeaveAlternateScreen,
         SetCursorStyle::DefaultUserShape
     )?;
@@ -219,6 +223,7 @@ fn event_loop(terminal: &mut Term, app: &mut App) -> Result<()> {
         if event::poll(Duration::from_millis(60))? {
             match event::read()? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => app.on_key(key),
+                Event::Mouse(mouse) => app.on_mouse(mouse),
                 Event::Resize(_, _) => {}
                 _ => {}
             }
