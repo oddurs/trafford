@@ -2,7 +2,7 @@
 id: 13
 title: A model that maps source positions to screen positions
 type: feature
-status: doing
+status: done
 milestone: v0.4
 assignee: Oddur Sigurdsson
 depends_on:
