@@ -55,11 +55,11 @@ thing under it changes: folding, switching notes, resizing.
 
 ## Acceptance criteria
 
-- [ ] The wheel scrolls preview, and the view stays where it was put
-- [ ] `j`/`k` move a visible row; the view follows when they reach the edge
-- [ ] `ctrl-d`/`ctrl-u` page by what is on screen
-- [ ] `gg`/`G` go to the first and last drawn rows
-- [ ] Folding above the cursor does not throw the view somewhere unrelated
-- [ ] Leaving preview puts the buffer cursor on the line that was under the
+- [x] The wheel scrolls preview, and the view stays where it was put
+- [x] `j`/`k` move a visible row; the view follows when they reach the edge
+- [x] `ctrl-d`/`ctrl-u` page by what is on screen
+- [x] `gg`/`G` go to the first and last drawn rows
+- [x] Folding above the cursor does not throw the view somewhere unrelated
+- [x] Leaving preview puts the buffer cursor on the line that was under the
       preview cursor
-- [ ] `za` and `K` act on the row the reader can see
+- [x] `za` and `K` act on the row the reader can see
