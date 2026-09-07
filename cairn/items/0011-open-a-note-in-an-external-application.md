@@ -2,7 +2,7 @@
 id: 11
 title: Open a note in an external application
 type: feature
-status: backlog
+status: done
 milestone: later
 created: 2026-09-07
 updated: 2026-09-07

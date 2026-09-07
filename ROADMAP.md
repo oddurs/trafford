@@ -38,11 +38,11 @@ demonstration that menus exist.
 
 ## later — Someday
 
-`··········` 0% · 0 of 1 done
+`##########` 100% · 1 of 1 done
 
 Good ideas without a date yet.
 
-### backlog
+### done
 
-- [ ] `0011` Open a note in an external application <sup>feature · p3 · mouse</sup>
+- [x] `0011` Open a note in an external application <sup>feature · p3 · mouse</sup>
 
