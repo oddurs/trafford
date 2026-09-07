@@ -45,6 +45,11 @@ ALWAYS = (
 
 TAG = re.compile(r"<[^>]+>")
 SCRIPT = re.compile(r"<(script|style)\b.*?</\1>", re.S | re.I)
+# The hero screenshot is inlined SVG, and SVG text carries its own
+# `font-family` — the system monospace stack, not this font. Its characters are
+# therefore not this font's problem, and one of them (`⎇`, the branch mark in
+# the status bar) does not exist in JetBrains Mono at all.
+SVG = re.compile(r"<svg\b.*?</svg>", re.S | re.I)
 ENTITY = {"&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'"}
 
 
@@ -60,6 +65,7 @@ def drawn_characters():
             continue
         html = path.read_text(errors="replace")
         html = SCRIPT.sub(" ", html)
+        html = SVG.sub(" ", html)
         # Attribute values are drawn too — alt text, aria labels, the title.
         text = TAG.sub(" ", html) + " ".join(re.findall(r'"([^"]*)"', html))
         for entity, char in ENTITY.items():
@@ -103,6 +109,14 @@ def main():
         raise SystemExit(f"{SOURCE} is missing")
 
     wanted = drawn_characters()
+    absent = sorted(wanted - font_characters(SOURCE))
+    if absent:
+        # Not a failure: the site should be able to draw a character the
+        # typeface does not have, and fall back for that one glyph. But it
+        # should be a decision rather than a surprise.
+        shown = " ".join(f"{c!r}(U+{ord(c):04X})" for c in absent)
+        print(f"note: the typeface has no glyph for {shown}; those fall back")
+        wanted -= set(absent)
 
     if args.check:
         if not DEST.exists():

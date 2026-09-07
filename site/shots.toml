@@ -37,3 +37,32 @@ title = "The command palette"
 cols = 120
 rows = 24
 keys = ["ctrl-k"]
+
+# ─── Casts ───────────────────────────────────────────────────────────────────
+#
+# A still cannot show what a terminal application is for. A cast is the same
+# recording with the frames kept: `hold` is how long the frame that key
+# produced stays on screen, in milliseconds.
+#
+# Three seconds and one idea. A loop nobody waits out is worse than a still.
+
+[[cast]]
+name = "hero"
+title = "Opening a note by name, then reading it"
+# The same geometry as the `screenshot` still, deliberately: the cast is drawn
+# over the still and the still is what reserves the space, so a different
+# number of columns would resize the box the moment the frames arrived.
+cols = 120
+rows = 24
+hold = 1100          # the opening frame, before the first key
+loop_pause = 1600    # the pause on the last frame before it starts again
+steps = [
+  { key = "ctrl-p", hold = 650 },
+  { key = "l", hold = 110 },
+  { key = "i", hold = 110 },
+  { key = "n", hold = 110 },
+  { key = "k", hold = 420 },
+  { key = "enter", hold = 1300 },
+  { key = "ctrl-e", hold = 2100 },
+  { key = "ctrl-e", hold = 900 },
+]

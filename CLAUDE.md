@@ -121,17 +121,43 @@ a user's is. Five things about it are load-bearing.
   binary via `tools/shots.py`; the palette comes from `ui::theme`. CI
   regenerates and diffs. A generated file edited by hand is reverted by the
   next sync, and CI says so first.
+- **The hero is a recording, and the still is the content.** `tools/shots.py`
+  keeps the frames as well as the last one; `site.js` paints them over the
+  still, which stays in the flow with `visibility: hidden` so nothing moves
+  when the frames land. With no JavaScript, with reduced motion, or before the
+  fetch returns, the still is what a reader sees — which is why it is still
+  generated. Every control on the page ships `hidden` and is revealed by
+  script, and a test asserts that of every button on every page.
 - **The reload client exists only in `serve`.** `build` never writes it, and a
   test asserts that of every page. A deployed page carrying a livereload script
   is the standard way this leaks.
 
-Two smaller things that cost time to find. The screenshots run against a *copy*
-of `site/fixture` in a temp directory, with `HOME` pointed there too: in place,
-trafford walks up, finds this repository, and puts its dirty-file count in the
-status bar, and `Theme::resolve` reads `~/.config/trafford/themes/` before the
-built-ins. And `mono` is not offered as a site theme, because it sets its
-background and foreground to `reset`, meaning "whatever the terminal already
-is", which a browser cannot answer.
+Four smaller things that each cost time to find.
+
+The recordings run against a *copy* of `site/fixture` in a temp directory, with
+`HOME` pointed there too, and the copy is made into a git repository with the
+branch, the identity and both dates pinned. In place, trafford walks up and
+finds *this* repository, so its dirty-file count went into the status bar and
+every shot changed whenever anything else did; without a repository at all the
+status bar reads `no git`, which is an odd thing to show under a claim about
+git being in the status bar; and `Theme::resolve` reads
+`~/.config/trafford/themes/` *before* the built-ins, so a developer's own
+gotham.toml would take a different screenshot from CI.
+
+The recorder waits for the screen to stop changing rather than for a fixed
+pause. A guess broke silently the moment startup grew a git poll: the first
+keystroke arrived before the program was listening and the shot recorded the
+wrong note without failing.
+
+`mono` is not offered as a site theme, because it sets its background and
+foreground to `reset`, meaning "whatever the terminal already is", which a
+browser cannot answer.
+
+The typeface is subset to the characters the built site draws, and the subset
+is derived from the built HTML rather than listed by hand — a character the
+subset lacks falls back mid-word and reads as one broken glyph. `--check` also
+pins the advance width at 0.6em, which every fallback in the stack shares, so
+the swap when the font lands moves nothing.
 
 ## Obsidian compatibility
 

@@ -71,13 +71,12 @@ Preview stops being the editor with the syntax hidden. A note's structure folds,
 
 ## v1.0 — Safe to depend on
 
-`#######···` 70% · 14 of 20 done · due 2027-03-01
+`########··` 75% · 15 of 20 done · due 2027-03-01
 
 Documented, packaged, and hardened. Someone who is not the author can install
 
 ### backlog
 
-- [ ] `0057` The hero plays, and it is the real program <sup>feature · p1 · site</sup>
 - [ ] `0058` Paste a Ghostty theme and watch the site wear it <sup>feature · p2 · site</sup>
 - [ ] `0059` Links to the site unfurl as something <sup>chore · p2 · site</sup>
 - [ ] `0060` The roadmap is a page, built from the items <sup>feature · p2 · site</sup>
@@ -100,6 +99,7 @@ Documented, packaged, and hardened. Someone who is not the author can install
 - [x] `0053` The landing page is one screen, and the screenshot is real <sup>feature · p1 · site</sup>
 - [x] `0055` Give the site a typeface <sup>chore · p1 · site</sup>
 - [x] `0056` The landing page has a grid, not a column <sup>feature · p1 · site</sup>
+- [x] `0057` The hero plays, and it is the real program <sup>feature · p1 · site</sup>
 
 ## later — Someday
 

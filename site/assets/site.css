@@ -589,6 +589,65 @@ th.center {
   overflow-x: auto;
 }
 
+/* The cast replaces the still in place, so the box must not resize when it
+   arrives — same padding, same border, same rounding. */
+.shot {
+  position: relative;
+}
+
+.cast-screen {
+  /* Drawn over the still, which stays in the flow and keeps reserving the box.
+     Nothing on the page moves when the frames arrive. */
+  position: absolute;
+  inset: 0.6rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  overflow: hidden;
+  line-height: 1.45;
+  font-variant-ligatures: none;
+  /* The recording is a grid of cells; a space in it is content. */
+  white-space: pre;
+  tab-size: 8;
+}
+
+.cast-screen div {
+  height: 1.45em;
+}
+
+.cast-control {
+  position: absolute;
+  right: 0.75rem;
+  /* Top, not bottom: the terminal's own status line lives along the bottom
+     edge and the control was sitting on top of the word count. */
+  top: 0.75rem;
+  font: inherit;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  background: var(--bg);
+  border: var(--rule);
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.shot:hover .cast-control,
+.cast-control:focus-visible {
+  opacity: 1;
+}
+
+/* Someone who asked for less motion is not being asked to hunt for the
+   control that starts it. */
+@media (prefers-reduced-motion: reduce) {
+  .cast-control {
+    opacity: 1;
+  }
+}
+
 .shot svg,
 .shot img {
   display: block;

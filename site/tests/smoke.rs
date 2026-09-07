@@ -188,6 +188,33 @@ fn a_built_page_carries_no_development_code() {
     }
 }
 
+/// Every control on the page is an enhancement, and a reader without
+/// JavaScript must not be shown one that does nothing.
+///
+/// The cast player is the case that made this worth pinning: it replaces the
+/// still screenshot, so if it ever became part of the markup rather than
+/// something script builds, a reader with no JavaScript would get an empty box
+/// where the picture was.
+#[test]
+fn a_page_without_javascript_has_no_dead_controls() {
+    let site = built_and_served();
+    for page in &site.pages {
+        let (_, _, body) = serve::get(&format!("{}/{page}", site.url)).unwrap();
+        let html = String::from_utf8_lossy(&body).to_string();
+        for button in html.split("<button").skip(1) {
+            let tag = button.split('>').next().unwrap_or("");
+            assert!(
+                tag.contains(" hidden"),
+                "/{page} ships a button script has to reveal, without `hidden`: <button{tag}>"
+            );
+        }
+        assert!(
+            !html.contains("cast-screen"),
+            "/{page} has the cast in its markup; it must be built by script"
+        );
+    }
+}
+
 /// Anchors are what a `[[Note#Heading]]` link lands on, and the build already
 /// refuses a link to a heading that is not there. This is the other half: the
 /// heading it *is* there, with the id the link was rewritten to.

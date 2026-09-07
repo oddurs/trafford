@@ -20,9 +20,11 @@ Needs pyte, like tools/probe.py:
 """
 
 import argparse
+import json
 import os
 import pathlib
 import shutil
+import subprocess
 import sys
 import tempfile
 import tomllib
@@ -74,6 +76,63 @@ KEYS = {
 }
 
 
+def make_repo(vault):
+    """Make the fixture a git repository, so the status bar has something true
+    to say.
+
+    Without it the status bar reads `no git`, which is an odd thing for a
+    landing page to show under a claim about git being in the status bar. It is
+    created here rather than committed because a `.git` directory inside this
+    repository is not a thing git will track.
+
+    Everything that could vary is pinned: the branch name, the identity, and
+    both dates. The global config is taken out of the picture entirely — a
+    developer's signing key or a template directory would otherwise reach in.
+    """
+    fixed = {
+        **os.environ,
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_CONFIG_SYSTEM": "/dev/null",
+        "GIT_AUTHOR_DATE": "2026-01-01T00:00:00+00:00",
+        "GIT_COMMITTER_DATE": "2026-01-01T00:00:00+00:00",
+    }
+    identity = [
+        "-c",
+        "user.name=trafford",
+        "-c",
+        "user.email=trafford@example.com",
+        "-c",
+        "commit.gpgsign=false",
+    ]
+    run = lambda *args: subprocess.run(
+        ["git", *identity, *args], cwd=vault, env=fixed, check=True,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    run("init", "-b", "main")
+    run("add", "-A")
+    run("commit", "-m", "the vault")
+
+
+def settle(session, limit=6.0):
+    """Wait for the screen to stop moving.
+
+    A fixed pause is a guess, and the guess broke the moment the fixture became
+    a git repository: startup grew a git poll, the first keystroke arrived
+    before the program was listening, and the shot silently showed whatever
+    note happened to be open instead of the one it asked for. Nothing failed —
+    it just recorded the wrong thing.
+    """
+    previous = None
+    waited = 0.0
+    while waited < limit:
+        session.pump(0.25)
+        waited += 0.25
+        now = session.display()
+        if now == previous:
+            return
+        previous = now
+
+
 def keystrokes(name):
     if name in KEYS:
         return KEYS[name]
@@ -87,17 +146,90 @@ def capture(shot, vault):
     session = Session(str(BIN), str(vault), cols=shot["cols"], rows=shot["rows"])
     try:
         session.until(lambda s: "notes" in "\n".join(s.display), 30)
+        settle(session)
         for key in shot.get("keys", []):
             # Each key as its own write: a terminal delivers ESC glued to the
             # next byte as Alt+key, and two keys in one write are one keypress.
-            session.send(keystrokes(key), 0.5)
-        session.pump(0.5)
+            session.send(keystrokes(key), 0.35)
+            settle(session, 2.0)
         return [
             [session.screen.buffer[y][x] for x in range(session.screen.columns)]
             for y in range(session.screen.lines)
         ]
     finally:
         session.close()
+
+
+def record(cast, vault):
+    """Run the binary and keep every frame, not only the last.
+
+    One frame per keystroke, because the program redraws once per event — so
+    "hold `l` to walk down the tree" is several steps in the manifest rather
+    than an animation this has to sample.
+    """
+    session = Session(str(BIN), str(vault), cols=cast["cols"], rows=cast["rows"])
+    frames = []
+
+    def grab(hold):
+        frames.append(
+            (
+                hold,
+                [
+                    [session.screen.buffer[y][x] for x in range(session.screen.columns)]
+                    for y in range(session.screen.lines)
+                ],
+            )
+        )
+
+    try:
+        session.until(lambda s: "notes" in "\n".join(s.display), 30)
+        settle(session)
+        grab(cast.get("hold", 900))
+        for step in cast["steps"]:
+            session.send(keystrokes(step["key"]), 0.25)
+            settle(session, 2.0)
+            grab(step["hold"])
+        return frames
+    finally:
+        session.close()
+
+
+def to_cast(frames, cast):
+    """A frame format, not a video.
+
+    A style table, then rows of runs, and every frame after the first carries
+    only the rows that *changed*. Twenty full frames of a 108x24 terminal would
+    be megabytes; the diff is tens of kilobytes, and the text stays real text.
+    """
+    styles, index = [], {}
+
+    def style_id(style):
+        if style not in index:
+            index[style] = len(styles)
+            styles.append(list(style))
+        return index[style]
+
+    out, previous = [], None
+    for hold, grid in frames:
+        rows = {}
+        for y, row in enumerate(grid):
+            encoded = [[style_id(style), text] for style, text in runs(row)]
+            if previous is None or previous[y] != encoded:
+                rows[str(y)] = encoded
+        previous = [
+            [[style_id(style), text] for style, text in runs(row)] for row in grid
+        ]
+        out.append({"d": hold, "rows": rows})
+
+    return {
+        "title": cast["title"],
+        "cols": cast["cols"],
+        "rows": cast["rows"],
+        "loop": cast.get("loop_pause", 1500),
+        "bg": DEFAULT_BG,
+        "styles": styles,
+        "frames": out,
+    }
 
 
 def runs(row):
@@ -227,19 +359,30 @@ def main():
         home.mkdir()
         os.environ["HOME"] = str(home)
         os.environ["XDG_CONFIG_HOME"] = str(home / ".config")
-        shots = [(shot, to_svg(capture(shot, vault), shot["title"])) for shot in manifest["shot"]]
+        make_repo(vault)
+        shots = [
+            (out_dir / f"{shot['name']}.svg", to_svg(capture(shot, vault), shot["title"]))
+            for shot in manifest["shot"]
+        ]
+        shots += [
+            (
+                out_dir / f"{cast['name']}.cast.json",
+                json.dumps(to_cast(record(cast, vault), cast), separators=(",", ":"))
+                + "\n",
+            )
+            for cast in manifest.get("cast", [])
+        ]
 
-    for shot, svg in shots:
-        dest = out_dir / f"{shot['name']}.svg"
+    for dest, body in shots:
         current = dest.read_text() if dest.exists() else None
-        if current == svg:
+        if current == body:
             print(f"  {dest.relative_to(ROOT)} is current")
             continue
         if args.check:
             stale.append(dest.relative_to(ROOT))
             continue
-        dest.write_text(svg)
-        print(f"  wrote {dest.relative_to(ROOT)} ({len(svg) // 1024} KiB)")
+        dest.write_text(body)
+        print(f"  wrote {dest.relative_to(ROOT)} ({len(body) // 1024} KiB)")
 
     if stale:
         names = "\n".join(f"  {p}" for p in stale)

@@ -84,6 +84,7 @@ struct Meta {
     tagline: Option<String>,
     install: Option<String>,
     screenshot: Option<String>,
+    cast: Option<String>,
 }
 
 fn meta(note: &Note) -> Meta {
@@ -100,6 +101,7 @@ fn meta(note: &Note) -> Meta {
         tagline: get("tagline"),
         install: get("install"),
         screenshot: get("screenshot"),
+        cast: get("cast"),
     }
 }
 
@@ -294,9 +296,30 @@ fn hero(
     if let Some(shot) = &m.screenshot {
         match vault.attachment(shot) {
             Some(rel) => {
+                // The still is the content; the cast is an enhancement layered
+                // over it. With no JavaScript, with reduced motion, or before
+                // the frames arrive, this is what a reader sees — which is why
+                // the still stays generated even now that the cast exists.
+                let cast = match &m.cast {
+                    Some(name) => match vault.attachment(name) {
+                        Some(cast_rel) => format!(
+                            " data-cast=\"{}\"",
+                            html::escape_attr(&ctx.href(&format!("{ASSET_DIR}/{cast_rel}")))
+                        ),
+                        None => {
+                            problems.push(Problem {
+                                file: note.id.clone(),
+                                line: 1,
+                                message: format!("cast: {name} is not in the vault"),
+                            });
+                            String::new()
+                        }
+                    },
+                    None => String::new(),
+                };
                 let _ = writeln!(
                     out,
-                    "<figure class=\"shot\">{}</figure>",
+                    "<figure class=\"shot\"{cast}>{}</figure>",
                     inline_or_img(ctx, &vault.root, rel)
                 );
             }

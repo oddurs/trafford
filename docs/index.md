@@ -4,6 +4,7 @@ layout: landing
 tagline: An Obsidian-shaped vault in your terminal — wikilinks, backlinks, tags, a modal editor, git in the status bar, and an assistant that reads your notes before it answers.
 install: cargo install --git https://github.com/oddurs/trafford
 screenshot: screenshot.svg
+cast: hero.cast.json
 description: trafford is a terminal knowledge base — plain markdown, [[wikilinks]], backlinks and tags, with a modal editor and git built in.
 ---
 
