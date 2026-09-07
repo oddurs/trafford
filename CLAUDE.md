@@ -51,6 +51,42 @@ the UI; `ui` reads `App` but never mutates it except for viewport bookkeeping.
 - **The editor owns no I/O.** `App::save` writes and then re-indexes; the
   editor never touches the filesystem.
 
+## Testing a TUI
+
+Unit tests cover the parts that are pure. They cannot tell you that a pane got
+drawn over, that the cursor is in the wrong column, or that a keystroke went to
+the wrong place — none of that is visible from inside the process.
+
+`tools/probe.py` runs the real binary against an emulated terminal and reads
+the screen back:
+
+```sh
+pip install pyte
+cargo build --release
+python3 tools/probe.py screens  /tmp/vault   # what each keystroke draws
+python3 tools/probe.py cursor   /tmp/vault   # where the cursor actually lands
+python3 tools/probe.py sizes    /tmp/vault   # panic-hunt across terminal sizes
+python3 tools/probe.py timings  /tmp/vault   # startup, save, search latency
+```
+
+Every non-trivial bug in this project's first week came from there: a panic on
+narrow terminals, CRLF files tearing the layout apart, the cursor drifting on
+CJK text, and a 700 ms stall on save in a large vault. All four are invisible
+to `cargo test` and to reading a screenshot of ASCII notes.
+
+When it finds something, the fix belongs in a unit test as well — the probe
+tells you *what* is wrong, and a test in `src/` keeps it from coming back.
+Prefer asserting invariants over examples: `line.width() <= width` across a
+matrix of widths catches the off-by-one that one hand-picked case does not.
+
+Two things that cost an afternoon each, so they are worth knowing:
+
+- **Send `esc` as its own step.** A terminal delivers ESC glued to the next key
+  as `Alt+key`, so `b"\x1bа"` is one keypress, not two.
+- **Check that a new regression test fails without the fix.** The first version
+  of the narrow-terminal test left focus on the editor, so the branch with the
+  panic in it never ran, and the test passed against the bug.
+
 ## Style
 
 Match what is there: comments explain *why*, not *what*; tests are named as
