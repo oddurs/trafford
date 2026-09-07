@@ -52,7 +52,7 @@ impl<'a> Renderer<'a> {
             spans.push(Span::styled(">".to_string(), Style::default().fg(t.accent)));
             spans.extend(self.inline(
                 quoted,
-                Style::default().fg(t.dim).add_modifier(Modifier::ITALIC),
+                Style::default().fg(t.muted).add_modifier(Modifier::ITALIC),
             ));
             return spans;
         }
@@ -63,7 +63,7 @@ impl<'a> Renderer<'a> {
         // Leading list marker or task checkbox, coloured but never rewritten.
         if let Some((marker, tail)) = split_list_marker(text) {
             let style = if marker.trim_start().starts_with("- [x]") {
-                Style::default().fg(t.add)
+                Style::default().fg(t.added)
             } else {
                 Style::default().fg(t.accent)
             };
@@ -73,7 +73,7 @@ impl<'a> Renderer<'a> {
 
         let body_style = if text.trim_start().starts_with("- [x]") {
             Style::default()
-                .fg(t.dim)
+                .fg(t.muted)
                 .add_modifier(Modifier::CROSSED_OUT)
         } else {
             Style::default().fg(t.fg)
@@ -112,7 +112,7 @@ impl<'a> Renderer<'a> {
                     let colour = if (self.resolves)(&target) {
                         t.link
                     } else {
-                        t.link_broken
+                        t.broken
                     };
                     flush!();
                     spans.push(Span::styled(
@@ -302,7 +302,7 @@ mod tests {
     /// The critical invariant: styling never adds or removes characters, or the
     /// editor cursor would drift away from the buffer.
     fn assert_char_preserving(input: &str) {
-        let theme = Theme::night();
+        let theme = Theme::default();
         let spans = renderer(&theme).line(input, false);
         assert_eq!(text_of(&spans), input, "renderer changed the text");
     }
@@ -327,25 +327,25 @@ mod tests {
 
     #[test]
     fn broken_links_are_coloured_differently_from_live_ones() {
-        let theme = Theme::night();
+        let theme = Theme::default();
         let r = renderer(&theme);
         let live = r.line("[[Real]]", false);
         let dead = r.line("[[Missing]]", false);
         assert_eq!(live[0].style.fg, Some(theme.link));
-        assert_eq!(dead[0].style.fg, Some(theme.link_broken));
+        assert_eq!(dead[0].style.fg, Some(theme.broken));
     }
 
     #[test]
     fn aliased_and_headed_links_resolve_on_the_target_only() {
-        let theme = Theme::night();
+        let theme = Theme::default();
         let r = renderer(&theme);
         let spans = r.line("[[Missing#Section|alias]]", false);
-        assert_eq!(spans[0].style.fg, Some(theme.link_broken));
+        assert_eq!(spans[0].style.fg, Some(theme.broken));
     }
 
     #[test]
     fn headings_dim_their_hashes() {
-        let theme = Theme::night();
+        let theme = Theme::default();
         let spans = renderer(&theme).line("## Title", false);
         assert_eq!(spans[0].content.as_ref(), "##");
         assert_eq!(spans[0].style.fg, Some(theme.faint));
@@ -353,7 +353,7 @@ mod tests {
 
     #[test]
     fn completed_tasks_are_struck_through() {
-        let theme = Theme::night();
+        let theme = Theme::default();
         let spans = renderer(&theme).line("- [x] done", false);
         let body = spans.last().unwrap();
         assert!(body.style.add_modifier.contains(Modifier::CROSSED_OUT));
@@ -361,7 +361,7 @@ mod tests {
 
     #[test]
     fn code_blocks_render_as_a_single_code_span() {
-        let theme = Theme::night();
+        let theme = Theme::default();
         let spans = renderer(&theme).line("let x = [[not a link]];", true);
         assert_eq!(spans.len(), 1);
         assert_eq!(spans[0].style.fg, Some(theme.code));
@@ -384,7 +384,7 @@ mod tests {
 
     #[test]
     fn tags_need_a_word_boundary() {
-        let theme = Theme::night();
+        let theme = Theme::default();
         let r = renderer(&theme);
         let spans = r.line("word#nottag and #realtag", false);
         let tagged: Vec<&str> = spans

@@ -1,0 +1,36 @@
+# Gotham — https://github.com/whatyouhide/gotham
+# The palette is the terminal port's, with the brighter slots used where a
+# role needs to carry over a dark ground rather than recede into it.
+name = "Gotham"
+dark = true
+
+background   = "#0a0f14"   # the page
+surface      = "#0c1418"   # panes and the status bar, a shade above it
+overlay      = "#11202a"   # popups, which must read as floating
+
+text         = "#98d1ce"
+muted        = "#599caa"   # secondary text that still has to be read
+faint        = "#245361"   # line numbers, guides, things you look past
+
+border       = "#0e2129"
+border_focus = "#33859d"
+
+selection    = "#245361"
+cursorline   = "#0c1a20"
+
+accent       = "#edb54b"   # the one warm note, used sparingly
+secondary    = "#33859d"
+
+heading      = "#d3ebe9"
+link         = "#599caa"
+broken       = "#c33027"   # a link with nothing behind it
+code         = "#26a98b"
+tag          = "#a3a6c0"
+
+added        = "#3fc2a0"
+removed      = "#c33027"
+modified     = "#d26939"
+
+mode_normal  = "#edb54b"
+mode_insert  = "#3fc2a0"
+mode_visual  = "#5fb3c9"

@@ -78,7 +78,8 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         Some(Overlay::Palette(p))
         | Some(Overlay::Switcher(p))
         | Some(Overlay::LinkPicker(p))
-        | Some(Overlay::Backlinks(p)) => draw_picker(f, &theme, p, area),
+        | Some(Overlay::Backlinks(p))
+        | Some(Overlay::Themes(p)) => draw_picker(f, &theme, p, area),
         Some(Overlay::Search(pane)) => draw_search(f, &theme, pane, area),
         Some(Overlay::Prompt(prompt)) => {
             draw_prompt(f, &theme, prompt, area);
@@ -95,6 +96,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
             body,
             scroll,
         }) => draw_diff(f, &theme, title, body, *scroll, area),
+        Some(Overlay::Menu(menu)) => draw_menu(f, &theme, menu, area),
         Some(Overlay::Help) => {
             draw_help(f, &theme, area);
             Rect::default()
@@ -114,30 +116,35 @@ fn inner_of(area: Rect) -> Rect {
 }
 
 fn pane_block<'a>(theme: &Theme, title: &'a str, focused: bool) -> Block<'a> {
+    // The focused pane sits one shade above the page and carries a dot, so
+    // where you are is legible at a glance without a loud border.
+    let marker = if focused { " ● " } else { "   " };
     Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(theme.border_style(focused))
         .title(Line::from(vec![
-            Span::styled(" ", theme.dimmed()),
+            Span::styled(marker, Style::default().fg(theme.accent)),
             Span::styled(
                 title.to_string(),
                 if focused {
                     theme.title()
                 } else {
-                    theme.dimmed().add_modifier(Modifier::BOLD)
+                    theme.dimmed()
                 },
             ),
             Span::styled(" ", theme.dimmed()),
         ]))
-        .style(Style::default().bg(theme.bg))
+        .style(Style::default().bg(if focused { theme.surface } else { theme.bg }))
 }
 
 fn section(theme: &Theme, label: &str) -> Line<'static> {
+    // Secondary, not accent: the accent marks focus and the current thing, and
+    // loses its meaning if every heading also wears it.
     Line::from(Span::styled(
         label.to_uppercase(),
         Style::default()
-            .fg(theme.accent)
+            .fg(theme.secondary)
             .add_modifier(Modifier::BOLD),
     ))
 }
@@ -273,7 +280,7 @@ fn draw_sidebar(f: &mut Frame, app: &App, area: Rect) {
                 }
                 let mut line = Line::from(spans);
                 if selected {
-                    line = line.style(Style::default().bg(theme.sel));
+                    line = line.style(Style::default().bg(theme.selection));
                 }
                 lines.push(line);
             }
@@ -459,7 +466,7 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
 
         let mut line = Line::from(spans);
         if selected {
-            line = line.style(Style::default().bg(theme.sel));
+            line = line.style(Style::default().bg(theme.selection));
         } else if is_cursor_row && focused {
             line = line.style(Style::default().bg(theme.cursorline));
         }
@@ -708,7 +715,7 @@ fn draw_context(f: &mut Frame, app: &App, area: Rect) -> Vec<Option<ContextTarge
                 Span::styled("  ○ ", theme.faded()),
                 Span::styled(
                     fit(target, width.saturating_sub(4)),
-                    Style::default().fg(theme.link_broken),
+                    Style::default().fg(theme.broken),
                 ),
             ]));
             targets.push(Some(ContextTarget::Unwritten((*target).clone())));
@@ -767,7 +774,7 @@ fn draw_assistant(f: &mut Frame, app: &App, area: Rect) -> (Rect, Rect) {
             lines.push(Line::from(""));
             lines.push(Line::from(Span::styled(
                 "ANTHROPIC_API_KEY is not set.",
-                Style::default().fg(theme.link_broken),
+                Style::default().fg(theme.broken),
             )));
         }
     }
@@ -904,9 +911,9 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
     let theme = app.theme;
     let mode = app.editor.mode;
     let mode_colour = match mode {
-        Mode::Normal => theme.accent,
-        Mode::Insert => theme.add,
-        Mode::Visual | Mode::VisualLine => theme.link,
+        Mode::Normal => theme.mode_normal,
+        Mode::Insert => theme.mode_insert,
+        Mode::Visual | Mode::VisualLine => theme.mode_visual,
     };
 
     let mut spans = vec![
@@ -917,7 +924,7 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
                 .bg(mode_colour)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("  ", Style::default().bg(theme.panel)),
+        Span::styled("  ", Style::default().bg(theme.surface)),
     ];
 
     // A focused pane explains itself here, so its keys are discoverable
@@ -942,54 +949,54 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
     if let Some(status) = app.status_text() {
         spans.push(Span::styled(
             status.to_string(),
-            Style::default().fg(theme.fg).bg(theme.panel),
+            Style::default().fg(theme.fg).bg(theme.surface),
         ));
     } else if let Some(hint) = hint {
         if app.focus == Focus::Editor && app.repo.is_some() {
             // Branch first: it is state, and the hint is only a reminder.
             spans.push(Span::styled(
                 format!("⎇ {}   ", app.git_status.branch),
-                Style::default().fg(theme.link).bg(theme.panel),
+                Style::default().fg(theme.link).bg(theme.surface),
             ));
         }
         spans.push(Span::styled(
             hint.to_string(),
-            Style::default().fg(theme.faint).bg(theme.panel),
+            Style::default().fg(theme.faint).bg(theme.surface),
         ));
     } else {
         let git = &app.git_status;
         if app.repo.is_some() {
             spans.push(Span::styled(
                 format!("⎇ {}", git.branch),
-                Style::default().fg(theme.link).bg(theme.panel),
+                Style::default().fg(theme.link).bg(theme.surface),
             ));
             if !git.is_clean() {
                 spans.push(Span::styled(
                     format!("  ●{}", git.changes.len()),
-                    Style::default().fg(theme.accent).bg(theme.panel),
+                    Style::default().fg(theme.accent).bg(theme.surface),
                 ));
             }
             if git.ahead > 0 {
                 spans.push(Span::styled(
                     format!("  ↑{}", git.ahead),
-                    Style::default().fg(theme.add).bg(theme.panel),
+                    Style::default().fg(theme.added).bg(theme.surface),
                 ));
             }
             if git.behind > 0 {
                 spans.push(Span::styled(
                     format!("  ↓{}", git.behind),
-                    Style::default().fg(theme.del).bg(theme.panel),
+                    Style::default().fg(theme.removed).bg(theme.surface),
                 ));
             }
         } else {
             spans.push(Span::styled(
                 "no git",
-                Style::default().fg(theme.faint).bg(theme.panel),
+                Style::default().fg(theme.faint).bg(theme.surface),
             ));
         }
         spans.push(Span::styled(
             format!("   {}", plural(app.vault.notes.len(), "note")),
-            Style::default().fg(theme.dim).bg(theme.panel),
+            Style::default().fg(theme.muted).bg(theme.surface),
         ));
     }
 
@@ -1004,11 +1011,11 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
     let pad = (area.width as usize).saturating_sub(used + right.chars().count());
     spans.push(Span::styled(
         " ".repeat(pad),
-        Style::default().bg(theme.panel),
+        Style::default().bg(theme.surface),
     ));
     spans.push(Span::styled(
         right,
-        Style::default().fg(theme.dim).bg(theme.panel),
+        Style::default().fg(theme.muted).bg(theme.surface),
     ));
 
     f.render_widget(Paragraph::new(Line::from(spans)), area);
@@ -1039,7 +1046,7 @@ fn overlay_block<'a>(theme: &Theme, title: String) -> Block<'a> {
             Span::styled(title, theme.title()),
             Span::styled(" ", theme.dimmed()),
         ]))
-        .style(Style::default().bg(theme.panel))
+        .style(Style::default().bg(theme.overlay))
 }
 
 fn draw_picker(f: &mut Frame, theme: &Theme, picker: &Picker, area: Rect) -> Rect {
@@ -1086,7 +1093,7 @@ fn draw_picker(f: &mut Frame, theme: &Theme, picker: &Picker, area: Rect) -> Rec
         }
         let mut line = Line::from(spans);
         if selected {
-            line = line.style(Style::default().bg(theme.sel));
+            line = line.style(Style::default().bg(theme.selection));
         }
         lines.push(line);
     }
@@ -1142,7 +1149,7 @@ fn draw_search(f: &mut Frame, theme: &Theme, pane: &crate::app::SearchPane, area
         ));
         let mut line = Line::from(spans);
         if selected {
-            line = line.style(Style::default().bg(theme.sel));
+            line = line.style(Style::default().bg(theme.selection));
         }
         lines.push(line);
     }
@@ -1205,17 +1212,17 @@ fn draw_git(f: &mut Frame, theme: &Theme, pane: &crate::app::GitPane, area: Rect
     if snap.changes.is_empty() {
         lines.push(Line::from(Span::styled(
             "  working tree clean",
-            Style::default().fg(theme.add),
+            Style::default().fg(theme.added),
         )));
     }
     for (i, change) in snap.changes.iter().enumerate().take(12) {
         let selected = i == pane.cursor;
         let colour = match change.status {
-            crate::git::Status::Added => theme.add,
-            crate::git::Status::Deleted => theme.del,
-            crate::git::Status::Conflicted => theme.link_broken,
-            crate::git::Status::Untracked => theme.dim,
-            _ => theme.accent,
+            crate::git::Status::Added => theme.added,
+            crate::git::Status::Deleted => theme.removed,
+            crate::git::Status::Conflicted => theme.broken,
+            crate::git::Status::Untracked => theme.muted,
+            _ => theme.modified,
         };
         let mut line = Line::from(vec![
             Span::styled(
@@ -1228,7 +1235,7 @@ fn draw_git(f: &mut Frame, theme: &Theme, pane: &crate::app::GitPane, area: Rect
                 } else {
                     "        "
                 },
-                Style::default().fg(theme.add),
+                Style::default().fg(theme.added),
             ),
             Span::styled(
                 format!("{} ", change.status.glyph()),
@@ -1240,7 +1247,7 @@ fn draw_git(f: &mut Frame, theme: &Theme, pane: &crate::app::GitPane, area: Rect
             ),
         ]);
         if selected {
-            line = line.style(Style::default().bg(theme.sel));
+            line = line.style(Style::default().bg(theme.selection));
         }
         lines.push(line);
     }
@@ -1288,9 +1295,9 @@ fn draw_diff(
             } else if raw.starts_with("@@") {
                 Style::default().fg(theme.link)
             } else if raw.starts_with('+') {
-                Style::default().fg(theme.add)
+                Style::default().fg(theme.added)
             } else if raw.starts_with('-') {
-                Style::default().fg(theme.del)
+                Style::default().fg(theme.removed)
             } else if raw.starts_with("diff ") || raw.starts_with("index ") {
                 theme.faded()
             } else {
@@ -1344,17 +1351,84 @@ fn draw_confirm(f: &mut Frame, theme: &Theme, confirm: &crate::app::Confirm, are
         Line::from(vec![
             Span::styled(
                 "y",
-                Style::default().fg(theme.add).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(theme.added)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::styled(" yes    ", theme.dimmed()),
             Span::styled(
                 "esc",
-                Style::default().fg(theme.del).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(theme.removed)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::styled(" cancel", theme.dimmed()),
         ]),
     ];
     f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: true }), inner);
+    inner
+}
+
+/// A context menu, drawn at the point that was right-clicked and nudged back
+/// on screen when that point is near an edge.
+fn draw_menu(f: &mut Frame, theme: &Theme, menu: &crate::app::Menu, area: Rect) -> Rect {
+    let width = menu
+        .items
+        .iter()
+        .map(|i| i.label.width() + 4)
+        .chain(std::iter::once(menu.title.width() + 6))
+        .max()
+        .unwrap_or(20)
+        .clamp(16, area.width.saturating_sub(2) as usize) as u16;
+    let height = (menu.items.len() as u16 + 2).min(area.height);
+
+    let (cx, cy) = menu.at;
+    let x = cx.min(area.right().saturating_sub(width)).max(area.x);
+    // Prefer below the pointer; flip above when there is no room.
+    let y = if cy + height <= area.bottom() {
+        cy
+    } else {
+        cy.saturating_sub(height).max(area.y)
+    };
+    let rect = Rect {
+        x,
+        y,
+        width,
+        height,
+    };
+
+    f.render_widget(Clear, rect);
+    let block = overlay_block(theme, menu.title.clone());
+    let inner = block.inner(rect);
+    f.render_widget(block, rect);
+
+    let lines: Vec<Line> = menu
+        .items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| {
+            let selected = i == menu.cursor;
+            let mut line = Line::from(vec![
+                Span::styled(
+                    if selected { "▌ " } else { "  " },
+                    Style::default().fg(theme.accent),
+                ),
+                Span::styled(
+                    fit(&item.label, inner.width.saturating_sub(2) as usize),
+                    if selected {
+                        theme.selected()
+                    } else {
+                        Style::default().fg(theme.fg)
+                    },
+                ),
+            ]);
+            if selected {
+                line = line.style(Style::default().bg(theme.selection));
+            }
+            line
+        })
+        .collect();
+    f.render_widget(Paragraph::new(lines), inner);
     inner
 }
 

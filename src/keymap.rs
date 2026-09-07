@@ -22,7 +22,9 @@ pub const COMMANDS: &[(&str, &str, &str)] = &[
     ("toggle-preview", "Toggle rendered preview", "ctrl-e"),
     ("toggle-sidebar", "Toggle sidebar", "ctrl-b"),
     ("toggle-context", "Toggle context pane", ""),
-    ("cycle-theme", "Cycle theme", ""),
+    ("theme", "Change theme", ""),
+    ("expand-all", "Sidebar: expand every folder", "E"),
+    ("collapse-all", "Sidebar: collapse every folder", "C"),
     ("reindex", "Reindex vault from disk", ""),
     ("git-panel", "Git: review changes", "ctrl-g"),
     ("git-commit", "Git: commit all changes", ""),
@@ -174,17 +176,37 @@ impl App {
                 self.preview = !self.preview;
                 self.set_status(if self.preview { "preview" } else { "source" });
             }
+            "expand-all" => {
+                self.expand_all();
+                self.focus = Focus::Sidebar;
+            }
+            "collapse-all" => {
+                self.collapse_all();
+                self.focus = Focus::Sidebar;
+            }
             "toggle-sidebar" => self.sidebar_visible = !self.sidebar_visible,
             "toggle-context" => self.context_visible = !self.context_visible,
-            "cycle-theme" => {
-                let next = match self.config.theme.as_str() {
-                    "night" => "paper",
-                    "paper" => "mono",
-                    _ => "night",
-                };
-                self.config.theme = next.to_string();
-                self.theme = Theme::named(next);
-                self.set_status(format!("theme: {next}"));
+            "theme" => {
+                let items: Vec<PickItem> = Theme::available(&self.vault.root)
+                    .into_iter()
+                    .map(|(name, kind)| PickItem {
+                        label: name.clone(),
+                        detail: kind,
+                        key: name,
+                    })
+                    .collect();
+                let mut picker = Picker::new("Theme", items);
+                // Start on the theme in use, so the preview begins where you
+                // are rather than jumping somewhere else.
+                if let Some(pos) = picker
+                    .matches
+                    .iter()
+                    .position(|(i, _)| picker.items[*i].key == self.config.theme)
+                {
+                    picker.cursor = pos;
+                }
+                self.theme_before_preview = Some(self.config.theme.clone());
+                self.overlay = Some(Overlay::Themes(picker));
             }
             "reindex" => match self.vault.rescan() {
                 Ok(()) => self.set_status(format!("indexed {} notes", self.vault.notes.len())),
@@ -300,6 +322,78 @@ impl App {
             "help" => self.overlay = Some(Overlay::Help),
             "quit" => self.request_quit(),
             other => self.set_status(format!("unknown command: {other}")),
+        }
+    }
+
+    /// Carry out a context-menu entry.
+    pub fn run_menu_action(&mut self, action: crate::app::MenuAction) {
+        use crate::app::MenuAction as A;
+        match action {
+            A::Command(name) => self.run_command(name),
+            A::OpenNote(id) => self.open_note(&id, true),
+            A::OpenNoteAt(id, line) => {
+                self.open_note(&id, true);
+                self.editor.buf.goto_line(line);
+            }
+            A::GoToLine(line) => {
+                self.focus = Focus::Editor;
+                self.editor.buf.goto_line(line);
+            }
+            A::RenameNote(id) => {
+                let input = id.trim_end_matches(".md").to_string();
+                self.overlay = Some(Overlay::Prompt(Prompt {
+                    kind: PromptKind::Rename,
+                    title: "Rename note".into(),
+                    input,
+                    hint: "incoming [[links]] are rewritten".into(),
+                }));
+            }
+            A::DeleteNote(id) => {
+                self.overlay = Some(Overlay::Confirm(Confirm {
+                    message: format!("Delete {id}? This cannot be undone."),
+                    kind: ConfirmKind::DeleteNote(id),
+                }));
+            }
+            A::LinkToNote(id) => self.insert_link_to(&id),
+            A::CreateNote(target) => self.prompt_new_note_from_link(&target),
+            A::HistoryOf(id) => {
+                let previous = self.current.clone();
+                self.current = Some(id);
+                self.run_command("git-history");
+                // `git-history` reads the open note, so put it back afterwards
+                // if the menu was about a different one.
+                if self.overlay.is_none() {
+                    self.current = previous;
+                }
+            }
+            A::NewNoteIn(dir) => {
+                self.overlay = Some(Overlay::Prompt(Prompt {
+                    kind: PromptKind::NewNote,
+                    title: "New note".into(),
+                    input: if dir.is_empty() {
+                        String::new()
+                    } else {
+                        format!("{dir}/")
+                    },
+                    hint: "name, or folder/name".into(),
+                }));
+            }
+            A::ExpandUnder(dir) => {
+                let under: Vec<String> = self
+                    .vault
+                    .notes
+                    .iter()
+                    .filter(|n| n.id.starts_with(&format!("{dir}/")))
+                    .flat_map(|n| crate::tree::ancestors(&n.id))
+                    .collect();
+                self.expanded.extend(under);
+                self.expanded.insert(dir);
+            }
+            A::CollapseDir(dir) => {
+                let prefix = format!("{dir}/");
+                self.expanded
+                    .retain(|d| d != &dir && !d.starts_with(&prefix));
+            }
         }
     }
 
@@ -549,6 +643,9 @@ impl App {
 
     fn overlay_key(&mut self, key: KeyEvent) {
         if key.code == KeyCode::Esc {
+            if let Some(previous) = self.theme_before_preview.take() {
+                self.apply_theme(&previous);
+            }
             match escape_target(self.overlay.as_ref()) {
                 Escape::Close => self.overlay = None,
                 // The diff was opened from the git pane, so esc goes back to
@@ -565,6 +662,7 @@ impl App {
             Overlay::Switcher(picker) => self.picker_key(key, picker, PickerKind::Switcher),
             Overlay::LinkPicker(picker) => self.picker_key(key, picker, PickerKind::Link),
             Overlay::Backlinks(picker) => self.picker_key(key, picker, PickerKind::Backlink),
+            Overlay::Themes(picker) => self.picker_key(key, picker, PickerKind::Theme),
             Overlay::Search(pane) => self.search_key(key, pane),
             Overlay::Prompt(prompt) => self.prompt_key(key, prompt),
             Overlay::Git(pane) => self.git_key(key, pane),
@@ -596,6 +694,22 @@ impl App {
                     scroll,
                 });
             }
+            Overlay::Menu(mut menu) => match key.code {
+                KeyCode::Char('j') | KeyCode::Down => {
+                    menu.move_cursor(1);
+                    self.overlay = Some(Overlay::Menu(menu));
+                }
+                KeyCode::Char('k') | KeyCode::Up => {
+                    menu.move_cursor(-1);
+                    self.overlay = Some(Overlay::Menu(menu));
+                }
+                KeyCode::Enter | KeyCode::Char('l') | KeyCode::Right | KeyCode::Char(' ') => {
+                    if let Some(item) = menu.items.get(menu.cursor).cloned() {
+                        self.run_menu_action(item.action);
+                    }
+                }
+                _ => self.overlay = Some(Overlay::Menu(menu)),
+            },
             Overlay::Confirm(confirm) => self.confirm_key(key, confirm),
             Overlay::Help => {}
         }
@@ -612,6 +726,11 @@ impl App {
                         PickerKind::Switcher => self.open_note(&chosen, true),
                         PickerKind::Link => self.insert_link_to(&chosen),
                         PickerKind::Backlink => self.jump_to_backlink(&chosen),
+                        PickerKind::Theme => {
+                            self.apply_theme(&chosen);
+                            self.theme_before_preview = None;
+                            self.set_status(format!("theme: {}", self.theme_source));
+                        }
                     }
                 }
                 return;
@@ -629,6 +748,15 @@ impl App {
             PickerKind::Switcher => Overlay::Switcher(picker),
             PickerKind::Link => Overlay::LinkPicker(picker),
             PickerKind::Backlink => Overlay::Backlinks(picker),
+            PickerKind::Theme => {
+                // Preview as the cursor moves: a theme is judged by looking at
+                // it, not by reading its name.
+                if let Some(item) = picker.selected() {
+                    let name = item.key.clone();
+                    self.apply_theme(&name);
+                }
+                Overlay::Themes(picker)
+            }
         });
     }
 
@@ -888,6 +1016,7 @@ enum PickerKind {
     Switcher,
     Link,
     Backlink,
+    Theme,
 }
 
 fn trim_md(id: &str) -> &str {
@@ -942,6 +1071,10 @@ pub const HELP: &[(&str, &str)] = &[
     ),
     ("", "  (in preview, a plain click follows it)"),
     ("drag", "selects lines; y d c then act on them"),
+    (
+        "right-click",
+        "a menu of what can be done to the thing under it",
+    ),
     ("wheel", "scrolls whatever is under the pointer"),
     ("shift-drag", "select text, as your terminal normally would"),
     ("", ""),

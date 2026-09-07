@@ -1,0 +1,34 @@
+# Night — warm ink on a near-black ground. The original trafford palette.
+name = "Night"
+dark = true
+
+background   = "#14131a"
+surface      = "#1a1922"
+overlay      = "#1e1d28"
+
+text         = "#d6d1c4"
+muted        = "#8b8597"
+faint        = "#4d4959"
+
+border       = "#2e2b38"
+border_focus = "#5a5270"
+
+selection    = "#2e2b3d"
+cursorline   = "#1f1e28"
+
+accent       = "#e0a458"
+secondary    = "#a58ce0"
+
+heading      = "#f0ebdd"
+link         = "#a58ce0"
+broken       = "#c46a7c"
+code         = "#7fb3a8"
+tag          = "#6fa8c4"
+
+added        = "#86b06e"
+removed      = "#d1687a"
+modified     = "#e0a458"
+
+mode_normal  = "#e0a458"
+mode_insert  = "#86b06e"
+mode_visual  = "#a58ce0"

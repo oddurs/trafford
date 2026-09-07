@@ -18,6 +18,7 @@ impl App {
         let (c, r) = (event.column, event.row);
         match event.kind {
             MouseEventKind::Down(MouseButton::Left) => self.click(c, r, event),
+            MouseEventKind::Down(MouseButton::Right) => self.right_click(c, r),
             MouseEventKind::Drag(MouseButton::Left) => self.drag(c, r, event),
             MouseEventKind::ScrollUp => self.scroll(c, r, -(WHEEL as isize)),
             MouseEventKind::ScrollDown => self.scroll(c, r, WHEEL as isize),
@@ -45,6 +46,128 @@ impl App {
         } else if self.panes.assistant_hit(c, r) {
             self.focus = Focus::Assistant;
         }
+    }
+
+    /// Right-click offers what can be done to the thing under the pointer.
+    /// The menu is built from what was actually clicked rather than being one
+    /// fixed list, so it never offers "rename" over empty space.
+    fn right_click(&mut self, c: u16, r: u16) {
+        use crate::app::{Menu, MenuAction as A, MenuItem};
+        let item = |label: &str, action: A| MenuItem {
+            label: label.to_string(),
+            action,
+        };
+
+        // A menu is already open: a second right-click dismisses it.
+        if self.overlay.is_some() {
+            self.overlay = None;
+            return;
+        }
+
+        let (title, items) = if self.panes.sidebar_hit(c, r) {
+            self.focus = Focus::Sidebar;
+            match self.sidebar_target(r) {
+                Some(SidebarTarget::Note(id)) => (
+                    short_name(&id),
+                    vec![
+                        item("Open", A::OpenNote(id.clone())),
+                        item("Insert a link to this", A::LinkToNote(id.clone())),
+                        item("Rename…", A::RenameNote(id.clone())),
+                        item("History", A::HistoryOf(id.clone())),
+                        item("Delete…", A::DeleteNote(id)),
+                    ],
+                ),
+                Some(SidebarTarget::Dir(path)) => (
+                    short_name(&path),
+                    vec![
+                        item("New note here…", A::NewNoteIn(path.clone())),
+                        item("Expand everything under", A::ExpandUnder(path.clone())),
+                        item("Collapse", A::CollapseDir(path)),
+                    ],
+                ),
+                None => (
+                    "Vault".to_string(),
+                    vec![
+                        item("New note…", A::Command("new-note")),
+                        item("Expand all", A::Command("expand-all")),
+                        item("Collapse all", A::Command("collapse-all")),
+                        item("Change theme…", A::Command("theme")),
+                    ],
+                ),
+            }
+        } else if self.panes.context_hit(c, r) {
+            let index = r.saturating_sub(self.panes.context.y) as usize;
+            match self.context_targets.get(index).cloned().flatten() {
+                Some(ContextTarget::Heading(row)) => {
+                    ("Heading".into(), vec![item("Go to it", A::GoToLine(row))])
+                }
+                Some(ContextTarget::Note(id)) => (
+                    short_name(&id),
+                    vec![
+                        item("Open", A::OpenNote(id.clone())),
+                        item("History", A::HistoryOf(id)),
+                    ],
+                ),
+                Some(ContextTarget::Backlink(id, line)) => (
+                    short_name(&id),
+                    vec![
+                        item("Open at the mention", A::OpenNoteAt(id.clone(), line)),
+                        item("Open the note", A::OpenNote(id)),
+                    ],
+                ),
+                Some(ContextTarget::Unwritten(target)) => (
+                    target.clone(),
+                    vec![item("Write this note…", A::CreateNote(target))],
+                ),
+                None => return,
+            }
+        } else if self.panes.editor_hit(c, r) {
+            self.focus = Focus::Editor;
+            // Put the cursor where the click was, so the menu acts on it.
+            let event = MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Right),
+                column: c,
+                row: r,
+                modifiers: crossterm::event::KeyModifiers::NONE,
+            };
+            self.click_editor(c, r, event);
+            let mut items = Vec::new();
+            if let Some(link) = self.editor.link_under_cursor() {
+                let target = link.target.clone();
+                match self.vault.resolve_target(&target) {
+                    Some(idx) => {
+                        let id = self.vault.notes[idx].id.clone();
+                        items.push(item("Follow this link", A::OpenNote(id)));
+                    }
+                    None => items.push(item("Write this note…", A::CreateNote(target))),
+                }
+            }
+            items.push(item("Insert a link…", A::Command("insert-link")));
+            items.push(item("Save", A::Command("save")));
+            items.push(item("Toggle preview", A::Command("toggle-preview")));
+            if self.current.is_some() {
+                items.push(item("History of this note", A::Command("git-history")));
+                items.push(item("Rename…", A::Command("rename")));
+            }
+            let title = self
+                .current
+                .as_deref()
+                .map(short_name)
+                .unwrap_or_else(|| "Editor".into());
+            (title, items)
+        } else {
+            return;
+        };
+
+        if items.is_empty() {
+            return;
+        }
+        self.overlay = Some(Overlay::Menu(Menu {
+            title,
+            items,
+            cursor: 0,
+            at: (c, r),
+        }));
     }
 
     /// Dragging in the editor selects. The editor's operators are line-wise,
@@ -111,6 +234,18 @@ impl App {
         let offset = crate::ui::scroll_offset(self.sidebar_cursor, len, visible);
         let index = offset + (r - first) as usize;
         (index < len).then_some(index)
+    }
+
+    /// What the sidebar row at screen row `r` refers to.
+    fn sidebar_target(&self, r: u16) -> Option<SidebarTarget> {
+        let index = self.sidebar_index(r)?;
+        match self.sidebar_tab {
+            SidebarTab::Notes => match self.tree_rows().get(index)?.entry.clone() {
+                Entry::Note { id, .. } => Some(SidebarTarget::Note(id)),
+                Entry::Dir { path, .. } => Some(SidebarTarget::Dir(path)),
+            },
+            SidebarTab::Tags => None,
+        }
     }
 
     fn click_sidebar(&mut self, _c: u16, r: u16) {
@@ -310,6 +445,18 @@ impl App {
                 }
                 self.overlay = Some(Overlay::Git(pane));
             }
+            Overlay::Menu(mut menu) => {
+                let first = self.panes.overlay.y;
+                if r >= first {
+                    let index = (r - first) as usize;
+                    if let Some(chosen) = menu.items.get(index).cloned() {
+                        menu.cursor = index;
+                        self.run_menu_action(chosen.action);
+                        return;
+                    }
+                }
+                self.overlay = Some(Overlay::Menu(menu));
+            }
             other => self.overlay = Some(other),
         }
     }
@@ -322,10 +469,12 @@ impl App {
             Overlay::Palette(p)
             | Overlay::Switcher(p)
             | Overlay::LinkPicker(p)
-            | Overlay::Backlinks(p) => {
+            | Overlay::Backlinks(p)
+            | Overlay::Themes(p) => {
                 p.cursor = step(p.cursor, delta, p.matches.len());
             }
             Overlay::Search(pane) => pane.cursor = step(pane.cursor, delta, pane.hits.len()),
+            Overlay::Menu(menu) => menu.cursor = step(menu.cursor, delta, menu.items.len()),
             Overlay::Git(pane) => {
                 pane.cursor = step(pane.cursor, delta, pane.snapshot.changes.len())
             }
@@ -339,6 +488,20 @@ impl App {
             _ => {}
         }
     }
+}
+
+enum SidebarTarget {
+    Note(String),
+    Dir(String),
+}
+
+/// The last path segment, which is what a menu title should say.
+fn short_name(id: &str) -> String {
+    id.trim_end_matches(".md")
+        .rsplit('/')
+        .next()
+        .unwrap_or(id)
+        .to_string()
 }
 
 /// Move `cursor` by `delta`, clamped to `len`.
