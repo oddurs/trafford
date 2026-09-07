@@ -38,9 +38,24 @@ the UI; `ui` reads `App` but never mutates it except for viewport bookkeeping.
 
 ## Invariants worth knowing
 
-- **The markdown renderer never changes characters.** `ui::markdown::Renderer`
-  only applies styles, because the editor draws through it and the cursor
-  column has to line up with the buffer. There is a test for this; keep it.
+- **The markdown renderer changes no characters on the editor path.**
+  `ui::markdown::Renderer` has a `conceal` flag. With it **off** — which is how
+  the editor always builds it — the renderer only applies styles, because the
+  editor draws the source and the cursor column has to line up with the buffer.
+  `styling_alone_preserves_every_character` pins that; keep it. It replaced
+  `rendering_preserves_every_character`, which claimed the same thing of the
+  renderer as a whole and stopped being true when preview started concealing.
+- **Preview conceals, and pays for it by carrying a map.** With `conceal` on,
+  `[[Note|alias]]` is drawn as `alias`, so drawn width and source width part
+  company. That is only safe because there is no caret in preview: what protects
+  a click instead is `Rendered`, which carries the drawn text and the character
+  ranges its links occupy. `PreviewView` folds *that* text, never the source —
+  fold the source and a concealed line breaks in the wrong place.
+- **Two views, two layouts, and the buffer owns the cursor.** `editor.layout` is
+  over the source and is what motions and the caret read, in preview as well.
+  `app.preview_view` is over the rendered text and is what preview draws and
+  hit-tests. Resolving a motion against rendered columns would move the cursor
+  somewhere the file does not agree with.
 - **Columns are characters, never bytes.** `Buffer` converts at the edges
   (`byte_at`). Notes contain non-ASCII.
 - **`Note.text` and `Note.haystack` are line-aligned.** `haystack` is the
@@ -80,6 +95,13 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
   `.trash/` stays out of the index without a special case.
 - **Frontmatter** `title:` and `tags:` are read, including the `- item` list
   form. Nested tags like `type/reference` are ordinary tags.
+- **What preview renders, and what it leaves alone.** Concealed: wikilink and
+  markdown-link syntax, `**bold**`, `*italic*`, `==highlight==`, `` `code` ``
+  and heading hashes. Kept: `#tags` (the hash is part of the tag, not wrapping
+  around it), list markers and checkboxes, `>` quote markers, and everything
+  inside a fence, where the syntax *is* the content. A broken link still draws
+  in the broken colour — concealing the brackets must not conceal that it goes
+  nowhere.
 
 ## Testing a TUI
 
