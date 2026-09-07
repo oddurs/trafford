@@ -29,7 +29,6 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(git *)",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/git-guard.sh\"",
             "statusMessage": "Checking the git command"
           }

@@ -10,6 +10,17 @@ env:
   RUSTFLAGS: -D warnings
 
 jobs:
+  # Fast and independent of the toolchain, so it fails in seconds rather than
+  # after a cargo build. The guard it tests is what keeps an agent from
+  # destroying work, and it has already failed silently once.
+  hooks:
+    name: git guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test the git guard
+        run: ./.claude/hooks/git-guard.test.sh
+
   check:
     name: fmt · clippy · test
     runs-on: ${{ matrix.os }}

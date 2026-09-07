@@ -5,10 +5,19 @@
 #
 # Reads the PreToolUse payload on stdin; exit 2 blocks the call and feeds the
 # message on stderr back to the model.
+#
+# This runs on *every* Bash call, not only ones that start with `git`. It used
+# to be gated on an `if: Bash(git *)` condition in settings.json, which matches
+# the start of the command line — so `cairn close 0013 && git commit` slipped
+# straight past it and landed a commit on main. A guard that a shell operator
+# can hide behind is not a guard.
 set -uo pipefail
 
 command=$(jq -r '.tool_input.command // empty')
-[ -z "$command" ] && exit 0
+case "$command" in
+  *git*) ;;
+  *) exit 0 ;;
+esac
 
 block() {
   echo "blocked by .claude/hooks/git-guard.sh: $1" >&2
