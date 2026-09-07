@@ -304,12 +304,21 @@ impl Theme {
             .into_iter()
             .map(|n| (n.to_string(), "built in".to_string()))
             .collect();
+        // Built-ins keep their declared order — a shortlist, not an index —
+        // but anything found on disk is sorted, because a directory listing's
+        // order means nothing to the person reading it.
+        let mut found = Vec::new();
         for dir in theme_dirs(vault_root) {
-            collect(&dir, Some("toml"), "theme file", &mut out);
+            collect(&dir, Some("toml"), "theme file", &mut found);
         }
+        let user_themes = found.len();
         for dir in ghostty_dirs() {
-            collect(&dir, None, "ghostty", &mut out);
+            collect(&dir, None, "ghostty", &mut found);
         }
+        found[..user_themes].sort_by_key(|(n, _)| n.to_lowercase());
+        found[user_themes..].sort_by_key(|(n, _)| n.to_lowercase());
+        found.retain(|(n, _)| !out.iter().any(|(b, _)| b == n));
+        out.extend(found);
         out
     }
 
@@ -716,5 +725,25 @@ palette = 15=#5c5f77
                 "{name} was not listed"
             );
         }
+        // Built-ins lead, in the order they are declared.
+        let leading: Vec<&str> = found
+            .iter()
+            .take(Theme::builtin_names().len())
+            .map(|(n, _)| n.as_str())
+            .collect();
+        assert_eq!(leading, Theme::builtin_names());
+    }
+
+    #[test]
+    fn themes_found_on_disk_are_listed_alphabetically() {
+        let found = Theme::available(Path::new("/nonexistent"));
+        let on_disk: Vec<String> = found
+            .iter()
+            .skip(Theme::builtin_names().len())
+            .map(|(n, _)| n.to_lowercase())
+            .collect();
+        let mut sorted = on_disk.clone();
+        sorted.sort();
+        assert_eq!(on_disk, sorted, "themes on disk should be in name order");
     }
 }
