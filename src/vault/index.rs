@@ -27,6 +27,9 @@ pub struct Vault {
     pub root: PathBuf,
     pub notes: Vec<Note>,
     by_id: HashMap<String, usize>,
+    /// Lowercased ids, so a case-insensitive path match is a lookup rather
+    /// than a scan of every note.
+    by_id_lower: HashMap<String, usize>,
     by_stem: HashMap<String, Vec<usize>>,
     backlinks: HashMap<String, Vec<Backlink>>,
     /// Link targets that resolve to nothing — the vault's growing edge.
@@ -83,14 +86,42 @@ impl Vault {
         Ok(())
     }
 
+    /// Re-read a single note and rebuild the link indexes, without touching
+    /// the rest of the vault. Saving a note is the hot path here: a full
+    /// rescan re-reads every file on disk, which is a visible stall once a
+    /// vault has a few thousand notes.
+    ///
+    /// Falls back to a full rescan when the note is not one we already know
+    /// about, since that means the tree changed underneath us.
+    pub fn refresh_note(&mut self, id: &str) -> Result<()> {
+        let Some(index) = self.index_of(id) else {
+            return self.rescan();
+        };
+        let path = self.notes[index].path.clone();
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            // The file is gone: the vault no longer matches our picture of it.
+            Err(_) => return self.rescan(),
+        };
+        let mut note = Note::parse(&self.root, &path, &text);
+        if let Ok(modified) = std::fs::metadata(&path).and_then(|m| m.modified()) {
+            note.modified = modified;
+        }
+        self.notes[index] = note;
+        self.reindex();
+        Ok(())
+    }
+
     fn reindex(&mut self) {
         self.by_id.clear();
+        self.by_id_lower.clear();
         self.by_stem.clear();
         self.backlinks.clear();
         self.unresolved.clear();
 
         for (i, note) in self.notes.iter().enumerate() {
             self.by_id.insert(note.id.clone(), i);
+            self.by_id_lower.insert(note.id.to_lowercase(), i);
             self.by_stem
                 .entry(note.stem().to_lowercase())
                 .or_default()
@@ -136,8 +167,7 @@ impl Vault {
         if let Some(&i) = self.by_id.get(&with_ext) {
             return Some(i);
         }
-        let lower = with_ext.to_lowercase();
-        if let Some((_, &i)) = self.by_id.iter().find(|(id, _)| id.to_lowercase() == lower) {
+        if let Some(&i) = self.by_id_lower.get(&with_ext.to_lowercase()) {
             return Some(i);
         }
         let stem = target
@@ -534,6 +564,98 @@ mod tests {
     fn rewrite_leaves_unrelated_links_alone() {
         let text = "[[keep]] [[old]]";
         assert_eq!(rewrite_links(text, "old", "new"), "[[keep]] [[new]]");
+    }
+
+    #[test]
+    fn refreshing_one_note_picks_up_its_new_links() {
+        let (dir, mut vault) = scratch(&[("a.md", "# A\n"), ("b.md", "# B\n")]);
+        assert!(vault.backlinks_for("b.md").is_empty());
+
+        std::fs::write(dir.path().join("a.md"), "# A\n\nnow links to [[b]]\n").unwrap();
+        vault.refresh_note("a.md").unwrap();
+
+        assert_eq!(vault.backlinks_for("b.md").len(), 1);
+        assert_eq!(vault.outgoing("a.md"), vec!["b.md".to_string()]);
+        assert_eq!(vault.notes.len(), 2, "no note should have been added");
+    }
+
+    #[test]
+    fn refreshing_one_note_drops_links_it_no_longer_has() {
+        let (dir, mut vault) = scratch(&[("a.md", "# A\n\n[[b]]\n"), ("b.md", "# B\n")]);
+        assert_eq!(vault.backlinks_for("b.md").len(), 1);
+
+        std::fs::write(dir.path().join("a.md"), "# A\n\nno links now\n").unwrap();
+        vault.refresh_note("a.md").unwrap();
+
+        assert!(vault.backlinks_for("b.md").is_empty());
+    }
+
+    #[test]
+    fn refreshing_updates_the_title_and_tags() {
+        let (dir, mut vault) = scratch(&[("a.md", "# Old\n")]);
+        assert_eq!(vault.get("a.md").unwrap().title, "Old");
+
+        std::fs::write(dir.path().join("a.md"), "# New\n\ntagged #fresh\n").unwrap();
+        vault.refresh_note("a.md").unwrap();
+
+        let note = vault.get("a.md").unwrap();
+        assert_eq!(note.title, "New");
+        assert_eq!(note.tags, vec!["fresh".to_string()]);
+    }
+
+    /// The point of the fast path is that it agrees with the slow one.
+    #[test]
+    fn refreshing_agrees_with_a_full_rescan() {
+        let files: &[(&str, &str)] = &[
+            ("a.md", "# A\n\n[[b]] [[missing]]\n"),
+            ("b.md", "# B\n\n[[a]]\n"),
+            ("sub/c.md", "# C\n\n[[a]] #tagged\n"),
+        ];
+        let (dir, mut incremental) = scratch(files);
+        std::fs::write(dir.path().join("a.md"), "# A2\n\n[[sub/c]] #other\n").unwrap();
+
+        let mut full = Vault::open(dir.path()).unwrap();
+        full.rescan().unwrap();
+        incremental.refresh_note("a.md").unwrap();
+
+        assert_eq!(incremental.all_tags(), full.all_tags());
+        for id in ["a.md", "b.md", "sub/c.md"] {
+            assert_eq!(incremental.outgoing(id), full.outgoing(id), "outgoing {id}");
+            let (a, b) = (incremental.backlinks_for(id), full.backlinks_for(id));
+            assert_eq!(a.len(), b.len(), "backlinks {id}");
+            assert_eq!(
+                incremental.get(id).unwrap().title,
+                full.get(id).unwrap().title
+            );
+        }
+        let mut mine: Vec<&String> = incremental.unresolved.keys().collect();
+        let mut theirs: Vec<&String> = full.unresolved.keys().collect();
+        mine.sort();
+        theirs.sort();
+        assert_eq!(mine, theirs);
+    }
+
+    #[test]
+    fn refreshing_an_unknown_note_falls_back_to_a_full_rescan() {
+        let (dir, mut vault) = scratch(&[("a.md", "# A\n")]);
+        std::fs::write(dir.path().join("new.md"), "# New\n").unwrap();
+        vault.refresh_note("new.md").unwrap();
+        assert_eq!(vault.notes.len(), 2, "the new note should have been found");
+    }
+
+    #[test]
+    fn refreshing_a_deleted_note_falls_back_to_a_full_rescan() {
+        let (dir, mut vault) = scratch(&[("a.md", "# A\n"), ("b.md", "# B\n")]);
+        std::fs::remove_file(dir.path().join("b.md")).unwrap();
+        vault.refresh_note("b.md").unwrap();
+        assert_eq!(vault.notes.len(), 1);
+        assert!(vault.get("b.md").is_none());
+    }
+
+    #[test]
+    fn case_insensitive_path_links_still_resolve() {
+        let (_d, vault) = scratch(&[("Sub/Note.md", "# n\n"), ("a.md", "[[sub/note]]\n")]);
+        assert_eq!(vault.backlinks_for("Sub/Note.md").len(), 1);
     }
 
     #[test]
