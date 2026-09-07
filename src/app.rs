@@ -201,6 +201,13 @@ pub enum MenuAction {
     CollapseDir(String),
     GoToLine(usize),
     CreateNote(String),
+    /// Git actions carry the path they act on, since the pane's own cursor may
+    /// not be where the pointer was.
+    GitStage(String),
+    GitUnstage(String),
+    GitDiff(String),
+    GitDiscard(String),
+    FilterByTag(String),
 }
 
 #[derive(Debug, Clone)]

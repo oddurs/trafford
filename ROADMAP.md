@@ -15,8 +15,11 @@ understand how to use this".
 
 ### planned
 
-- [ ] `0002` Right-click every surface that has actions <sup>feature · p1 · mouse</sup>
 - [ ] `0004` Open the context menu from the keyboard <sup>feature · p2 · mouse</sup>
+
+### in progress
+
+- [ ] `0002` Right-click every surface that has actions <sup>feature · p1 · mouse</sup>
 
 ### done
 

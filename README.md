@@ -100,8 +100,14 @@ under the pointer, dragging in the editor selects lines for `y`, `d` and
 `c`, and clicking outside an overlay dismisses it.
 
 **Right-click** gives you a menu of what can be done to whatever is under the
-pointer — open, rename, delete or link to a note; create a folder's first note;
-follow or write an unresolved link — rather than one fixed list.
+pointer, rather than one fixed list. Every surface that has actions answers it:
+the tree, the editor, the context pane, the git panel, the tag list, search
+results, the quick switcher and the assistant. The git panel is the one to
+know — its actions are single letters otherwise.
+
+An action that exists but cannot run right now is shown greyed with the reason
+(`Delete… — the only note`), so the menu's shape does not change under you. Keys
+are shown beside the entries that have them.
 
 Links follow Obsidian: in source mode a click puts the cursor in the link and
 `ctrl-click` follows it, so a link is still editable; in preview a plain click
