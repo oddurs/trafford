@@ -36,6 +36,29 @@ demonstration that menus exist.
 - [x] `0008` Move, duplicate, and make folders from the tree <sup>feature · p1 · tree</sup>
 - [x] `0009` Act on a selection from the editor's menu <sup>feature · p2 · mouse</sup>
 
+## v0.4 — What you wrote, as you wrote it
+
+`··········` 0% · 0 of 8 done · due 2026-11-15
+
+The editor stops showing markdown as plain text. Long lines wrap, links read as
+links, headings in a table of contents go somewhere, and a table looks like a
+table. Every one of these breaks the same assumption — that a line of source is
+a line of screen — so the model underneath them comes first.
+
+### backlog
+
+- [ ] `0013` A model that maps source positions to screen positions <sup>feature · p0 · chrome</sup>
+- [ ] `0014` Soft-wrap long lines instead of scrolling sideways <sup>feature · p1 · editor</sup>
+- [ ] `0015` Show links as links, and the source where the cursor is <sup>feature · p1 · markdown</sup>
+- [ ] `0016` Follow a table-of-contents link to its heading <sup>feature · p2 · markdown</sup>
+- [ ] `0018` Draw markdown tables as tables <sup>feature · p2 · markdown</sup>
+- [ ] `0019` Retire the character-preserving invariant <sup>docs · p2 · docs</sup>
+
+### planned
+
+- [ ] `0012` How much of the source should the editor render? <sup>spike · p0 · chrome</sup>
+- [ ] `0017` How does a rendered table get edited? <sup>spike · p1 · chrome</sup>
+
 ## later — Someday
 
 `##########` 100% · 1 of 1 done
