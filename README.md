@@ -183,9 +183,11 @@ cargo fmt --all --check
 python3 tools/probe.py sizes /tmp/vault   # drive the real TUI in a pty
 ```
 
-Working on this with an agent? Read [CLAUDE.md](CLAUDE.md) for the architecture
-and [docs/version-control-with-agents.md](docs/version-control-with-agents.md)
-for how changes get committed and reviewed.
+Where it is going: [ROADMAP.md](ROADMAP.md), generated from the items in
+`cairn/items`. Working on this with an agent? Read [CLAUDE.md](CLAUDE.md) for
+the architecture and
+[docs/version-control-with-agents.md](docs/version-control-with-agents.md) for
+how changes get committed and reviewed.
 
 ## License
 
