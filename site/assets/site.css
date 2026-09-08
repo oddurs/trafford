@@ -26,16 +26,11 @@
 }
 
 :root {
-  /* The fallbacks all advance at 0.6em, like JetBrains Mono, so the swap moves
-     nothing. Anything narrower here would reflow the page as the font lands. */
+  /* The two things the generated scales cannot state: the family, whose
+     fallbacks all advance at 0.6em like JetBrains Mono so the swap moves
+     nothing, and the hairline the whole grid is made of. */
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, "DejaVu Sans Mono",
     monospace;
-  --measure: 66ch;
-  --gap: 1.5rem;
-  --radius: 6px;
-  --sidebar: 15rem;
-  --rail: 14rem;
-  /* One hairline, everywhere. The grid is this line and nothing else. */
   --rule: 1px solid var(--border);
 }
 
@@ -50,8 +45,8 @@ body {
   font-family: var(--mono);
   /* Monospace reads small. The size is up and the leading is loose, which is
      most of what makes people say mono is unreadable when it is neither. */
-  font-size: 15px;
-  line-height: 1.75;
+  font-size: var(--text-md);
+  line-height: var(--leading-body);
   font-feature-settings: "calt" 1, "liga" 0;
   display: flex;
   flex-direction: column;
@@ -72,7 +67,7 @@ body > * {
 :focus-visible {
   outline: 2px solid var(--border-focus);
   outline-offset: 2px;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
 }
 
 .skip {
@@ -81,7 +76,7 @@ body > * {
   top: 0;
   background: var(--surface);
   color: var(--fg);
-  padding: 0.6rem 1rem;
+  padding: var(--space-3) var(--space-4);
   z-index: 10;
 }
 
@@ -96,8 +91,8 @@ body > * {
   align-items: center;
   /* The links sit beside the wordmark, not across the page from it. That one
      difference is most of what separates a product page from a docs page. */
-  gap: 2rem;
-  padding: 1rem clamp(1rem, 4vw, 2.5rem);
+  gap: var(--space-6);
+  padding: var(--space-4) var(--space-gutter);
   border-bottom: 1px solid var(--border);
   background: var(--bg);
   position: sticky;
@@ -108,7 +103,7 @@ body > * {
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
+  gap: var(--space-2);
   color: var(--fg);
   text-decoration: none;
 }
@@ -125,14 +120,14 @@ body > * {
 
 .wordmark {
   font-weight: 700;
-  font-size: 1.05rem;
+  font-size: var(--text-md);
   letter-spacing: -0.03em;
 }
 
 .top-nav {
   display: flex;
-  gap: 1.5rem;
-  font-size: 0.85rem;
+  gap: var(--space-5);
+  font-size: var(--text-xs);
 }
 
 .theme-toggle {
@@ -150,12 +145,12 @@ body > * {
 
 .theme-toggle {
   font: inherit;
-  font-size: 0.78rem;
+  font-size: var(--text-2xs);
   color: var(--muted);
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-3);
   cursor: pointer;
 }
 
@@ -170,11 +165,24 @@ body > * {
   flex: 1;
   display: grid;
   grid-template-columns: var(--sidebar) minmax(0, 1fr) var(--rail);
-  gap: clamp(1.5rem, 4vw, 3.5rem);
-  max-width: 84rem;
+  gap: var(--space-6);
+  max-width: var(--page);
   width: 100%;
   margin: 0 auto;
-  padding: 2.5rem clamp(1rem, 4vw, 2.5rem) 4rem;
+  padding: var(--space-7) var(--space-gutter) var(--space-8);
+}
+
+/* A page with no headings to list still reserved fourteen rems for the list.
+   The specimen page is the first one without a table of contents, and it read
+   as a column squeezed by nothing.
+   
+   Behind a min-width, because `:not(:has(…))` outspecifies the plain `.layout`
+   rule that collapses the grid on a narrow screen — so without the query this
+   kept two columns at 380px and left the content 76 pixels wide. */
+@media (min-width: 62rem) {
+  .layout:not(:has(.toc)) {
+    grid-template-columns: var(--sidebar) minmax(0, 1fr);
+  }
 }
 
 .sidebar,
@@ -184,7 +192,7 @@ body > * {
   align-self: start;
   max-height: calc(100vh - 6rem);
   overflow-y: auto;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .nav,
@@ -197,7 +205,7 @@ body > * {
 .nav a,
 .toc a {
   display: block;
-  padding: 0.2rem 0 0.2rem 0.75rem;
+  padding: var(--space-1) 0 var(--space-1) var(--space-3);
   color: var(--muted);
   text-decoration: none;
   border-left: 2px solid transparent;
@@ -219,11 +227,11 @@ body > * {
 .nav-section,
 .toc-title {
   font-family: var(--mono);
-  font-size: 0.72rem;
+  font-size: var(--text-3xs);
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--faint);
-  margin: 1.5rem 0 0.4rem;
+  margin: var(--space-5) 0 var(--space-2);
 }
 
 .nav-section:first-child,
@@ -232,8 +240,8 @@ body > * {
 }
 
 .toc-3 a {
-  padding-left: 1.6rem;
-  font-size: 0.85rem;
+  padding-left: var(--space-5);
+  font-size: var(--text-xs);
 }
 
 /* ── Prose ───────────────────────────────────────────────────────────────── */
@@ -248,24 +256,24 @@ body > * {
 .prose h3,
 .prose h4 {
   color: var(--heading);
-  line-height: 1.25;
+  line-height: var(--leading-snug);
   letter-spacing: -0.015em;
-  margin: 2.25rem 0 0.75rem;
+  margin: var(--space-6) 0 var(--space-3);
 }
 
 .prose h1 {
-  font-size: 2rem;
+  font-size: var(--text-2xl);
   margin-top: 0;
 }
 
 .prose h2 {
-  font-size: 1.4rem;
-  padding-top: 0.75rem;
+  font-size: var(--text-xl);
+  padding-top: var(--space-3);
   border-top: 1px solid var(--border);
 }
 
 .prose h3 {
-  font-size: 1.1rem;
+  font-size: var(--text-lg);
 }
 
 .prose h2 a,
@@ -294,7 +302,7 @@ body > * {
 .prose p,
 .prose ul,
 .prose ol {
-  margin: 0 0 1.1rem;
+  margin: 0 0 var(--space-4);
 }
 
 .prose a {
@@ -308,12 +316,12 @@ body > * {
 }
 
 .prose li {
-  margin: 0.25rem 0;
+  margin: var(--space-1) 0;
 }
 
 .prose li.task {
   list-style: none;
-  margin-left: -1.2rem;
+  margin-left: calc(-1 * var(--space-5));
 }
 
 .prose li.task.done {
@@ -324,14 +332,14 @@ body > * {
 .prose hr {
   border: none;
   border-top: 1px solid var(--border);
-  margin: 2rem 0;
+  margin: var(--space-6) 0;
 }
 
 .prose mark {
   background: var(--accent);
   color: var(--bg);
   padding: 0 0.15em;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
 }
 
 /* A screenshot in the prose is the same SVG the hero inlines, dropped in as an
@@ -342,8 +350,8 @@ body > * {
   min-width: 34rem;
   height: auto;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  margin: 0 0 1.3rem;
+  border-radius: var(--radius-md);
+  margin: 0 0 var(--space-5);
 }
 
 .prose p:has(> img) {
@@ -369,14 +377,14 @@ pre {
    inline code on it. */
 kbd {
   display: inline-block;
-  font-size: 0.82em;
-  line-height: 1.4;
+  font-size: 0.85em;
+  line-height: var(--leading-snug);
   padding: 0.05em 0.4em;
   color: var(--fg);
   background: var(--surface);
   border: var(--rule);
   border-bottom-width: 2px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   white-space: nowrap;
   vertical-align: 0.05em;
 }
@@ -385,7 +393,7 @@ kbd {
   background: var(--surface);
   color: var(--code);
   padding: 0.12em 0.35em;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 0.88em;
   overflow-wrap: break-word;
 }
@@ -393,12 +401,12 @@ kbd {
 pre {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.9rem 1.1rem;
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
   overflow-x: auto;
-  font-size: 0.85rem;
-  line-height: 1.55;
-  margin: 0 0 1.3rem;
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+  margin: 0 0 var(--space-5);
 }
 
 pre code {
@@ -413,9 +421,9 @@ pre code {
 .callout {
   border-left: 3px solid var(--accent);
   background: var(--surface);
-  border-radius: 0 var(--radius) var(--radius) 0;
-  padding: 0.9rem 1.1rem;
-  margin: 0 0 1.3rem;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  padding: var(--space-3) var(--space-4);
+  margin: 0 0 var(--space-5);
 }
 
 .callout > :last-child {
@@ -424,11 +432,11 @@ pre code {
 
 .callout-title {
   font-family: var(--mono);
-  font-size: 0.78rem;
+  font-size: var(--text-2xs);
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--accent-text);
-  margin: 0 0 0.4rem;
+  margin: 0 0 var(--space-2);
 }
 
 /* Three colours, mapped onto roles the themes already define, so a Ghostty
@@ -462,8 +470,8 @@ pre code {
 }
 
 blockquote {
-  margin: 0 0 1.3rem;
-  padding-left: 1rem;
+  margin: 0 0 var(--space-5);
+  padding-left: var(--space-4);
   border-left: 3px solid var(--border);
   color: var(--muted);
   font-style: italic;
@@ -474,26 +482,26 @@ blockquote {
 /* Wide content scrolls inside its own box. The page body never does. */
 .table-scroll {
   overflow-x: auto;
-  margin: 0 0 1.3rem;
+  margin: 0 0 var(--space-5);
 }
 
 table {
   border-collapse: collapse;
   width: 100%;
-  font-size: 0.92rem;
+  font-size: var(--text-sm);
 }
 
 th,
 td {
   text-align: left;
-  padding: 0.5rem 0.85rem;
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border);
   vertical-align: top;
 }
 
 th {
   font-family: var(--mono);
-  font-size: 0.78rem;
+  font-size: var(--text-2xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--faint);
@@ -519,9 +527,9 @@ th.center {
   position: relative;
   margin: 0;
   border: var(--rule);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   background: var(--surface);
-  padding: 0.6rem;
+  padding: var(--space-3);
   overflow-x: auto;
 }
 
@@ -578,7 +586,7 @@ th.center {
   width: 0;
   background: var(--accent);
   opacity: 0;
-  transition: width 180ms linear, opacity 200ms;
+  transition: width var(--motion-base) var(--ease), opacity var(--motion-base);
   z-index: 1;
 }
 
@@ -595,13 +603,13 @@ th.center {
      edge and the control was sitting on top of the word count. */
   top: 0.75rem;
   font: inherit;
-  font-size: 0.75rem;
+  font-size: var(--text-2xs);
   letter-spacing: 0.04em;
   color: var(--muted);
   background: var(--bg);
   border: var(--rule);
-  border-radius: 4px;
-  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
   cursor: pointer;
   opacity: 0;
   z-index: 1;
@@ -625,7 +633,7 @@ th.center {
    affordance is added by script, so without it these stay three pictures. */
 .wearable {
   cursor: pointer;
-  transition: border-color 160ms, transform 160ms;
+  transition: border-color var(--motion-fast), transform var(--motion-fast);
 }
 
 .wearable:hover,
@@ -653,8 +661,8 @@ th.center {
 }
 
 figcaption {
-  margin-top: 0.6rem;
-  font-size: 0.78rem;
+  margin-top: var(--space-3);
+  font-size: var(--text-2xs);
   color: var(--muted);
 }
 
@@ -673,9 +681,9 @@ figcaption {
 .landing {
   flex: 1;
   width: 100%;
-  max-width: 84rem;
+  max-width: var(--page);
   margin: 0 auto;
-  padding: 0 clamp(1rem, 4vw, 2.5rem) 0;
+  padding: 0 var(--space-gutter) 0;
 }
 
 /* ── Hero ────────────────────────────────────────────────────────────────── */
@@ -684,12 +692,12 @@ figcaption {
    program runs the full width beneath it — a picture beside a paragraph is a
    feature list, a picture under a claim is an argument. */
 .hero {
-  padding: clamp(3.5rem, 9vw, 7rem) 0 0;
+  padding: var(--space-section) 0 0;
 }
 
 .hero h1 {
-  font-size: clamp(2.4rem, 6.2vw, 4.4rem);
-  line-height: 1.02;
+  font-size: var(--text-4xl);
+  line-height: var(--leading-tight);
   letter-spacing: -0.045em;
   margin: 0;
   color: var(--heading);
@@ -697,19 +705,19 @@ figcaption {
 }
 
 .hero .tagline {
-  font-size: clamp(1rem, 1.5vw, 1.2rem);
-  line-height: 1.6;
+  font-size: var(--text-lg);
+  line-height: var(--leading-body);
   color: var(--muted);
   max-width: 52ch;
-  margin: 1.5rem 0 0;
+  margin: var(--space-5) 0 0;
 }
 
 .hero .actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 1rem 1.5rem;
-  margin: 2.25rem 0 0;
+  gap: var(--space-4) var(--space-5);
+  margin: var(--space-6) 0 0;
 }
 
 /* The command *is* the call to action for a program you install with one. A
@@ -717,12 +725,12 @@ figcaption {
 .install {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
   background: var(--surface);
   border: var(--rule);
-  border-radius: var(--radius);
-  padding: 0.6rem 0.6rem 0.6rem 1rem;
-  font-size: 0.85rem;
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  font-size: var(--text-xs);
   max-width: 100%;
   overflow-x: auto;
 }
@@ -736,12 +744,12 @@ figcaption {
 
 .copy {
   font: inherit;
-  font-size: 0.72rem;
+  font-size: var(--text-3xs);
   color: var(--muted);
   background: var(--bg);
   border: var(--rule);
-  border-radius: 4px;
-  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
   cursor: pointer;
   flex: none;
   position: sticky;
@@ -755,15 +763,15 @@ figcaption {
 
 /* Counted at build time, not typed. Small, and stated once. */
 .facts {
-  margin: 1.5rem 0 0;
-  font-size: 0.78rem;
+  margin: var(--space-5) 0 0;
+  font-size: var(--text-2xs);
   color: var(--faint);
   letter-spacing: 0.01em;
 }
 
 .hero .secondary {
   color: var(--accent-text);
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   text-decoration: none;
 }
 
@@ -772,7 +780,7 @@ figcaption {
 }
 
 .hero .shot {
-  margin: clamp(2.5rem, 6vw, 4rem) 0 0;
+  margin: var(--space-8) 0 0;
 }
 
 /* ── Sections ────────────────────────────────────────────────────────────── */
@@ -794,8 +802,8 @@ figcaption {
   position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 1.25rem;
-  padding: clamp(3.5rem, 8vw, 6rem) 0;
+  gap: 0 var(--space-5);
+  padding: var(--space-section) 0;
   border-top: var(--rule);
 }
 
@@ -808,7 +816,7 @@ figcaption {
   position: absolute;
   left: -3.25rem;
   top: clamp(3.5rem, 8vw, 6rem);
-  font-size: 0.72rem;
+  font-size: var(--text-3xs);
   letter-spacing: 0.08em;
   color: var(--faint);
 }
@@ -826,8 +834,8 @@ figcaption {
   border-top: none;
   padding-top: 0;
   margin: 0;
-  font-size: clamp(1.7rem, 3.4vw, 2.5rem);
-  line-height: 1.1;
+  font-size: var(--text-3xl);
+  line-height: var(--leading-tight);
   letter-spacing: -0.035em;
 }
 
@@ -836,12 +844,12 @@ figcaption {
   grid-column: 1 / -1;
   max-width: 56ch;
   color: var(--muted);
-  margin: 1rem 0 0;
+  margin: var(--space-4) 0 0;
 }
 
 .showcase > figure {
   grid-column: 1 / -1;
-  margin: 2.25rem 0 0;
+  margin: var(--space-6) 0 0;
 }
 
 /* ── Cards ───────────────────────────────────────────────────────────────── */
@@ -851,11 +859,11 @@ figcaption {
    reads better than cropping to the right. */
 .showcase > .callout {
   grid-column: auto;
-  margin: 2.25rem 0 0;
-  padding: 1.6rem 1.6rem 0;
+  margin: var(--space-6) 0 0;
+  padding: var(--space-5) var(--space-5) 0;
   background: var(--surface);
   border: var(--rule);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
@@ -865,34 +873,34 @@ figcaption {
 
 .showcase > .callout .callout-title {
   color: var(--heading);
-  font-size: 1.05rem;
+  font-size: var(--text-md);
   letter-spacing: -0.02em;
   text-transform: none;
-  margin: 0 0 0.6rem;
+  margin: 0 0 var(--space-3);
 }
 
 .showcase > .callout p:not(.callout-title) {
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   margin: 0;
 }
 
 /* The bottom padding is left off so a recording can bleed through it. A card
    without one needs it back, or its last line sits on the border. */
 .showcase > .callout:not(:has(figure)) {
-  padding-bottom: 1.6rem;
+  padding-bottom: var(--space-5);
 }
 
 .showcase > .callout figure {
-  margin: 1.6rem -1.6rem 0 0;
+  margin: var(--space-5) calc(-1 * var(--space-5)) 0 0;
   height: 15rem;
   overflow: hidden;
   border: var(--rule);
   border-right: none;
   border-bottom: none;
-  border-radius: 10px 0 0 0;
+  border-radius: var(--radius-lg) 0 0 0;
   background: var(--bg);
-  padding: 0.5rem 0 0 0.5rem;
+  padding: var(--space-2) 0 0 var(--space-2);
 }
 
 .showcase > .callout figure img,
@@ -916,12 +924,12 @@ figcaption {
    name any of them. */
 .showcase:has(> figure:nth-of-type(3)) {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  column-gap: 1.25rem;
+  column-gap: var(--space-5);
 }
 
 .showcase:has(> figure:nth-of-type(3)) > figure {
   grid-column: auto;
-  padding: 0.4rem;
+  padding: var(--space-2);
 }
 
 .showcase:has(> figure:nth-of-type(3)) > figure img {
@@ -931,7 +939,7 @@ figcaption {
 .showcase:has(> figure:nth-of-type(3)) > figure figcaption {
   text-align: center;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   letter-spacing: 0.04em;
 }
 
@@ -942,7 +950,7 @@ figcaption {
 .reveal {
   opacity: 0;
   transform: translateY(10px);
-  transition: opacity 520ms ease-out, transform 520ms ease-out;
+  transition: opacity var(--motion-slow) var(--ease), transform var(--motion-slow) var(--ease);
 }
 
 .reveal.shown {
@@ -965,25 +973,25 @@ figcaption {
 }
 
 .showcase.closing > h2 {
-  font-size: clamp(1.9rem, 4.4vw, 3.2rem);
+  font-size: var(--text-4xl);
   max-width: 20ch;
 }
 
 .showcase.closing > p {
   max-width: 48ch;
-  margin-top: 1.25rem;
+  margin-top: var(--space-5);
 }
 
 .showcase.closing .install {
-  margin: 2rem auto 0;
+  margin: var(--space-6) auto 0;
 }
 
 /* ── 404 ─────────────────────────────────────────────────────────────────── */
 
 .notfound {
   max-width: var(--measure);
-  margin: 6rem auto;
-  padding: 0 1.5rem;
+  margin: var(--space-9) auto;
+  padding: 0 var(--space-5);
   font-family: var(--mono);
 }
 
@@ -991,6 +999,163 @@ figcaption {
   font-size: 4rem;
   margin: 0;
   color: var(--accent);
+}
+
+/* ── The specimen ───────────────────────────────────────────────────────── */
+
+/* `/design` draws every token at the size it is. The samples are the only
+   place on the site where a style attribute is written, and they are written
+   by the generator from the token's own name — a swatch that says one thing
+   and a stylesheet that does another is the failure this page exists to make
+   impossible. */
+
+.specimen {
+  max-width: none;
+}
+
+table.tokens {
+  table-layout: auto;
+}
+
+/* A token name is one word. `overflow-wrap: break-word` on inline code is
+   right in a paragraph and wrong in a table cell, where it broke `--text-3xs`
+   across three lines. */
+table.tokens code {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+/* A fluid value is three numbers and it may wrap; a token name is one word and
+   may not. Letting the value wrap is what leaves the "for" column room to say
+   anything. */
+.token-value {
+  overflow-wrap: anywhere;
+}
+
+table.tokens th:first-child,
+table.tokens td:first-child {
+  width: 1%;
+}
+
+table.tokens td:last-child,
+table.tokens th:last-child {
+  width: 9rem;
+  text-align: right;
+}
+
+.token-value {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.specimen-type {
+  color: var(--heading);
+  line-height: var(--leading-tight);
+}
+
+.specimen-space {
+  display: inline-block;
+  height: var(--space-3);
+  background: var(--accent);
+  border-radius: var(--radius-sm);
+  vertical-align: middle;
+}
+
+.specimen-radius {
+  display: inline-block;
+  width: var(--space-6);
+  height: var(--space-6);
+  background: var(--surface);
+  border: var(--rule);
+}
+
+.specimen-leading {
+  display: inline-block;
+  color: var(--muted);
+  font-size: var(--text-2xs);
+}
+
+/* The one place motion is the subject rather than the manner. */
+.specimen-motion {
+  display: inline-block;
+  width: var(--space-6);
+  height: var(--space-3);
+  background: var(--accent);
+  border-radius: var(--radius-sm);
+  animation: slide 2.4s var(--ease) infinite alternate;
+}
+
+@keyframes slide {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(var(--space-7));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .specimen-motion {
+    animation: none;
+  }
+}
+
+.swatches {
+  display: grid;
+  gap: 0;
+  border: var(--rule);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin: var(--space-5) 0 var(--space-6);
+}
+
+.swatch {
+  display: grid;
+  grid-template-columns: var(--space-6) 10rem 1fr auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-top: var(--rule);
+  font-size: var(--text-sm);
+}
+
+.swatch:first-child {
+  border-top: none;
+}
+
+.swatch .chip {
+  width: var(--space-6);
+  height: var(--space-5);
+  border: var(--rule);
+  border-radius: var(--radius-sm);
+}
+
+.swatch-use {
+  color: var(--muted);
+}
+
+.swatch-ratio {
+  color: var(--faint);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 52rem) {
+  .swatch {
+    /* `minmax(0, 1fr)` rather than `1fr`: a grid track sized `1fr` still
+       refuses to go below its content, and `--bg` in a code span was enough to
+       push the whole page sideways at 380px. */
+    grid-template-columns: var(--space-6) minmax(0, 1fr) auto;
+    gap: var(--space-3);
+  }
+
+  .swatch-use {
+    display: none;
+  }
+
+  .swatch code {
+    overflow-wrap: anywhere;
+  }
 }
 
 /* ── Footer ──────────────────────────────────────────────────────────────── */
@@ -1001,27 +1166,27 @@ figcaption {
 
 .bottom {
   border-top: var(--rule);
-  padding: clamp(2.5rem, 6vw, 4rem) clamp(1rem, 4vw, 2.5rem);
+  padding: var(--space-8) var(--space-gutter);
   margin-top: auto;
 }
 
 .foot-grid {
   display: grid;
   grid-template-columns: 2fr repeat(3, minmax(0, 1fr));
-  gap: 2.5rem 1.5rem;
-  max-width: 84rem;
+  gap: var(--space-7) var(--space-5);
+  max-width: var(--page);
   margin: 0 auto;
 }
 
 .foot-brand .brand {
-  margin-bottom: 0.9rem;
+  margin-bottom: var(--space-3);
 }
 
 .foot-brand p {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
   max-width: 34ch;
-  margin: 0 0 0.5rem;
+  margin: 0 0 var(--space-2);
 }
 
 .foot-fine {
@@ -1030,10 +1195,10 @@ figcaption {
 
 .foot-title {
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: var(--text-3xs);
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  margin: 0 0 0.9rem;
+  margin: 0 0 var(--space-3);
 }
 
 .bottom ul {
@@ -1041,12 +1206,12 @@ figcaption {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .bottom a:not(.brand) {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
   text-decoration: none;
 }
 
@@ -1074,9 +1239,9 @@ figcaption {
   border-top: 3px solid var(--removed);
   color: var(--fg);
   font-family: var(--mono);
-  font-size: 0.82rem;
+  font-size: var(--text-xs);
   white-space: pre-wrap;
-  padding: 1rem 1.25rem;
+  padding: var(--space-4) var(--space-5);
   max-height: 40vh;
   overflow: auto;
   z-index: 20;
@@ -1087,7 +1252,7 @@ figcaption {
 @media (max-width: 62rem) {
   .layout {
     grid-template-columns: minmax(0, 1fr);
-    padding-top: 1.5rem;
+    padding-top: var(--space-5);
   }
 
   .sidebar,
@@ -1103,15 +1268,15 @@ figcaption {
   .sidebar {
     order: 2;
     border-top: var(--rule);
-    padding-top: 1.5rem;
-    margin-top: 2rem;
+    padding-top: var(--space-5);
+    margin-top: var(--space-6);
   }
 
   /* The split collapses; the rule between the halves becomes the rule under
      the claim, which is the same job in one column. */
   .hero {
     grid-template-columns: minmax(0, 1fr);
-    row-gap: 2rem;
+    row-gap: var(--space-6);
   }
 
   .hero .shot,
@@ -1145,11 +1310,11 @@ figcaption {
   }
 
   .showcase > .callout {
-    margin-top: 1.25rem;
+    margin-top: var(--space-5);
   }
 
   .showcase > .callout:first-of-type {
-    margin-top: 2rem;
+    margin-top: var(--space-6);
   }
 
   /* The strip's cells are separated by a rule either way; horizontally it is
@@ -1166,13 +1331,13 @@ figcaption {
 @media (max-width: 34rem) {
   .top {
     flex-wrap: wrap;
-    gap: 0.75rem 1.25rem;
+    gap: var(--space-3) var(--space-5);
   }
 
   .top-nav {
     order: 2;
     width: 100%;
-    gap: 1.1rem;
+    gap: var(--space-4);
     overflow-x: auto;
   }
 }

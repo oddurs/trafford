@@ -390,6 +390,38 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
   in the broken colour — concealing the brackets must not conceal that it goes
   nowhere.
 
+## The design system
+
+Every measurement the site makes comes from `site/src/design.rs` — a type
+scale, a spacing scale, radii, motion and layout, as data. `palette.rs` already
+worked this way for colour; everything else did not, and the stylesheet had
+about sixty locally-chosen sizes that were each defensible on their own line
+and were not a system.
+
+They live in Rust rather than in a `:root` block for three reasons a block
+would not give:
+
+- **`/design` is rendered from them**, so a specimen cannot show one thing
+  while the site uses another. The colour swatches print the contrast each role
+  actually achieves, which is the same argument this file makes about the
+  terminal: look at colour, do not reason about it.
+- **`no_raw_values_for_what_the_system_owns` reads `site.css`** and fails when
+  a font size, radius, duration or space is written as a literal. That is the
+  rule that keeps the scale real.
+- **Reduced motion is a property of the tokens.** The durations become `0ms` in
+  one block, so every transition stops — including ones written afterwards by
+  someone who never read this.
+
+What is deliberately not a token: the width of a recording, the height of a
+cropped card. Those measure a particular picture rather than deciding anything,
+and folding them in would make the scale meaningless.
+
+Two rules that bit while building it. `:not(:has(…))` outspecifies a plain
+class selector, so a rule written to widen a page with no table of contents
+also won inside the narrow-screen media query and left the content 76 pixels
+wide. And a grid track sized `1fr` still refuses to shrink below its content —
+`minmax(0, 1fr)` is what actually means "take what is left".
+
 ## Looking at the site
 
 `tools/look.py` is `probe.py` pointed at the website: it drives a real browser,
