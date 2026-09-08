@@ -10,6 +10,10 @@ use ratatui::layout::{Position, Rect};
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
+/// How many past queries to keep. Enough for a working session, short
+/// enough that the list stays readable in an empty search box.
+const RECENT_QUERIES: usize = 8;
+
 // ---------------------------------------------------------------------------
 // Fuzzy matching
 // ---------------------------------------------------------------------------
@@ -366,6 +370,8 @@ pub struct SearchPane {
     /// How many there were before the list was cut to what fits. Shown when it
     /// differs, so a truncated answer cannot pass itself off as the whole one.
     pub total: usize,
+    /// Queries this reader ran before, offered while the box is empty.
+    pub recent: Vec<String>,
     pub cursor: usize,
     /// What is wrong with the query, if anything. A misspelled field reports
     /// itself here rather than returning nothing — an empty result and a
@@ -825,6 +831,11 @@ pub struct App {
     pub context_targets: Vec<Option<ContextTarget>>,
     /// Tag currently filtering the note list, if any.
     pub tag_filter: Option<String>,
+    /// Derived state the vault did not author, in `.trafford/`.
+    pub sidecar: crate::sidecar::Sidecar,
+    /// Queries worth offering back, most recent first. Derived and disposable:
+    /// losing them costs a reader some retyping and nothing else.
+    pub recent_queries: Vec<String>,
     /// Where the current theme came from, for the status line and the picker.
     pub theme_source: String,
     /// The theme in use before the picker started previewing, so esc restores.
@@ -839,6 +850,10 @@ impl App {
             .and_then(|r| r.snapshot().ok())
             .unwrap_or_default();
         let (theme, theme_source) = Theme::resolve(&config.theme, &vault.root);
+        let root = vault.root.clone();
+        let recent_queries = crate::sidecar::Sidecar::beside(&root)
+            .load("queries")
+            .unwrap_or_default();
         let mut app = App {
             vault,
             repo,
@@ -877,6 +892,8 @@ impl App {
             pending_suspend: None,
             context_targets: Vec::new(),
             tag_filter: None,
+            sidecar: crate::sidecar::Sidecar::beside(&root),
+            recent_queries,
             theme_source,
             theme_before_preview: None,
             config,
@@ -967,6 +984,23 @@ impl App {
         {
             self.sidebar_cursor = pos;
         }
+    }
+
+    /// Remember a query the reader got an answer out of.
+    ///
+    /// Only on the way out, and only when it found something: a query is
+    /// half-typed on every keystroke, and remembering those would fill the list
+    /// with prefixes of itself.
+    pub fn remember_query(&mut self, query: &str, found: usize) {
+        let query = query.trim();
+        if query.is_empty() || found == 0 {
+            return;
+        }
+        self.recent_queries.retain(|q| q != query);
+        self.recent_queries.insert(0, query.to_string());
+        self.recent_queries.truncate(RECENT_QUERIES);
+        // Best effort. A vault on a read-only disk should still search.
+        let _ = self.sidecar.store("queries", &self.recent_queries);
     }
 
     /// Show only the notes carrying a tag. One definition, because a tag is
@@ -1964,6 +1998,50 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A query the reader got an answer out of comes back next session. The
+    /// sidecar is the only thing that makes that true, and losing it costs
+    /// them some retyping and nothing else.
+    #[test]
+    fn a_useful_query_is_offered_back_next_time() {
+        let dir = crate::testing::TempDir::with_files(&[("a.md", "# A\n")]);
+        {
+            let vault = Vault::open(dir.path()).unwrap();
+            let mut app = App::new(vault, Config::default());
+            app.remember_query("type:reference status:active", 40);
+            app.remember_query("orphan", 9);
+        }
+        let vault = Vault::open(dir.path()).unwrap();
+        let app = App::new(vault, Config::default());
+        assert_eq!(
+            app.recent_queries,
+            ["orphan", "type:reference status:active"]
+        );
+    }
+
+    /// A query nobody got an answer from is not worth offering back, and a
+    /// half-typed one never gets that far.
+    #[test]
+    fn a_query_that_found_nothing_is_not_remembered() {
+        let dir = crate::testing::TempDir::with_files(&[("a.md", "# A\n")]);
+        let vault = Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, Config::default());
+        app.remember_query("typ", 0);
+        app.remember_query("   ", 3);
+        assert!(app.recent_queries.is_empty());
+    }
+
+    /// Running the same query again moves it up rather than listing it twice.
+    #[test]
+    fn repeating_a_query_does_not_duplicate_it() {
+        let dir = crate::testing::TempDir::with_files(&[("a.md", "# A\n")]);
+        let vault = Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, Config::default());
+        app.remember_query("orphan", 9);
+        app.remember_query("broken", 2);
+        app.remember_query("orphan", 9);
+        assert_eq!(app.recent_queries, ["orphan", "broken"]);
+    }
 
     /// An app on a one-note vault, that note open.
     fn app_on_a_note(body: &str) -> (crate::testing::TempDir, App) {

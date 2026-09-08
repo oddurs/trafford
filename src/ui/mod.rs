@@ -1968,6 +1968,21 @@ fn draw_search(f: &mut Frame, theme: &Theme, pane: &crate::app::SearchPane, area
     // An empty box says what it can do. The syntax is invisible otherwise, and
     // a query language nobody knows about is one nobody uses.
     if pane.query.is_empty() {
+        // What you asked before, then what you can ask. The recent list is
+        // usually the answer — a reader who ran `type:reference status:active`
+        // once should not have to type it twice.
+        if !pane.recent.is_empty() {
+            for q in &pane.recent {
+                lines.push(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        fit(q, width.saturating_sub(2)),
+                        Style::default().fg(theme.fg),
+                    ),
+                ]));
+            }
+            lines.push(Line::from(""));
+        }
         for (example, what) in [
             ("type:reference", "a tag namespace, or a frontmatter key"),
             ("status:active", "several narrow together"),
@@ -3460,6 +3475,7 @@ mod tests {
                     cursor: 0,
                     problem: None,
                     total: 0,
+                    recent: Vec::new(),
                 }),
                 Overlay::Prompt(Prompt {
                     kind: PromptKind::NewNote,

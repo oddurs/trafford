@@ -8,6 +8,7 @@ mod keymap;
 mod layout;
 mod llm;
 mod mouse;
+mod sidecar;
 #[cfg(test)]
 mod testing;
 mod tree;

@@ -119,6 +119,7 @@ impl App {
     fn open_search_with(&mut self, query: &str) {
         let mut pane = SearchPane {
             query: query.to_string(),
+            recent: self.recent_queries.clone(),
             ..Default::default()
         };
         run_search(&self.vault, &mut pane);
@@ -183,7 +184,10 @@ impl App {
         match key {
             "open" => self.open_switcher(),
             "search" => {
-                self.overlay = Some(Overlay::Search(SearchPane::default()));
+                self.overlay = Some(Overlay::Search(SearchPane {
+                    recent: self.recent_queries.clone(),
+                    ..Default::default()
+                }));
             }
             "new-note" => {
                 self.overlay = Some(Overlay::Prompt(Prompt {
@@ -1245,6 +1249,9 @@ impl App {
         match key.code {
             KeyCode::Enter => {
                 if let Some(hit) = pane.hits.get(pane.cursor).cloned() {
+                    // Opening a result is the signal that the query was the
+                    // right one; a half-typed prefix never gets that far.
+                    self.remember_query(&pane.query, pane.hits.len());
                     self.open_note(&hit.id, true);
                     self.jump_to(hit.line);
                     return;
