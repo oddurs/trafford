@@ -3,10 +3,11 @@ id: 35
 key: v0.4
 title: What you wrote, as you wrote it
 type: milestone
-status: backlog
+status: done
 depends_on:
 - 34
 created: 2026-09-07
+updated: 2026-09-08
 due: 2026-11-15
 ---
 
