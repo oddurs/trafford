@@ -30,8 +30,8 @@ way — true, knowable, and invisible:
 | | |
 | --- | --- |
 | paths differing from the last commit | 21 |
-| distinct link targets that resolve to nothing | ~58 |
-| notes nothing links to | 28 |
+| distinct link targets that resolve to nothing | 13 |
+| notes nothing links to | 9 |
 | notes marked `status/active` | 62 |
 
 That last row is the interesting one: 62 notes claim to be active in a vault
