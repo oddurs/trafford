@@ -92,6 +92,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
             Rect::default()
         }
         Some(Overlay::Git(pane)) => draw_git(f, &theme, pane, area),
+        Some(Overlay::Drift(pane)) => draw_drift(f, &theme, pane, area),
         Some(Overlay::History(log)) => draw_history(f, &theme, log, area),
         Some(Overlay::Confirm(c)) => {
             draw_confirm(f, &theme, c, area);
@@ -1564,6 +1565,85 @@ fn reading_tags(app: &App) -> Option<String> {
             .collect::<Vec<_>>()
             .join("  "),
     )
+}
+
+/// The drift report: what the vault says about itself that is no longer true.
+///
+/// Sections carry their full count in the heading and list only the first few,
+/// so a vault with four hundred orphans says four hundred rather than printing
+/// four hundred lines.
+fn draw_drift(f: &mut Frame, theme: &Theme, pane: &crate::app::DriftPane, area: Rect) -> Rect {
+    let rect = centred(area, 76, 24);
+    f.render_widget(Clear, rect);
+    let total = pane.report.total();
+    let block = overlay_block(
+        theme,
+        match total {
+            0 => "drift · nothing to mention".to_string(),
+            n => format!("drift · {n} things"),
+        },
+    );
+    let inner = block.inner(rect);
+    f.render_widget(block, rect);
+    if inner.height == 0 {
+        return inner;
+    }
+    let width = inner.width as usize;
+    let mut lines: Vec<Line> = Vec::new();
+
+    if pane.report.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "The vault agrees with itself. Nothing has drifted.",
+            theme.faded(),
+        )));
+        f.render_widget(Paragraph::new(lines), inner);
+        return inner;
+    }
+
+    let mut row_index = 0usize;
+    for s in &pane.report.sections {
+        if s.count == 0 {
+            continue;
+        }
+        if !lines.is_empty() {
+            lines.push(Line::from(""));
+        }
+        lines.push(Line::from(vec![
+            Span::styled(
+                s.title.to_uppercase(),
+                Style::default()
+                    .fg(theme.secondary)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(format!("  {}", s.count), theme.faded()),
+        ]));
+        for row in &s.rows {
+            let selected = row_index == pane.cursor;
+            lines.push(Line::from(vec![
+                Span::styled(
+                    if selected { "▌ " } else { "  " },
+                    Style::default().fg(theme.accent),
+                ),
+                Span::styled(
+                    fit(&row.label, width.saturating_sub(2)),
+                    if selected {
+                        Style::default().fg(theme.heading)
+                    } else {
+                        Style::default().fg(theme.fg)
+                    },
+                ),
+            ]));
+            row_index += 1;
+        }
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "enter opens · esc closes",
+        theme.faded(),
+    )));
+    f.render_widget(Paragraph::new(lines), inner);
+    inner
 }
 
 fn draw_status(f: &mut Frame, app: &App, area: Rect) {

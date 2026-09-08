@@ -33,6 +33,7 @@ pub const COMMANDS: &[(&str, &str, &str)] = &[
     ("delete-selection", "Delete the selected lines", "d"),
     ("reindex", "Reindex vault from disk", ""),
     ("git-panel", "Git: review changes", "ctrl-g"),
+    ("drift", "What has drifted in this vault", ""),
     ("git-commit", "Git: commit all changes", ""),
     ("git-push", "Git: push", ""),
     ("git-pull", "Git: pull with rebase", ""),
@@ -111,6 +112,70 @@ impl App {
             cursor: 0,
             log,
         }));
+    }
+
+    /// Open the search box with a query already in it, so a report can hand
+    /// the reader off to the surface that knows how to show and open results.
+    fn open_search_with(&mut self, query: &str) {
+        let mut pane = SearchPane {
+            query: query.to_string(),
+            ..Default::default()
+        };
+        run_search(&self.vault, &mut pane);
+        self.overlay = Some(Overlay::Search(pane));
+    }
+
+    /// Open the drift report. Computed here rather than per draw: it walks
+    /// every note, and scrolling a list should not recompute what it says.
+    fn open_drift_pane(&mut self) {
+        let report = crate::drift::report(
+            &self.vault,
+            self.repo.is_some().then_some(&self.git_status),
+            std::time::SystemTime::now(),
+        );
+        self.overlay = Some(Overlay::Drift(crate::app::DriftPane { report, cursor: 0 }));
+    }
+
+    fn drift_key(&mut self, key: KeyEvent, mut pane: crate::app::DriftPane) {
+        let rows = pane.selectable().len();
+        match key.code {
+            KeyCode::Esc => return,
+            KeyCode::Char('j') | KeyCode::Down => {
+                pane.cursor = (pane.cursor + 1).min(rows.saturating_sub(1))
+            }
+            KeyCode::Char('k') | KeyCode::Up => pane.cursor = pane.cursor.saturating_sub(1),
+            KeyCode::Enter => {
+                let go = pane
+                    .selectable()
+                    .get(pane.cursor)
+                    .and_then(|r| r.go.clone());
+                match go {
+                    Some(crate::drift::Go::Git) => {
+                        self.open_git_pane();
+                        return;
+                    }
+                    Some(crate::drift::Go::Note(id)) => {
+                        // A broken link's target is not a note, so opening it
+                        // offers to write it — the same answer following the
+                        // link in the text already gives.
+                        if self.vault.get(&id).is_some() {
+                            self.open_note(&id, true);
+                        } else {
+                            self.prompt_new_note_from_link(&id);
+                        }
+                        self.overlay = None;
+                        return;
+                    }
+                    Some(crate::drift::Go::Query(q)) => {
+                        self.open_search_with(&q);
+                        return;
+                    }
+                    None => {}
+                }
+            }
+            _ => {}
+        }
+        self.overlay = Some(Overlay::Drift(pane));
     }
 
     /// Run a palette command by key. Also used by the direct shortcuts.
@@ -277,6 +342,7 @@ impl App {
                 Err(err) => self.set_status(format!("reindex failed: {err}")),
             },
             "git-panel" => self.open_git_pane(),
+            "drift" => self.open_drift_pane(),
             "git-commit" => {
                 if self.repo.is_none() {
                     self.set_status("not a git repository");
@@ -1053,6 +1119,7 @@ impl App {
             Overlay::Search(pane) => self.search_key(key, pane),
             Overlay::Prompt(prompt) => self.prompt_key(key, prompt),
             Overlay::Git(pane) => self.git_key(key, pane),
+            Overlay::Drift(pane) => self.drift_key(key, pane),
             Overlay::History(log) => {
                 // Any navigation key keeps it open; anything else closes it.
                 if matches!(

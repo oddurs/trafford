@@ -373,6 +373,27 @@ pub struct SearchPane {
     pub problem: Option<String>,
 }
 
+/// The drift report, and where the cursor is in it. The report is computed
+/// when the pane opens rather than per draw: it walks every note, and a reader
+/// scrolling a list should not be recomputing what the list says.
+#[derive(Debug, Default)]
+pub struct DriftPane {
+    pub report: crate::drift::Report,
+    pub cursor: usize,
+}
+
+impl DriftPane {
+    /// The rows a reader can actually land on, paired with the section they
+    /// belong to. Headings are drawn but not selectable.
+    pub fn selectable(&self) -> Vec<&crate::drift::Row> {
+        self.report
+            .sections
+            .iter()
+            .flat_map(|s| s.rows.iter())
+            .collect()
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct GitPane {
     pub snapshot: git::Snapshot,
@@ -398,6 +419,8 @@ pub enum Overlay {
         note: String,
     },
     Search(SearchPane),
+    /// What the vault says about itself that is no longer true.
+    Drift(DriftPane),
     Prompt(Prompt),
     Git(GitPane),
     History(Vec<git::Commit>),

@@ -412,6 +412,11 @@ fn build_link(inner: &str, source: &str, line: usize, col: usize, len: usize) ->
         Some((t, a)) => (t, Some(a.trim().to_string())),
         None => (inner, None),
     };
+    // Obsidian writes `[[Note\|alias]]` inside a table, where a bare pipe would
+    // end the cell. The backslash is table syntax, not part of the name, and
+    // leaving it on makes the link resolve to nothing — a real vault had one
+    // pointing at `../07-chameleon-research/00-overview\`.
+    let target_part = target_part.strip_suffix('\\').unwrap_or(target_part);
     let (target, heading) = match target_part.split_once('#') {
         Some((t, h)) => (t, Some(h.trim().to_string())),
         None => (target_part, None),
@@ -430,6 +435,25 @@ fn build_link(inner: &str, source: &str, line: usize, col: usize, len: usize) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Obsidian writes `[[Note\|alias]]` inside a table, where a bare pipe
+    /// would end the cell. The backslash is table syntax; left on the target
+    /// the link resolves to nothing.
+    #[test]
+    fn an_escaped_pipe_in_a_table_is_not_part_of_the_name() {
+        let links = parse_wikilinks("| [[a/b/Note\\|alias]] | x |", 0);
+        assert_eq!(links[0].target, "a/b/Note");
+        assert_eq!(links[0].alias.as_deref(), Some("alias"));
+    }
+
+    /// `[[#Section]]` names a heading in the note it is written in. There is no
+    /// target, and inventing an empty one makes it look like a dead link.
+    #[test]
+    fn a_heading_only_link_has_no_target() {
+        let links = parse_wikilinks("see [[#Some Section]] above", 0);
+        assert_eq!(links[0].target, "");
+        assert_eq!(links[0].heading.as_deref(), Some("Some Section"));
+    }
 
     #[test]
     fn parses_plain_alias_and_heading_links() {

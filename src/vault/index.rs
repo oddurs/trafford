@@ -186,6 +186,19 @@ impl Vault {
                     line: link.line,
                     context: link.context.clone(),
                 };
+                // `[[#Section]]` names a heading in the note it is written in,
+                // so there is no target to resolve and nothing missing. A real
+                // vault has nine of them; counted as broken they became one
+                // dead link with an empty name, referenced nine times.
+                if link.target.is_empty() {
+                    continue;
+                }
+                // A template's links are literal until it is expanded.
+                // `[[<% tp.date.now("YYYY-MM-DD", -1) %>]]` is tomorrow's note
+                // name waiting to be written, not a note somebody forgot.
+                if link.target.contains("<%") {
+                    continue;
+                }
                 match self.resolve_target(&link.target) {
                     Some(idx) => resolved.push((self.notes[idx].id.clone(), backlink)),
                     // An embedded image is not a note waiting to be written.
@@ -991,6 +1004,32 @@ mod tests {
         assert_eq!(vault.attachment("photo.jpg"), Some("photo.jpg"));
         assert_eq!(vault.attachment("_assets/map.png"), Some("_assets/map.png"));
         assert!(vault.resolves("photo.jpg"));
+    }
+
+    /// A template's links are literal until it is expanded, so an unexpanded
+    /// expression is not a note anybody forgot to write.
+    #[test]
+    fn an_unexpanded_template_expression_is_not_a_broken_link() {
+        let (_d, vault) = scratch(&[(
+            "_templates/daily.md",
+            "# Daily\nyesterday: [[<% tp.date.now(\"YYYY-MM-DD\", -1) %>]]\n",
+        )]);
+        assert!(
+            vault.unresolved.is_empty(),
+            "{:?}",
+            vault.unresolved.keys().collect::<Vec<_>>()
+        );
+    }
+
+    /// A link to a heading in the same note is not a link to a missing note.
+    #[test]
+    fn a_heading_only_link_is_not_a_broken_link() {
+        let (_d, vault) = scratch(&[("a.md", "# A\n## Bit\nsee [[#Bit]] above\n")]);
+        assert!(
+            vault.unresolved.is_empty(),
+            "{:?}",
+            vault.unresolved.keys().collect::<Vec<_>>()
+        );
     }
 
     #[test]

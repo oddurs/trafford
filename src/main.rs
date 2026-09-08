@@ -1,6 +1,7 @@
 mod app;
 mod clipboard;
 mod config;
+mod drift;
 mod editor;
 mod git;
 mod keymap;
