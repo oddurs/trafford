@@ -12,12 +12,9 @@ on:
     # Mondays, early. Only the external-link job runs on this trigger.
     - cron: "17 6 * * 1"
 
-# One run per commit, keyed on the commit rather than on the ref. A push and a
-# pull_request event for the same code arrive under different refs
-# (`refs/heads/…` and `refs/pull/…/merge`), so keying on the ref ran everything
-# twice — which is what this pull request's own first green build did.
+# One run per ref, so pushing three times in a minute runs the jobs once.
 concurrency:
-  group: ci-${{ github.event.pull_request.head.sha || github.sha }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -30,7 +27,10 @@ jobs:
   # destroying work, and it has already failed silently once.
   hooks:
     name: git guard
-    if: github.event_name != 'schedule'
+    if: >-
+      github.event_name != 'schedule' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name != github.repository)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +39,10 @@ jobs:
 
   check:
     name: fmt · clippy · test
-    if: github.event_name != 'schedule'
+    if: >-
+      github.event_name != 'schedule' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name != github.repository)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -83,7 +86,10 @@ jobs:
   # are reported together rather than one after the other.
   site:
     name: docs site
-    if: github.event_name != 'schedule'
+    if: >-
+      github.event_name != 'schedule' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name != github.repository)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
