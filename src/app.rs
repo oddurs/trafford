@@ -107,11 +107,18 @@ impl Picker {
             .iter()
             .enumerate()
             .filter_map(|(i, item)| {
-                let against = if item.detail.is_empty() {
-                    item.label.clone()
-                } else {
-                    format!("{} {}", item.label, item.detail)
-                };
+                // The key matters as much as the label and is never shown.
+                // A command named `weekly-note` labelled "Open this week's
+                // note" was unreachable by typing "weekly", and nine others
+                // were the same — "help" did not find "Keyboard reference".
+                // Searching by the name of the thing is not an unreasonable
+                // thing to try.
+                let against = [item.label.as_str(), item.detail.as_str(), item.key.as_str()]
+                    .iter()
+                    .filter(|part| !part.is_empty())
+                    .copied()
+                    .collect::<Vec<_>>()
+                    .join(" ");
                 fuzzy_match(&self.query, &against).map(|(s, idx)| {
                     // Only keep highlight indices that fall inside the label.
                     let label_len = item.label.chars().count();
