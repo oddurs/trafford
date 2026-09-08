@@ -123,6 +123,14 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
 - **A template's H1 is not a title.** Templater files carry
   `<% tp.file.title %>` there. Fall back to the filename, which is what
   Obsidian displays.
+- **Templates expand, but only the expressions this vault uses.**
+  `vault::template` covers `tp.date.now` with an optional day offset,
+  `tp.file.title` and `tp.file.cursor` — the whole inventory of the five
+  templates in a real vault, counted rather than guessed. Anything else is left
+  *exactly as written*: losing text is worse than not expanding it. Templater's
+  formats are moment.js and chrono's are strftime, so the token table is matched
+  longest-first, or `YYYY` reads as two `YY`s; `[W]` stays a literal W, which is
+  how a week note is named.
 - **Deleting moves a note to `.trash/`, it does not unlink it.** Obsidian puts
   deletions there and a real vault already has a `.trash/` full of them, so
   unlinking made trafford the one program that could take a note away for good.
