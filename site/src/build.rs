@@ -300,9 +300,10 @@ fn hero(
     }
     let _ = writeln!(
         out,
-        "<div class=\"actions\">{}<a class=\"secondary\" href=\"{}\">Read the docs →</a></div>",
+        "<div class=\"actions\">{}<a class=\"secondary\" href=\"{}\">Read the docs →</a></div>\n{}",
         install(m),
         html::escape_attr(&ctx.href("docs/getting-started/")),
+        facts().unwrap_or_default(),
     );
     if let Some(shot) = &m.screenshot {
         match vault.attachment(shot) {
@@ -343,6 +344,48 @@ fn hero(
     }
     out.push_str("</section>\n");
     out
+}
+
+/// Facts about the project, counted rather than typed.
+///
+/// A number on a landing page is a claim, and a claim that is typed goes stale
+/// the first time it changes and nobody notices. These are read out of the
+/// repository at build time, so they are either right or the build is wrong.
+fn facts() -> Result<String> {
+    let root = workspace_root();
+    let manifest = fs::read_to_string(root.join("trafford/Cargo.toml"))
+        .context("reading the application's manifest for the dependency count")?;
+    let deps = manifest
+        .split("[dependencies]")
+        .nth(1)
+        .unwrap_or("")
+        .lines()
+        .take_while(|l| !l.trim_start().starts_with('['))
+        .filter(|l| l.contains('=') && !l.trim_start().starts_with('#'))
+        .count();
+
+    let mut tests = 0;
+    let mut stack = vec![
+        root.join("trafford/src"),
+        root.join("site/src"),
+        root.join("site/tests"),
+    ];
+    while let Some(path) = stack.pop() {
+        if path.is_dir() {
+            let mut entries: Vec<PathBuf> = fs::read_dir(&path)
+                .with_context(|| format!("reading {}", path.display()))?
+                .filter_map(|e| e.ok().map(|e| e.path()))
+                .collect();
+            entries.sort();
+            stack.extend(entries);
+        } else if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+            tests += fs::read_to_string(&path)?.matches("#[test]").count();
+        }
+    }
+
+    Ok(format!(
+        "<p class=\"facts\">MIT licensed · {deps} direct dependencies · {tests} tests · no telemetry</p>"
+    ))
 }
 
 /// The command, with a button that copies it.

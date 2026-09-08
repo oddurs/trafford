@@ -58,7 +58,7 @@ about getting them there.
 > `ctrl-k` finds any command, `ctrl-p` any note. The keys beside each entry are
 > the ones that would have done it without the menu.
 >
-> ![[palette.svg|The command palette, listing every command by name]]
+> ![[palette.cast.json|The command palette, filtered by typing]]
 
 ## Git, without leaving the note
 

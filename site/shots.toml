@@ -81,6 +81,22 @@ steps = [
 ]
 
 [[cast]]
+name = "palette"
+title = "The command palette, filtered by typing"
+cols = 120
+rows = 24
+hold = 900
+loop_pause = 1600
+poster = 4
+setup = ["ctrl-p", "d", "e", "e", "enter"]
+steps = [
+  { key = "ctrl-k", hold = 900 },
+  { key = "t", hold = 150 },
+  { key = "h", hold = 150 },
+  { key = "e", hold = 2400 },
+]
+
+[[cast]]
 name = "search"
 title = "Searching the vault, with the line each hit came from"
 cols = 120
@@ -99,20 +115,12 @@ steps = [
 # ─── Stills ──────────────────────────────────────────────────────────────────
 
 [[shot]]
-name = "palette"
-title = "The command palette"
-cols = 120
-rows = 24
-# The note behind the overlay is opened by name. Which note the app opens by
-# default is its business, and it changed once — silently rewriting three
-# recordings that are not about that.
-keys = ["ctrl-p", "d", "e", "e", "enter", "ctrl-k"]
-
-[[shot]]
 name = "git"
 title = "The git panel, over a working tree with a change in it"
 cols = 120
-rows = 24
+# Shorter than the rest: the diff is nine lines, and in 24 rows a third of the
+# section was an empty pane.
+rows = 17
 # `d` opens the diff of the change under the cursor. Without it the panel is
 # mostly an empty pane, which is a poor argument for having one — and the pane
 # it replaces was the commit list, which draws how *old* a commit is. That is a

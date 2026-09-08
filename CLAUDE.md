@@ -390,6 +390,33 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
   in the broken colour — concealing the brackets must not conceal that it goes
   nowhere.
 
+## Looking at the site
+
+`tools/look.py` is `probe.py` pointed at the website: it drives a real browser,
+screenshots each section on its own, and measures what a full-page screenshot
+cannot tell you.
+
+```sh
+.venv/bin/pip install playwright
+.venv/bin/python -m playwright install chromium
+.venv/bin/python tools/look.py                    # every section, 1440 wide
+.venv/bin/python tools/look.py --width 380        # a phone
+.venv/bin/python tools/look.py --scheme light     # Paper, which is what a
+                                                  # reader with a light system
+                                                  # actually gets
+```
+
+It reports anything wider than the viewport, any text under 11px or 4.5:1, and
+how much of each section is air. Run it after touching `site.css` — the pass
+that added it found a page that scrolled sideways at 420px, a footer heading at
+3.06:1, and a card whose last line sat on its own border, none of which a
+5000-pixel-tall screenshot showed.
+
+A note on what it does *not* check: anything inside a recording. Those are
+pictures of a terminal, drawn in the terminal's colours on the terminal's own
+ground, and checking them reported forty false failures and hid the one real
+one.
+
 ## Testing a TUI
 
 Unit tests cover the parts that are pure. They cannot tell you that a pane got
