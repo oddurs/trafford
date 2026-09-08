@@ -215,6 +215,14 @@ def record(cast, vault):
     try:
         session.until(lambda s: "notes" in "\n".join(s.display), 30)
         settle(session)
+        # Keys sent before the first frame is kept. Two recordings that both
+        # began by opening a note through the picker were identical for their
+        # first two seconds, and side by side that reads as one broken player
+        # rather than as two recordings. Whatever a cast is *about* should be
+        # its opening frame.
+        for key in cast.get("setup", []):
+            session.send(keystrokes(key), 0.25)
+            settle(session, 2.0)
         grab(cast.get("hold", 900))
         for step in cast["steps"]:
             session.send(keystrokes(step["key"]), 0.25)

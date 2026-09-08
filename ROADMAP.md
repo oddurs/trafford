@@ -86,7 +86,7 @@ Obsidian is closed source, so there is nothing to read. The vault is not: its
 
 ## v1.0 — Safe to depend on
 
-`########··` 76% · 16 of 21 done · due 2027-03-01
+`########··` 73% · 16 of 22 done · due 2027-03-01
 
 Documented, packaged, and hardened. Someone who is not the author can install
 
@@ -97,6 +97,7 @@ Documented, packaged, and hardened. Someone who is not the author can install
 - [ ] `0160` The roadmap is a page, built from the items <sup>feature · p2 · site</sup>
 - [ ] `0161` Why trafford exists, as its own page <sup>docs · p2 · docs</sup>
 - [ ] `0162` Moving between pages feels like one page <sup>chore · p3 · site</sup>
+- [ ] `0169` Measure the site in CI, not only by eye <sup>chore · p2 · site</sup>
 
 ### done
 

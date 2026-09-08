@@ -92,7 +92,11 @@ A theme is a set of roles rather than a list of colours. trafford ships four,
 reads your own, and **reads Ghostty theme files directly** — so whatever your
 terminal already wears, trafford can wear too. No transcribing.
 
-![[theme-gotham.svg|Gotham]] ![[theme-night.svg|Night]] ![[theme-paper.svg|Paper]]
+![[theme-gotham.svg|Gotham]]
+
+![[theme-night.svg|Night]]
+
+![[theme-paper.svg|Paper]]
 
 ## Your notes are already on your disk
 

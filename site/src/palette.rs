@@ -92,18 +92,25 @@ fn vars(t: &Theme) -> Result<String> {
     let surface = rgb(t.surface)?;
     // Text roles sit on the page ground; `code` sits on the surface panels, so
     // that is what it has to be legible against.
-    let pairs: [(&str, (u8, u8, u8)); 20] = [
+    let pairs: [(&str, (u8, u8, u8)); 21] = [
         ("bg", bg),
         ("surface", surface),
         ("overlay", rgb(t.overlay)?),
         ("fg", lift(rgb(t.fg)?, bg, AA)),
         ("muted", lift(rgb(t.muted)?, bg, AA)),
-        ("faint", lift(rgb(t.faint)?, bg, AA_LARGE)),
+        // `faint` is a border colour in the terminal and a *text* colour on the
+        // site — every use of it here is a label. It has to clear AA.
+        ("faint", lift(rgb(t.faint)?, bg, AA)),
         ("border", rgb(t.border)?),
         ("border-focus", rgb(t.border_focus)?),
         ("selection", rgb(t.selection)?),
         ("cursorline", rgb(t.cursorline)?),
+        // The accent is a bar, a marker and a mark: a shape, which needs 3:1.
         ("accent", lift(rgb(t.accent)?, bg, AA_LARGE)),
+        // The same colour used for *words* needs 4.5:1, and in the light theme
+        // the two are far enough apart to matter. One role each rather than a
+        // compromise that is wrong for both.
+        ("accent-text", lift(rgb(t.accent)?, bg, AA)),
         ("secondary", lift(rgb(t.secondary)?, bg, AA_LARGE)),
         ("heading", lift(rgb(t.heading)?, bg, AA)),
         ("link", lift(rgb(t.link)?, bg, AA)),
@@ -284,7 +291,8 @@ mod tests {
                 ("broken", t.broken, bg, AA),
                 ("tag", t.tag, bg, AA),
                 ("code", t.code, surface, AA),
-                ("faint", t.faint, bg, AA_LARGE),
+                ("faint", t.faint, bg, AA),
+                ("accent-text", t.accent, bg, AA),
                 ("accent", t.accent, bg, AA_LARGE),
             ] {
                 let lifted = lift(rgb(colour).unwrap(), ground, wanted);

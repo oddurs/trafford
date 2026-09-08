@@ -322,7 +322,16 @@ impl<'a, 'b> Writer<'a, 'b> {
                 flush_para!();
                 flush_lists!();
                 let html = self.inline(embed, i);
-                let _ = writeln!(self.out, "<figure class=\"shot\">{html}</figure>");
+                // The alias is the caption. `![[theme-paper.svg|Paper]]` in a
+                // row of three is otherwise three colour schemes a reader
+                // cannot name.
+                let caption = match embed_label(embed) {
+                    Some(label) if !label.ends_with(".svg") && !label.ends_with(".json") => {
+                        format!("\n<figcaption>{}</figcaption>", escape(&label))
+                    }
+                    _ => String::new(),
+                };
+                let _ = writeln!(self.out, "<figure class=\"shot\">{html}{caption}</figure>");
                 i += 1;
                 continue;
             }
@@ -804,6 +813,14 @@ fn align_attr(align: Option<&table::Align>) -> &'static str {
 
 const SECTION: &str = "<section class=\"showcase\">";
 const CLOSING: &str = "<section class=\"showcase closing\">";
+
+/// What an embed reads as: the alias if it has one, otherwise the target.
+fn embed_label(embed: &str) -> Option<String> {
+    scan(embed).into_iter().find_map(|p| match p.kind {
+        Inline::Wiki { label, .. } | Inline::Link { label, .. } => Some(label),
+        _ => None,
+    })
+}
 
 /// The embed on a line that holds nothing else.
 fn lone_embed(line: &str) -> Option<&str> {

@@ -46,23 +46,16 @@ name = "backlinks"
 title = "Following a backlink to the line that mentions this note"
 cols = 120
 rows = 24
-hold = 900
+hold = 1000
 loop_pause = 1800
-# The backlink list itself, which is frame 7: the six before it are opening
-# the note that has backlinks in the first place.
-poster = 7
-# Open a note that *has* backlinks first. The first version of this recorded
-# `ctrl-t` on whichever note the app opens by default, which has none — a cast
-# of an empty pane under a heading about backlinks.
+poster = 1
+# The note is opened *before* recording starts. Recording the opening too made
+# this identical to the folding cast for its first two seconds, and two cards
+# side by side playing the same thing reads as one broken player.
+setup = ["ctrl-p", "l", "i", "n", "k", "enter"]
 steps = [
-  { key = "ctrl-p", hold = 450 },
-  { key = "l", hold = 100 },
-  { key = "i", hold = 100 },
-  { key = "n", hold = 100 },
-  { key = "k", hold = 380 },
-  { key = "enter", hold = 1200 },
-  { key = "ctrl-t", hold = 2200 },
-  { key = "down", hold = 800 },
+  { key = "ctrl-t", hold = 2400 },
+  { key = "down", hold = 900 },
   { key = "enter", hold = 2400 },
 ]
 
@@ -71,24 +64,19 @@ name = "folding"
 title = "A long note folded to its headings, and opened again"
 cols = 120
 rows = 24
-hold = 1400
+hold = 1600
 loop_pause = 1800
 # The folded frame, which is the point of the recording. `za` on one section
 # was the first idea and needed the cursor moved onto a heading first, which is
 # arithmetic over a layout that folding has just changed — `zR` says the same
 # thing and cannot be off by a row.
-poster = 8
+poster = 2
+setup = ["ctrl-p", "d", "e", "e", "enter", "ctrl-e"]
 steps = [
-  { key = "ctrl-p", hold = 500 },
-  { key = "d", hold = 100 },
-  { key = "e", hold = 100 },
-  { key = "e", hold = 380 },
-  { key = "enter", hold = 900 },
-  { key = "ctrl-e", hold = 1500 },
   { key = "z", hold = 60 },
-  { key = "M", hold = 2600 },
+  { key = "M", hold = 2800 },
   { key = "z", hold = 60 },
-  { key = "R", hold = 1600 },
+  { key = "R", hold = 1800 },
 ]
 
 [[cast]]
@@ -96,7 +84,7 @@ name = "search"
 title = "Searching the vault, with the line each hit came from"
 cols = 120
 rows = 24
-hold = 900
+hold = 700
 loop_pause = 1800
 poster = 5
 steps = [

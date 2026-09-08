@@ -410,7 +410,7 @@ pre code {
   font-size: 0.78rem;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-text);
   margin: 0 0 0.4rem;
 }
 
@@ -557,7 +557,7 @@ th.center {
      edge and the control was sitting on top of the word count. */
   top: 0.75rem;
   font: inherit;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   letter-spacing: 0.04em;
   color: var(--muted);
   background: var(--bg);
@@ -585,8 +585,13 @@ th.center {
 
 figcaption {
   margin-top: 0.6rem;
-  font-size: 0.75rem;
-  color: var(--faint);
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* A figure under its own heading already has a caption: the heading. */
+.showcase > figure:only-of-type > figcaption {
+  display: none;
 }
 
 /* ── Landing ────────────────────────────────────────────────────────────── */
@@ -680,7 +685,7 @@ figcaption {
 }
 
 .hero .secondary {
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 0.9rem;
   text-decoration: none;
 }
@@ -769,6 +774,12 @@ figcaption {
   margin: 0;
 }
 
+/* The bottom padding is left off so a recording can bleed through it. A card
+   without one needs it back, or its last line sits on the border. */
+.showcase > .callout:not(:has(figure)) {
+  padding-bottom: 1.6rem;
+}
+
 .showcase > .callout figure {
   margin: 1.6rem -1.6rem 0 0;
   height: 15rem;
@@ -796,29 +807,29 @@ figcaption {
 
 /* ── The theme strip ─────────────────────────────────────────────────────── */
 
-/* Three recordings of one screen, in three palettes. A paragraph that holds
-   nothing but images is a strip; anywhere else an image is an image. */
-.prose p:has(> img + img) {
-  display: grid;
+/* Three recordings of one screen, in three palettes, each with its name under
+   it. A section that holds three figures is a strip; one figure is a figure.
+   Without the captions a reader is looking at three colour schemes and cannot
+   name any of them. */
+.showcase:has(> figure:nth-of-type(3)) {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1px;
-  background: var(--border);
-  border: var(--rule);
-  border-radius: var(--radius);
-  overflow: hidden;
-  margin: 2.25rem 0 0;
-  grid-column: 1 / -1;
-  max-width: none;
+  column-gap: 1.25rem;
 }
 
-.prose p:has(> img + img) img {
-  display: block;
-  width: 100%;
+.showcase:has(> figure:nth-of-type(3)) > figure {
+  grid-column: auto;
+  padding: 0.4rem;
+}
+
+.showcase:has(> figure:nth-of-type(3)) > figure img {
   min-width: 0;
-  height: auto;
-  margin: 0;
-  border: none;
-  border-radius: 0;
+}
+
+.showcase:has(> figure:nth-of-type(3)) > figure figcaption {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
 }
 
 /* ── The closing claim ───────────────────────────────────────────────────── */
@@ -826,6 +837,10 @@ figcaption {
 /* A section written with no cards and no picture ends the page: centred, with
    the claim large and the command under it. */
 .showcase.closing {
+  /* One column. With two, `justify-items: center` centres each item in *its*
+     column, which put the command at a quarter of the way across and looked
+     like a bug. */
+  grid-template-columns: minmax(0, 1fr);
   justify-items: center;
   text-align: center;
   border-top: var(--rule);
@@ -838,6 +853,7 @@ figcaption {
 
 .showcase.closing > p {
   max-width: 48ch;
+  margin-top: 1.25rem;
 }
 
 .showcase.closing .install {
@@ -895,7 +911,7 @@ figcaption {
 }
 
 .foot-title {
-  color: var(--faint);
+  color: var(--muted);
   font-size: 0.7rem;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -1022,6 +1038,24 @@ figcaption {
      the gap, stacked it has to be a border. */
   .prose p:has(> img + img) {
     gap: 1px;
+  }
+}
+
+/* A brand, four links and a control do not fit across a phone. Rather than
+   dropping the navigation — the footer has it, but a reader should not have to
+   reach the bottom to find the docs — the bar wraps and the links take the
+   second row. Without this the whole page scrolled sideways. */
+@media (max-width: 34rem) {
+  .top {
+    flex-wrap: wrap;
+    gap: 0.75rem 1.25rem;
+  }
+
+  .top-nav {
+    order: 2;
+    width: 100%;
+    gap: 1.1rem;
+    overflow-x: auto;
   }
 }
 
