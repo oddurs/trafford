@@ -270,6 +270,39 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
 - **A template's H1 is not a title.** Templater files carry
   `<% tp.file.title %>` there. Fall back to the filename, which is what
   Obsidian displays.
+- **The vault has already been configured, in Obsidian's words.** `Config::load`
+  reads `.obsidian/app.json` and fills in what `config.toml` did not mention —
+  where new notes go, what deleting means, whether prose is held to a measure.
+  The reader's own file always wins, which is why `Config::read` returns the set
+  of keys the TOML actually named: `#[serde(default)]` cannot tell
+  `new_note_dir = ""` from a key nobody wrote, and that difference *is* the
+  precedence rule. Only settings trafford has an answer for are read — reading
+  one and ignoring it would suggest a promise it is not keeping. Never write to
+  `.obsidian/`: it belongs to Obsidian, and two programs writing one settings
+  file is how settings get lost.
+- **Periodic notes come from the plugin that makes them.** Folder, format and
+  template for the day and the week are read from
+  `.obsidian/plugins/periodic-notes/data.json`, with `config.toml` still
+  winning. The formats are moment.js and trafford's are strftime, so they go
+  through the same table the templates use — `YYYY-[W]ww` must come out as the
+  week note's real name, or every week links to one that does not exist. Asking
+  for a note that already exists opens it; overwriting today's work with a blank
+  template is the worst thing that command could do.
+- **Templates expand, but only the expressions this vault uses.**
+  `vault::template` covers `tp.date.now` with an optional day offset,
+  `tp.file.title` and `tp.file.cursor` — the whole inventory of the five
+  templates in a real vault, counted rather than guessed. Anything else is left
+  *exactly as written*: losing text is worse than not expanding it. Templater's
+  formats are moment.js and chrono's are strftime, so the token table is matched
+  longest-first, or `YYYY` reads as two `YY`s; `[W]` stays a literal W, which is
+  how a week note is named.
+- **Deleting moves a note to `.trash/`, it does not unlink it.** Obsidian puts
+  deletions there and a real vault already has a `.trash/` full of them, so
+  unlinking made trafford the one program that could take a note away for good.
+  The name is flattened (`a/b/Note.md` → `a-b-Note.md`) and a name already taken
+  gets a suffix — the trash holds last copies, and overwriting one deleted note
+  with another is the single thing it must not do. `trash = "none"` unlinks, for
+  anyone who wants that.
 - **`.gitignore` is respected** by the walker, which is why Obsidian's
   `.trash/` stays out of the index without a special case.
 - **Frontmatter** `title:` and `tags:` are read, including the `- item` list

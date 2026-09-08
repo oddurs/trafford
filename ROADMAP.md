@@ -73,16 +73,17 @@ Preview stops being the editor with the syntax hidden. A note's structure folds,
 
 ## v0.6 — It fits the vault it is given
 
-`··········` 0% · 0 of 4 done · due 2027-02-14
+`##########` 100% · 5 of 5 done · due 2027-02-14
 
 Obsidian is closed source, so there is nothing to read. The vault is not: its
 
-### backlog
+### done
 
-- [ ] `0048` Take the vault's settings from Obsidian's own config <sup>feature · p1 · config</sup>
-- [ ] `0049` Expand a template when a note is made from one <sup>feature · p1 · vault</sup>
-- [ ] `0050` Daily and weekly notes where this vault keeps them <sup>feature · p1 · vault</sup>
-- [ ] `0051` Delete to the vault's trash, not to nowhere <sup>bug · p1 · vault</sup>
+- [x] `0048` Take the vault's settings from Obsidian's own config <sup>feature · p1 · config</sup>
+- [x] `0049` Expand a template when a note is made from one <sup>feature · p1 · vault</sup>
+- [x] `0050` Daily and weekly notes where this vault keeps them <sup>feature · p1 · vault</sup>
+- [x] `0051` Delete to the vault's trash, not to nowhere <sup>bug · p1 · vault</sup>
+- [x] `0052` The command palette cannot find a command by its own name <sup>bug · p1 · chrome</sup>
 
 ## v1.0 — Safe to depend on
 

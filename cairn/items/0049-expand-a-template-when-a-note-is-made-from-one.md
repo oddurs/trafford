@@ -2,8 +2,9 @@
 id: 49
 title: Expand a template when a note is made from one
 type: feature
-status: backlog
+status: done
 milestone: v0.6
+assignee: Oddur Sigurdsson
 created: 2026-09-07
 updated: 2026-09-07
 priority: p1
@@ -39,11 +40,11 @@ degrades to what it is now instead of losing text.
 
 ## Acceptance criteria
 
-- [ ] Creating a note from a template expands the expressions above
-- [ ] An expression that is not understood is left as written, not emptied
-- [ ] The template itself is never modified
-- [ ] `_templates/` is still listed by filename rather than by its placeholders
-- [ ] A vault with no templates is unchanged
+- [x] Creating a note from a template expands the expressions above
+- [x] An expression that is not understood is left as written, not emptied
+- [x] The template itself is never modified
+- [x] `_templates/` is still listed by filename rather than by its placeholders
+- [x] A vault with no templates is unchanged
 
 ## Notes
 

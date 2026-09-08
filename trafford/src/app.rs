@@ -107,17 +107,34 @@ impl Picker {
             .iter()
             .enumerate()
             .filter_map(|(i, item)| {
-                let against = if item.detail.is_empty() {
+                let shown = if item.detail.is_empty() {
                     item.label.clone()
                 } else {
                     format!("{} {}", item.label, item.detail)
                 };
-                fuzzy_match(&self.query, &against).map(|(s, idx)| {
-                    // Only keep highlight indices that fall inside the label.
-                    let label_len = item.label.chars().count();
-                    let idx = idx.into_iter().filter(|i| *i < label_len).collect();
-                    (s, i, idx)
-                })
+                // The key is never displayed, but it is the name of the thing,
+                // and typing the name of the thing is the first thing a reader
+                // tries. `weekly-note`, labelled "Open this week's note", was
+                // unreachable by typing "weekly"; so were nine others — "help"
+                // did not find "Keyboard reference".
+                //
+                // Score the two separately and keep the better, rather than
+                // concatenating them: one fuzzy match running off the end of
+                // the label and into the key finds nonsense, and "close" would
+                // answer with `outdent-selection`.
+                let on_shown = fuzzy_match(&self.query, &shown);
+                let on_key = fuzzy_match(&self.query, item.key.as_str());
+                let best = match (on_shown, on_key) {
+                    (Some(a), Some(b)) if b.0 > a.0 => (b.0, Vec::new()),
+                    (Some(a), _) => a,
+                    (None, Some(b)) => (b.0, Vec::new()),
+                    (None, None) => return None,
+                };
+                let (score, idx) = best;
+                // Only keep highlight indices that fall inside the label.
+                let label_len = item.label.chars().count();
+                let idx = idx.into_iter().filter(|i| *i < label_len).collect();
+                Some((score, i, idx))
             })
             .collect();
         scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
@@ -1521,6 +1538,25 @@ impl App {
         }
     }
 
+    /// What a new note starts as, and which line to put the cursor on.
+    ///
+    /// A template when one is configured and readable, a heading otherwise.
+    /// Anything the expander does not understand is left as written, so a
+    /// template using more of Templater than this degrades to showing its own
+    /// source rather than losing it.
+    fn body_for_new_note(&self, title: &str) -> (String, Option<usize>) {
+        let plain = (format!("# {title}\n\n"), None);
+        let path = self.config.new_note_template.trim();
+        if path.is_empty() {
+            return plain;
+        }
+        let Ok(template) = std::fs::read_to_string(self.vault.path_for(path)) else {
+            return plain;
+        };
+        let out = crate::vault::template::expand(&template, title, chrono::Local::now());
+        (out.text, out.cursor)
+    }
+
     pub fn create_note(&mut self, name: &str) {
         let name = name.trim();
         if name.is_empty() {
@@ -1533,11 +1569,11 @@ impl App {
             .next()
             .unwrap_or(name)
             .trim_end_matches(".md");
-        let body = format!("# {title}\n\n");
+        let (body, cursor) = self.body_for_new_note(title);
         match self.vault.create_note(&rel, &body) {
             Ok(id) => {
                 self.open_note(&id, true);
-                self.editor.buf.goto_line(1);
+                self.editor.buf.goto_line(cursor.unwrap_or(1));
                 self.set_status(format!("created {id}"));
                 self.refresh_git();
             }
@@ -1546,33 +1582,62 @@ impl App {
     }
 
     pub fn daily_note(&mut self) {
-        let name = chrono::Local::now()
-            .format(&self.config.daily_note_format)
-            .to_string();
-        let dir = self.config.daily_note_dir.trim_matches('/');
+        let (fmt, dir, template) = (
+            self.config.daily_note_format.clone(),
+            self.config.daily_note_dir.clone(),
+            self.config.daily_note_template.clone(),
+        );
+        self.periodic_note(&fmt, &dir, &template);
+    }
+
+    pub fn weekly_note(&mut self) {
+        let (fmt, dir, template) = (
+            self.config.weekly_note_format.clone(),
+            self.config.weekly_note_dir.clone(),
+            self.config.weekly_note_template.clone(),
+        );
+        self.periodic_note(&fmt, &dir, &template);
+    }
+
+    /// Open the note for a period, writing it from its template if it is not
+    /// there yet.
+    ///
+    /// One function for both cadences: they differ only in the format, the
+    /// folder and the template, and a second copy would be a second place for
+    /// the "open it if it already exists" rule to go wrong.
+    fn periodic_note(&mut self, format: &str, dir: &str, template: &str) {
+        let name = chrono::Local::now().format(format).to_string();
+        let dir = dir.trim_matches('/');
         let rel = if dir.is_empty() {
             name.clone()
         } else {
             format!("{dir}/{name}")
         };
-        let existing = self.vault.resolve_target(&rel);
-        match existing {
-            Some(idx) => {
-                let id = self.vault.notes[idx].id.clone();
-                self.open_note(&id, true);
-                self.set_status(format!("opened {id}"));
-            }
-            None => {
-                let body = format!("# {name}\n\n");
-                match self.vault.create_note(&rel, &body) {
-                    Ok(id) => {
-                        self.open_note(&id, true);
-                        self.editor.buf.goto_line(1);
-                        self.set_status(format!("created {id}"));
-                    }
-                    Err(err) => self.set_status(format!("create failed: {err}")),
+        // Already written: open it. Overwriting today's note with a blank
+        // template would be the worst thing this command could do.
+        if let Some(idx) = self.vault.resolve_target(&rel) {
+            let id = self.vault.notes[idx].id.clone();
+            self.open_note(&id, true);
+            self.set_status(format!("opened {id}"));
+            return;
+        }
+        let (body, cursor) = match template.trim() {
+            "" => (format!("# {name}\n\n"), None),
+            path => match std::fs::read_to_string(self.vault.path_for(path)) {
+                Ok(text) => {
+                    let out = crate::vault::template::expand(&text, &name, chrono::Local::now());
+                    (out.text, out.cursor)
                 }
+                Err(_) => (format!("# {name}\n\n"), None),
+            },
+        };
+        match self.vault.create_note(&rel, &body) {
+            Ok(id) => {
+                self.open_note(&id, true);
+                self.editor.buf.goto_line(cursor.unwrap_or(1));
+                self.set_status(format!("created {id}"));
             }
+            Err(err) => self.set_status(format!("create failed: {err}")),
         }
     }
 
@@ -1599,8 +1664,19 @@ impl App {
 
     pub fn delete_note(&mut self, id: &str) {
         let path = self.vault.path_for(id);
-        match std::fs::remove_file(&path) {
-            Ok(()) => {
+        // `none` is for anyone who genuinely wants the file gone; everything
+        // else goes to the vault's own trash, which is where the rest of this
+        // vault's deletions already are.
+        let outcome = if self.config.trash == "none" {
+            std::fs::remove_file(&path).map(|()| None)
+        } else {
+            self.vault
+                .trash_note(id)
+                .map(Some)
+                .map_err(|e| std::io::Error::other(format!("{e:#}")))
+        };
+        match outcome {
+            Ok(where_it_went) => {
                 let _ = self.vault.rescan();
                 if self.current.as_deref() == Some(id) {
                     self.current = None;
@@ -1609,7 +1685,12 @@ impl App {
                         self.open_note(&next, false);
                     }
                 }
-                self.set_status(format!("deleted {id}"));
+                self.folded.forget(id);
+                self.unsaved.remove(id);
+                self.set_status(match where_it_went {
+                    Some(to) => format!("moved {id} to {to}"),
+                    None => format!("deleted {id}"),
+                });
                 self.refresh_git();
             }
             Err(err) => self.set_status(format!("delete failed: {err}")),
@@ -1995,6 +2076,187 @@ mod tests {
         std::fs::remove_file(dir.path().join("Note.md")).unwrap();
         absorb(&mut app, &[&dir.path().join("Note.md")], true);
         assert!(app.editor.buf.text().contains("Original."));
+    }
+
+    #[test]
+    fn deleting_moves_the_note_to_the_trash_and_says_where() {
+        let (dir, mut app) = two_note_app();
+        app.delete_note("Two.md");
+        assert!(
+            dir.path().join(".trash/Two.md").exists(),
+            "it is in the trash"
+        );
+        assert!(
+            app.status_text().is_some_and(|m| m.contains(".trash")),
+            "and the reader is told where it went: {:?}",
+            app.status_text()
+        );
+        assert!(app.vault.get("Two.md").is_none(), "gone from the index");
+    }
+
+    #[test]
+    fn trash_none_still_unlinks_for_anyone_who_wants_that() {
+        let (dir, mut app) = two_note_app();
+        app.config.trash = "none".into();
+        app.delete_note("Two.md");
+        assert!(!dir.path().join(".trash/Two.md").exists());
+        assert!(!dir.path().join("Two.md").exists(), "genuinely gone");
+    }
+
+    #[test]
+    fn deleting_a_note_forgets_what_was_being_held_for_it() {
+        // A held buffer or a fold set for a note that no longer exists is a
+        // stale key waiting to be applied to whatever takes its place.
+        let (_dir, mut app) = two_note_app();
+        app.open_note("Two.md", true);
+        app.editor.buf.lines.push("typed".into());
+        app.editor.buf.dirty = true;
+        app.open_note("One.md", true);
+        assert!(app.unsaved_notes().contains(&"Two.md".to_string()));
+
+        app.delete_note("Two.md");
+        assert!(
+            !app.unsaved_notes().contains(&"Two.md".to_string()),
+            "nothing is held for a note that is gone"
+        );
+    }
+
+    #[test]
+    fn a_daily_note_is_written_from_its_template() {
+        let dir = crate::testing::TempDir::with_files(&[(
+            "_templates/daily.md",
+            "---\ntags:\n  - type/log\n---\n\n# <% tp.date.now(\"dddd, MMMM D, YYYY\") %>\n\n<< [[<% tp.date.now(\"%Y-%m-%d\", -1) %>]] >>\n",
+        )]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.config.daily_note_dir = "00-inbox/daily".into();
+        app.config.daily_note_template = "_templates/daily.md".into();
+
+        app.daily_note();
+        let text = app.editor.buf.text();
+        assert!(
+            text.contains("type/log"),
+            "the template came with it: {text:?}"
+        );
+        assert!(!text.contains("<%"), "and expanded");
+        let id = app.current.clone().unwrap();
+        assert!(
+            id.starts_with("00-inbox/daily/"),
+            "in the vault's own folder: {id}"
+        );
+    }
+
+    #[test]
+    fn asking_twice_opens_the_note_rather_than_rewriting_it() {
+        // The worst thing this command could do is replace today's note with a
+        // blank template.
+        let dir = crate::testing::TempDir::with_files(&[("Seed.md", "# Seed\n")]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.config.daily_note_dir = "journal".into();
+
+        app.daily_note();
+        let id = app.current.clone().unwrap();
+        app.editor.buf.lines.push("something I wrote today".into());
+        app.save();
+
+        app.open_note("Seed.md", true);
+        app.daily_note();
+        assert_eq!(app.current.as_deref(), Some(id.as_str()));
+        assert!(
+            app.editor.buf.text().contains("something I wrote today"),
+            "the day's work survived asking again"
+        );
+    }
+
+    #[test]
+    fn a_weekly_note_is_its_own_note_in_its_own_place() {
+        let dir = crate::testing::TempDir::with_files(&[("Seed.md", "# Seed\n")]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.config.daily_note_dir = "00-inbox/daily".into();
+        app.config.weekly_note_dir = "00-inbox/weekly".into();
+        app.config.weekly_note_format = "%Y-W%V".into();
+
+        app.daily_note();
+        let day = app.current.clone().unwrap();
+        app.weekly_note();
+        let week = app.current.clone().unwrap();
+        assert_ne!(day, week);
+        assert!(week.starts_with("00-inbox/weekly/"), "{week}");
+        assert!(week.contains("-W"), "named as a week: {week}");
+    }
+
+    #[test]
+    fn a_missing_template_still_gives_you_todays_note() {
+        let dir = crate::testing::TempDir::with_files(&[("Seed.md", "# Seed\n")]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.config.daily_note_template = "_templates/gone.md".into();
+        app.daily_note();
+        assert!(app.current.is_some(), "the note was still made");
+        assert!(!app.editor.buf.text().is_empty());
+    }
+
+    #[test]
+    fn a_new_note_uses_the_template_when_one_is_configured() {
+        let dir = crate::testing::TempDir::with_files(&[(
+            "_templates/inbox.md",
+            "---\ntags:\n  - type/log\n---\n\n# <% tp.file.title %>\n\n<% tp.file.cursor(0) %>\n",
+        )]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.config.new_note_template = "_templates/inbox.md".into();
+
+        app.create_note("Reading list");
+        let text = app.editor.buf.text();
+        assert!(
+            text.contains("# Reading list"),
+            "the title went in: {text:?}"
+        );
+        assert!(
+            text.contains("type/log"),
+            "and the frontmatter came with it"
+        );
+        assert!(!text.contains("<%"), "nothing left unexpanded");
+        assert_eq!(
+            app.editor.buf.row, 7,
+            "the cursor landed where the template asked"
+        );
+    }
+
+    #[test]
+    fn a_new_note_without_a_template_is_what_it_always_was() {
+        let dir = crate::testing::TempDir::with_files(&[("Seed.md", "# Seed\n")]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.create_note("Plain");
+        assert_eq!(app.editor.buf.text(), "# Plain\n\n");
+    }
+
+    #[test]
+    fn a_template_that_cannot_be_read_falls_back_rather_than_failing() {
+        let dir = crate::testing::TempDir::with_files(&[("Seed.md", "# Seed\n")]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.config.new_note_template = "_templates/missing.md".into();
+        app.create_note("Still Fine");
+        assert_eq!(app.editor.buf.text(), "# Still Fine\n\n");
+    }
+
+    #[test]
+    fn making_a_note_never_changes_the_template() {
+        let dir =
+            crate::testing::TempDir::with_files(&[("_templates/t.md", "# <% tp.file.title %>\n")]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.config.new_note_template = "_templates/t.md".into();
+        app.create_note("A Note");
+        let template = std::fs::read_to_string(dir.path().join("_templates/t.md")).unwrap();
+        assert_eq!(
+            template, "# <% tp.file.title %>\n",
+            "the template is untouched"
+        );
     }
 
     #[test]
