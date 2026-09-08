@@ -71,6 +71,19 @@ Preview stops being the editor with the syntax hidden. A note's structure folds,
 - [x] `0045` Watch the vault and keep up with it <sup>feature · p0 · vault</sup>
 - [x] `0046` Tell agent instructions apart from notes in the sidebar <sup>feature · p2 · tree</sup>
 
+## v0.6 — It fits the vault it is given
+
+`··········` 0% · 0 of 4 done · due 2027-02-14
+
+Obsidian is closed source, so there is nothing to read. The vault is not: its
+
+### backlog
+
+- [ ] `0048` Take the vault's settings from Obsidian's own config <sup>feature · p1 · config</sup>
+- [ ] `0049` Expand a template when a note is made from one <sup>feature · p1 · vault</sup>
+- [ ] `0050` Daily and weekly notes where this vault keeps them <sup>feature · p1 · vault</sup>
+- [ ] `0051` Delete to the vault's trash, not to nowhere <sup>bug · p1 · vault</sup>
+
 ## later — Someday
 
 `##········` 14% · 1 of 7 done
