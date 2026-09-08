@@ -30,6 +30,45 @@
     return found;
   }
 
+  /* A still is an <img>, and nothing of the page reaches inside one.
+   *
+   * Its own stylesheet covers the two palettes a reader gets without asking —
+   * the dark default and the light one their system prefers — but not an
+   * explicit choice of the third theme. Inlined, the same file resolves
+   * `var(--term-…)` against the page and follows whatever was chosen. So the
+   * swap happens only when there is a choice to follow: with none, the <img>
+   * is already right, and is lazy besides. */
+  function inlineStills() {
+    if (!document.documentElement.hasAttribute("data-theme")) return;
+    if (!window.fetch || !window.DOMParser) return;
+
+    var stills = document.querySelectorAll(".shot img, .cast img");
+    Array.prototype.forEach.call(stills, function (img) {
+      var src = img.getAttribute("src");
+      if (!src || !/\.svg$/.test(src) || img.dataset.inlined) return;
+      img.dataset.inlined = "1";
+      fetch(src)
+        .then(function (r) {
+          return r.ok ? r.text() : Promise.reject(r.status);
+        })
+        .then(function (text) {
+          var svg = new DOMParser()
+            .parseFromString(text, "image/svg+xml")
+            .querySelector("svg");
+          /* Only a recording drawn in roles has anything to gain, and only it
+             carries rules scoped tightly enough to inline safely. */
+          if (!svg || !svg.classList.contains("shot-palette")) return;
+          if (!img.parentNode) return;
+          svg.setAttribute("role", "img");
+          svg.setAttribute("aria-label", img.getAttribute("alt") || "");
+          img.parentNode.replaceChild(svg, img);
+        })
+        .catch(function () {
+          /* The <img> is still there and is still correct. */
+        });
+    });
+  }
+
   function setUpTheme() {
     var button = document.querySelector(".theme-toggle");
     if (!button) return;
@@ -54,6 +93,7 @@
       current = names[(at + 1) % names.length];
       document.documentElement.setAttribute("data-theme", current);
       show(current);
+      inlineStills();
       try {
         localStorage.setItem(KEY, current);
       } catch (e) {}
@@ -96,8 +136,25 @@
    * Nothing is fetched until a recording is near the viewport, and a player
    * stops when it leaves. Six of these all running behind the fold is a
    * laptop fan. */
+  /* A recording says which *role* drew a cell, not which colour.
+   *
+   * The palettes are already in the stylesheet, one block per theme, so a
+   * recording painted through them wears whatever the reader chose — which is
+   * what the theme section of the landing page claims and what every
+   * recording used to contradict, being gotham no matter what the page was
+   * wearing. An older cast carries hex instead, and still paints. */
+  function colour(role) {
+    return /^[0-9a-f]{6}$/.test(role) ? "#" + role : "var(--term-" + role + ")";
+  }
+
   function Cast(host) {
-    var poster = host.firstElementChild;
+    /* Looked up rather than held: `inlineStills` may replace the poster with
+       an inline copy of itself when a theme is chosen, and a held reference
+       would go on styling the element that is no longer in the page — the
+       poster would never hide and the player would draw underneath it. */
+    function poster() {
+      return host.querySelector("img, svg");
+    }
     var quiet = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     var button = document.createElement("button");
     button.type = "button";
@@ -130,7 +187,7 @@
         screen.appendChild(row);
         grid.push(row);
       }
-      host.insertBefore(screen, poster);
+      host.insertBefore(screen, poster());
       /* The screen is built but not shown. Loading a recording used to reveal
          its *first* frame, which is the least interesting one — the poster was
          chosen for being worth looking at. So the poster stays until the
@@ -161,8 +218,8 @@
           var style = cast.styles[run[0]];
           var span = document.createElement("span");
           span.textContent = run[1];
-          span.style.color = "#" + style[0];
-          if (style[1] !== cast.bg) span.style.background = "#" + style[1];
+          span.style.color = colour(style[0]);
+          if (style[1] !== cast.bg) span.style.background = colour(style[1]);
           if (style[2]) span.style.fontWeight = "700";
           if (style[3]) span.style.fontStyle = "italic";
           if (style[4]) span.style.textDecoration = "underline";
@@ -203,7 +260,8 @@
          reserving the box, so swapping them moves nothing. `hidden` would not
          have worked for the inline one anyway — it is an <svg>, and
          `HTMLElement.hidden` is not a property SVG elements have. */
-      poster.style.visibility = "hidden";
+      var still = poster();
+      if (still) still.style.visibility = "hidden";
       screen.style.visibility = "visible";
       if (progress) progress.style.opacity = "1";
       resize();
@@ -330,6 +388,7 @@
 
       function wear() {
         document.documentElement.setAttribute("data-theme", name);
+        inlineStills();
         try {
           localStorage.setItem(KEY, name);
         } catch (e) {}
@@ -378,6 +437,7 @@
   }
 
   setUpTheme();
+  inlineStills();
   setUpCopy();
   setUpCasts();
   setUpThemeStrip();

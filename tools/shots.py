@@ -38,6 +38,27 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "site" / "shots.toml"
 BIN = ROOT / "target" / "release" / "trafford"
 
+# A theme whose every role is a different colour, used to record with.
+#
+# The recordings carry *roles* rather than colours, so the website can draw
+# them in whatever theme the reader has chosen — which is the whole claim the
+# theme section makes, and it was false: every recording was gotham, so
+# choosing Paper gave a cream page with six dark terminals pasted onto it.
+#
+# Roles cannot be recovered from a normal recording, because a palette is not
+# injective: gotham draws `faint` and `selection` in one hex, and `link` and
+# `muted` in another, and in paper those pairs are nowhere near each other. So
+# the capture runs against a theme that gives every role a colour of its own,
+# and the mapping back is exact by construction.
+SENTINEL = "probe"
+
+# What the root `<svg>` of a role recording wears, so its palette rules can be
+# scoped to it and reach nothing else on the page.
+SVG_CLASS = "shot-palette"
+
+# `Theme`'s field names are not quite the theme file's keys.
+TOML_KEY = {"bg": "background", "fg": "text"}
+
 # The terminal's own default, used for any cell the program left alone. Taken
 # from Gotham, which is the theme the fixture pins — a shot whose background
 # came from whoever ran it would differ between machines.
@@ -78,7 +99,79 @@ KEYS = {
 }
 
 
-def prepare(spec, base, tmp, index):
+def palettes():
+    """Every theme's roles, asked of the program rather than parsed here.
+
+    A theme file may leave a role unstated and have it derived, so a second
+    reader of the format would get a different answer from the one the app
+    draws with. `site palette` is that answer.
+    """
+    out = subprocess.run(
+        ["cargo", "run", "--quiet", "-p", "trafford-site", "--", "palette"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(out.stdout)
+
+
+def sentinel_colours(roles):
+    """One unmistakable colour per role. A grey ramp: unique, and nothing else
+    on the screen is anywhere near it."""
+    return {role: f"{i + 1:02x}{i + 1:02x}{i + 1:02x}" for i, role in enumerate(roles)}
+
+
+def write_sentinel_theme(vault, roles):
+    """Into the vault, which is the first place `Theme::resolve` looks.
+
+    Not the user config directory: that is `~/Library/Application Support` on
+    macOS and `~/.config` on Linux, so a theme written to one of them is
+    invisible on the other — which is exactly what happened, silently. Every
+    recording came out in two colours and nothing failed. The vault path is
+    the same everywhere.
+    """
+    directory = vault / ".trafford" / "themes"
+    directory.mkdir(parents=True, exist_ok=True)
+    lines = ['name = "Probe"', "dark = true"]
+    for role, colour in sentinel_colours(roles).items():
+        lines.append(f'{TOML_KEY.get(role, role.replace("-", "_"))} = "#{colour}"')
+    (directory / f"{SENTINEL}.toml").write_text("\n".join(lines) + "\n")
+
+
+def as_roles(rows, roles):
+    """Replace every captured colour with the role that produced it.
+
+    A colour that is not a sentinel means something drew with a value that did
+    not come from the theme. That is worth saying out loud rather than
+    silently freezing one theme's colour into a recording that claims to
+    follow the reader's.
+    """
+    back = {colour: role for role, colour in sentinel_colours(roles).items()}
+    unknown = set()
+
+    def role_of(colour, default):
+        if colour == "default":
+            return default
+        if colour in back:
+            return back[colour]
+        unknown.add(colour)
+        return default
+
+    # Rebuilt rather than mutated in place: pyte's cells are namedtuples, and
+    # two identical cells are equal, so anything that looks a cell up by value
+    # rewrites the wrong one.
+    rows = [
+        [cell._replace(fg=role_of(cell.fg, "fg"), bg=role_of(cell.bg, "bg")) for cell in row]
+        for row in rows
+    ]
+    if unknown:
+        shown = " ".join(sorted(f"#{c}" for c in unknown))
+        print(f"  note: drawn with colours no theme role explains: {shown}")
+    return rows
+
+
+def prepare(spec, base, tmp, index, roles):
     """A fresh vault for one recording.
 
     Per recording rather than one shared copy: a shot can ask for a theme or
@@ -90,11 +183,16 @@ def prepare(spec, base, tmp, index):
     vault = pathlib.Path(tmp) / f"{index:02d}-{spec['name']}"
     shutil.copytree(base, vault)
 
-    if "theme" in spec:
-        config = vault / ".trafford" / "config.toml"
-        config.write_text(
-            re.sub(r'theme = "[^"]*"', f'theme = "{spec["theme"]}"', config.read_text())
-        )
+    # A shot that names a theme means it: the strip is three palettes shown at
+    # once, and must not follow the reader's. Everything else records through
+    # the sentinel theme and comes out wearing roles.
+    theme = spec.get("theme", SENTINEL)
+    if theme == SENTINEL:
+        write_sentinel_theme(vault, roles)
+    config = vault / ".trafford" / "config.toml"
+    config.write_text(
+        re.sub(r'theme = "[^"]*"', f'theme = "{theme}"', config.read_text())
+    )
 
     make_repo(vault)
 
@@ -271,7 +369,9 @@ def to_cast(frames, cast):
         "cols": cast["cols"],
         "rows": cast["rows"],
         "loop": cast.get("loop_pause", 1500),
-        "bg": DEFAULT_BG,
+        # A role recording names its ground; a literal one carries the hex.
+        # `site.js` reads this to decide which it is holding.
+        "bg": "bg" if cast.get("roles", True) else DEFAULT_BG,
         "styles": styles,
         "frames": out,
     }
@@ -281,6 +381,8 @@ def runs(row):
     """Collapse a row into runs of one style, so the SVG is not one node per cell."""
     out, current, style = [], [], None
     for cell in row:
+        # `as_roles` has already turned a role recording's defaults into "fg"
+        # and "bg"; what is left here is a literal capture.
         here = (
             cell.fg if cell.fg != "default" else DEFAULT_FG,
             cell.bg if cell.bg != "default" else DEFAULT_BG,
@@ -304,31 +406,76 @@ def escape(text):
     )
 
 
-def to_svg(rows, title):
+def role_style(palette, used):
+    """The stylesheet an SVG carries so it can wear two themes.
+
+    An `<img>` cannot see the page's `data-theme`, but an SVG *does* honour a
+    `<style>` of its own, media queries included — so one file covers the two
+    palettes a reader gets without choosing: the dark default, and the light
+    one their system asks for. An explicit choice of the third theme is the
+    player's job, and the player repaints the moment it starts.
+
+    Every rule is scoped under the root's own class. The hero is *inlined* into
+    the page rather than loaded as an image, so a bare `.accent{fill:…}` here
+    is a document-wide rule — and the page has other inline SVG for it to
+    repaint.
+    """
+    themes = palette["themes"]
+    dark = next(n for n in themes if n == "gotham")
+    light = next((n for n in themes if n == "paper"), dark)
+    # `var(--term-r, #hex)` rather than a bare hex, because these files are
+    # read two ways. The hero is inlined into the page, where the variable is
+    # defined and follows whichever of the three themes the reader picked. The
+    # rest load as `<img>`, where nothing of the page reaches in and the
+    # fallback is what draws — which is why the media query below swaps the
+    # *fallback* rather than the variable.
+    rules = "".join(
+        f".{SVG_CLASS} .{r}{{fill:var(--term-{r},#{themes[dark][r]})}}" for r in used
+    )
+    swap = "".join(
+        f".{SVG_CLASS} .{r}{{fill:var(--term-{r},#{themes[light][r]})}}" for r in used
+    )
+    return (
+        f"<style>{rules}"
+        f"@media(prefers-color-scheme:light){{{swap}}}</style>"
+    )
+
+
+def to_svg(rows, title, palette=None):
     cols = len(rows[0])
     width = cols * ADVANCE + PADDING * 2
     height = len(rows) * LINE_HEIGHT + PADDING * 2
 
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width:.0f} {height:.0f}" '
-        f'width="{width:.0f}" height="{height:.0f}" role="img" '
+        f'width="{width:.0f}" height="{height:.0f}"{" class=" + chr(34) + SVG_CLASS + chr(34) if palette else ""} role="img" '
         f'aria-label="{escape(title)}" font-family="{FONT_STACK}" '
         f'font-size="{FONT_SIZE:.1f}">',
         f"<title>{escape(title)}</title>",
-        f'<rect width="100%" height="100%" fill="#{DEFAULT_BG}" rx="6"/>',
     ]
+    if palette:
+        used = sorted(
+            {c.fg for row in rows for c in row} | {c.bg for row in rows for c in row}
+        )
+        parts.append(role_style(palette, used))
+        parts.append('<rect width="100%" height="100%" class="bg" rx="6"/>')
+    else:
+        parts.append(f'<rect width="100%" height="100%" fill="#{DEFAULT_BG}" rx="6"/>')
+
+    ground = "bg" if palette else DEFAULT_BG
+    paint = (lambda c: f'class="{c}"') if palette else (lambda c: f'fill="#{c}"')
 
     # Backgrounds first, as one pass, so a coloured run sits under its text
     # rather than beside it.
     for y, row in enumerate(rows):
         x = 0
         for (fg, bg, bold, italic, under), text in runs(row):
-            if bg != DEFAULT_BG:
+            if bg != ground:
                 parts.append(
                     f'<rect x="{PADDING + x * ADVANCE:.1f}" '
                     f'y="{PADDING + y * LINE_HEIGHT:.1f}" '
                     f'width="{len(text) * ADVANCE:.1f}" height="{LINE_HEIGHT:.1f}" '
-                    f'fill="#{bg}"/>'
+                    f'{paint(bg)}/>'
                 )
             x += len(text)
 
@@ -351,7 +498,7 @@ def to_svg(rows, title):
                     f'x="{PADDING + x * ADVANCE:.1f}"',
                     f'textLength="{len(text) * ADVANCE:.1f}"',
                     'lengthAdjust="spacingAndGlyphs"',
-                    f'fill="#{fg}"',
+                    paint(fg),
                     'xml:space="preserve"',
                 ]
                 if bold:
@@ -431,6 +578,7 @@ def main():
     base = MANIFEST.parent
     out_dir = (base / manifest["out"]).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
+    palette = palettes()
 
     stale = []
     stale_pairs = []
@@ -445,15 +593,22 @@ def main():
         os.environ["XDG_CONFIG_HOME"] = str(home / ".config")
         fixture = base / manifest["vault"]
 
+        # A shot naming a theme is drawn in it; everything else is drawn in
+        # roles and coloured by whoever is reading.
+        roles_of = lambda spec, rows: rows if "theme" in spec else as_roles(rows, palette["roles"])
+        wear = lambda spec: None if "theme" in spec else palette
+
         shots = []
         for i, shot in enumerate(manifest["shot"]):
-            vault = prepare(shot, fixture, tmp, i)
+            vault = prepare(shot, fixture, tmp, i, palette["roles"])
+            rows = roles_of(shot, capture(shot, vault))
             shots.append(
-                (out_dir / f"{shot['name']}.svg", to_svg(capture(shot, vault), shot["title"]))
+                (out_dir / f"{shot['name']}.svg", to_svg(rows, shot["title"], wear(shot)))
             )
         for i, cast in enumerate(manifest.get("cast", []), start=100):
-            vault = prepare(cast, fixture, tmp, i)
-            frames = record(cast, vault)
+            vault = prepare(cast, fixture, tmp, i, palette["roles"])
+            frames = [(hold, roles_of(cast, rows)) for hold, rows in record(cast, vault)]
+            cast = {**cast, "roles": "theme" not in cast}
             shots.append(
                 (
                     out_dir / f"{cast['name']}.cast.json",
@@ -465,7 +620,7 @@ def main():
             # ends on, which is the one worth being still.
             poster = frames[cast.get("poster", len(frames) - 1)][1]
             shots.append(
-                (out_dir / f"{cast['name']}.svg", to_svg(poster, cast["title"]))
+                (out_dir / f"{cast['name']}.svg", to_svg(poster, cast["title"], wear(cast)))
             )
 
     for dest, body in shots:

@@ -135,6 +135,10 @@ def main():
     parser.add_argument("--width", type=int, default=1440)
     parser.add_argument("--height", type=int, default=1000)
     parser.add_argument("--page", default="")
+    # Sets the attribute directly rather than clicking the switcher, so
+    # anything the switcher *does* does not happen — the stills stay <img> and
+    # keep their default palette instead of being inlined and re-coloured.
+    # What this shows is the CSS, which is what it is for.
     parser.add_argument("--theme", default="", help="force a data-theme")
     # Playwright defaults to a light preference, which is a real reader and not
     # the one this site is designed against first. Both are worth looking at.
