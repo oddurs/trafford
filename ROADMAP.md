@@ -93,7 +93,7 @@ Good ideas without a date yet.
 ### backlog
 
 - [ ] `0026` A rail showing the shape of the note beside it <sup>feature · p2 · chrome</sup>
-- [ ] `0027` Every unfinished task in the vault, in one place <sup>feature · p2 · vault</sup>
+- [ ] `0027` Every unfinished task in the vault, in one place <sup>feature · p1 · vault</sup>
 - [ ] `0028` Show where you came from, and reopen where you left off <sup>feature · p3 · chrome</sup>
 - [ ] `0029` Read two notes side by side <sup>feature · p3 · chrome</sup>
 - [ ] `0030` Should the editor render in place, the way Obsidian does? <sup>spike · p2 · editor</sup>
