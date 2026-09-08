@@ -14,7 +14,7 @@ pub const COMMANDS: &[(&str, &str, &str)] = &[
     ("search", "Search vault", "ctrl-f"),
     ("new-note", "New note", "ctrl-n"),
     ("daily-note", "Open today's daily note", ""),
-    ("weekly-note", "Open this week's note", ""),
+    ("weekly-note", "Open the weekly note", ""),
     ("insert-link", "Insert link to a note", "ctrl-l"),
     ("backlinks", "Jump to a note that links here", "ctrl-t"),
     ("save", "Save note", "ctrl-s"),
@@ -1511,6 +1511,45 @@ pub const HELP: &[(&str, &str)] = &[
 
 #[cfg(test)]
 mod tests {
+
+    /// Every command must be reachable by typing the words in its own name.
+    ///
+    /// The palette matches on the *label*, not the key, so a command can be
+    /// registered and unfindable — which `weekly-note` was, labelled "Open this
+    /// week's note", where "weekly" is not a subsequence.
+    #[test]
+    fn every_command_can_be_found_by_typing_its_own_name() {
+        let mut unfindable = Vec::new();
+        for (key, label, _) in super::COMMANDS {
+            // Drive the real picker rather than a reconstruction of it: the
+            // question is what the reader sees when they type, not what the
+            // matcher would say about a string assembled here.
+            for word in key.split('-').chain(std::iter::once(*key)) {
+                let mut picker = crate::app::Picker::new("Commands", super::palette_items());
+                for c in word.chars() {
+                    picker.push(c);
+                }
+                let found = picker
+                    .matches
+                    .iter()
+                    .any(|(i, _)| picker.items[*i].key == *key);
+                if !found {
+                    unfindable.push(format!("{key}: typing {word:?} does not find {label:?}"));
+                }
+            }
+        }
+        let items = super::palette_items();
+        assert!(
+            unfindable.is_empty(),
+            "commands nobody can reach:\n  {}",
+            unfindable.join("\n  ")
+        );
+        assert_eq!(
+            items.len(),
+            super::COMMANDS.len(),
+            "every command is offered"
+        );
+    }
     use super::{escape_target, Escape};
     use crate::app::{fuzzy_match, Overlay};
 
