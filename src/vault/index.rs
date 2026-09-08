@@ -28,6 +28,19 @@ pub struct Results {
     pub total: usize,
 }
 
+/// One section of one note, retrieved to ground an answer.
+#[derive(Debug, Clone)]
+pub struct Passage {
+    pub id: String,
+    pub title: String,
+    /// The heading it sits under, if it has one.
+    pub heading: Option<String>,
+    /// The line the section starts on, which is what a citation opens.
+    pub line: usize,
+    pub text: String,
+    pub score: i64,
+}
+
 /// A search hit inside a note.
 #[derive(Debug, Clone)]
 pub struct Hit {
@@ -492,38 +505,75 @@ impl Vault {
     /// ranked so that title matches float above body matches.
     /// Rank whole notes against a natural-language question. Used to build
     /// context for the assistant: term overlap, weighted toward titles.
-    pub fn relevant(&self, question: &str, limit: usize) -> Vec<&Note> {
+    /// The passages most worth showing the assistant, as sections rather than
+    /// whole notes.
+    ///
+    /// Notes here are large — p50 803 words, p90 2,961, max 8,576 — so feeding
+    /// whole ones spends most of the context on prose nobody asked about and
+    /// buries the passage that matters. Sections come from `ui::fold::headings`,
+    /// which is already the single heading scanner for the outline, the folds
+    /// and the reading view; a second idea of a document's structure diverges
+    /// exactly the way a second idea of the layout does.
+    pub fn relevant_sections(&self, question: &str, limit: usize) -> Vec<Passage> {
         let terms: Vec<String> = question
             .to_lowercase()
             .split(|c: char| !c.is_alphanumeric())
             .filter(|t| t.len() > 2)
-            .map(|t| t.to_string())
+            .map(str::to_string)
             .collect();
         if terms.is_empty() {
             return Vec::new();
         }
-        let mut scored: Vec<(i64, &Note)> = self
-            .notes
-            .iter()
-            .map(|note| {
-                let title = note.title.to_lowercase();
+        let mut out: Vec<Passage> = Vec::new();
+        for note in &self.notes {
+            let lines: Vec<String> = note.text.lines().map(str::to_string).collect();
+            let folded: Vec<String> = note.haystack.lines().map(str::to_string).collect();
+            let heads = crate::ui::fold::headings(&lines);
+            // A note with no headings is one section: itself.
+            let spans: Vec<(usize, usize, Option<String>)> = if heads.is_empty() {
+                vec![(0, lines.len(), None)]
+            } else {
+                let mut spans = Vec::new();
+                if heads[0].row > 0 {
+                    spans.push((0, heads[0].row, None));
+                }
+                for (i, h) in heads.iter().enumerate() {
+                    let end = heads.get(i + 1).map(|n| n.row).unwrap_or(lines.len());
+                    spans.push((h.row, end, Some(h.text.clone())));
+                }
+                spans
+            };
+            for (start, end, heading) in spans {
+                let body_folded = folded[start..end.min(folded.len())].join("\n");
                 let mut score = 0i64;
                 for term in &terms {
-                    if title.contains(term) {
-                        score += 25;
+                    score += body_folded.matches(term.as_str()).count().min(8) as i64;
+                    if note.title.to_lowercase().contains(term) {
+                        score += 4;
                     }
-                    if note.tags.iter().any(|t| t.to_lowercase().contains(term)) {
-                        score += 10;
+                    if heading
+                        .as_deref()
+                        .is_some_and(|h| h.to_lowercase().contains(term))
+                    {
+                        score += 12;
                     }
-                    let occurrences = note.haystack.matches(term.as_str()).count() as i64;
-                    score += occurrences.min(8);
                 }
-                (score, note)
-            })
-            .filter(|(s, _)| *s > 0)
-            .collect();
-        scored.sort_by_key(|(score, _)| std::cmp::Reverse(*score));
-        scored.into_iter().take(limit).map(|(_, n)| n).collect()
+                if score == 0 {
+                    continue;
+                }
+                out.push(Passage {
+                    id: note.id.clone(),
+                    title: note.title.clone(),
+                    heading,
+                    line: start,
+                    text: lines[start..end.min(lines.len())].join("\n"),
+                    score,
+                });
+            }
+        }
+        out.sort_by_key(|p| std::cmp::Reverse(p.score));
+        out.truncate(limit);
+        out
     }
 
     pub fn path_for(&self, id: &str) -> PathBuf {
@@ -1455,12 +1505,26 @@ mod tests {
     }
 
     #[test]
-    fn relevance_prefers_title_and_tag_overlap() {
+    fn relevance_prefers_title_and_heading_overlap() {
         let (_d, vault) = scratch(&[
             ("gardening.md", "---\ntags: [outdoors]\n---\n# gardening\n"),
             ("misc.md", "a passing mention of gardening\n"),
         ]);
-        let top = vault.relevant("how is gardening going", 2);
+        let top = vault.relevant_sections("how is gardening going", 2);
         assert_eq!(top[0].id, "gardening.md");
+    }
+
+    /// Retrieval is over sections, so a long note contributes the part that
+    /// matched rather than all of itself.
+    #[test]
+    fn a_long_note_contributes_only_the_section_that_matched() {
+        let (_d, vault) = scratch(&[(
+            "big.md",
+            "# Big\n\n## Recursion\n\nfixed points everywhere\n\n## Packing\n\nsocks and shoes\n",
+        )]);
+        let top = vault.relevant_sections("recursion fixed points", 3);
+        assert_eq!(top[0].heading.as_deref(), Some("Recursion"));
+        assert!(!top[0].text.contains("socks"));
+        assert!(top[0].line > 0, "and it names the line it starts on");
     }
 }

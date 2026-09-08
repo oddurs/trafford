@@ -2,8 +2,10 @@
 id: 60
 title: Ask the vault, and cite it
 type: feature
-status: planned
+status: done
 milestone: v0.7
+assignee: Oddur Sigurdsson
+claimed: 2026-09-08
 depends_on:
 - 56
 - 58
@@ -59,3 +61,41 @@ not a fluent paragraph assembled from the nearest three notes.
 - [ ] A citation naming a note that does not exist is caught before drawing
 - [ ] A question with no support in the vault is answered as unsupported
 - [ ] Retrieval never sends the whole vault; what was sent is inspectable
+
+## What shipped
+
+**Retrieval is over sections.** `Vault::relevant_sections` splits each note at
+its headings — through `ui::fold::headings`, the one heading scanner the
+outline, the folds and the reading view already share — and scores each section
+on its own. A heading matching the question counts for three times what a body
+term does, since a heading is what the author said the section is about.
+
+`Vault::relevant`, which returned whole notes, is gone. Two ideas of what is
+relevant would be two things to keep in step, and on notes with p90 2,961 words
+the whole-note version spent most of the context on prose nobody asked about.
+
+**Citations are checked, not trusted.** When an answer finishes streaming,
+every `[[link]]` in it is resolved against the index, and any that names a note
+the vault does not have is reported. An assistant naming a note that does not
+exist is worse than one saying it does not know, because the vault is the one
+thing in the room that was supposed to be true — and a reader cannot tell the
+two apart by looking.
+
+**A citation opens what was cited.** `[[Note#Heading]]` already jumped to the
+heading; a citation without one now lands on the line the retrieved passage
+started on, because the top of an 8,000-word note is not where the answer came
+from.
+
+**It says when it has nothing.** The system prompt asks for "nothing in the
+vault covers this" over a fluent paragraph assembled from the nearest three
+notes, and instructs it to cite only passages it was given. Both are pinned by
+tests against the prompt text, which is the only part of a model's behaviour
+this program can actually assert on.
+
+### What is not claimed
+
+The end-to-end behaviour needs an API key and a live model, so what is tested
+here is retrieval, citation resolution and the prompt — not that the model
+obeys it. Retrieval returning the right section, a citation opening the right
+line, and a fabricated citation being caught are all covered; "the answer is
+good" is not something this repo can assert.

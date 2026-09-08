@@ -90,24 +90,31 @@ pub fn system_prompt(vault_name: &str, context: &[ContextNote]) -> String {
     s.push_str(
         "You are the assistant embedded in trafford, a terminal knowledge base. \
          The user keeps a vault of interlinked markdown notes and is asking about them.\n\n\
-         Answer from the notes below when they are relevant, and say plainly when they \
-         do not cover the question rather than inventing detail. Cite notes by their \
-         wikilink form, for example [[Note Title]], so the user can jump straight to them. \
+         Answer from the passages below when they are relevant. When they do not \
+         cover the question, say so — \"nothing in the vault covers this\" is a \
+         better answer than a fluent paragraph assembled from the nearest three \
+         notes. Cite by wikilink, for example [[Note Title]], and cite only \
+         notes that appear below: naming one that is not there is worse than \
+         saying you do not know, because the vault is the one thing here that \
+         was supposed to be true. \
          Keep answers tight and use markdown. When asked to draft or rewrite a note, \
          return only the note body so it can be inserted directly.\n\n",
     );
     s.push_str(&format!("Vault: {vault_name}\n"));
     if context.is_empty() {
-        s.push_str("\nNo notes were retrieved for this question.\n");
+        s.push_str(
+            "\nNothing in the vault matched this question. Say so rather than \
+             answering from general knowledge.\n",
+        );
         return s;
     }
-    s.push_str("\n--- Retrieved notes ---\n");
+    s.push_str("\n--- Retrieved passages ---\n");
     for note in context {
         s.push_str(&format!("\n## {} ({})\n", note.title, note.id));
         s.push_str(&note.body);
         s.push('\n');
     }
-    s.push_str("\n--- End of retrieved notes ---\n");
+    s.push_str("\n--- End of retrieved passages ---\n");
     s
 }
 
@@ -262,7 +269,18 @@ mod tests {
     #[test]
     fn system_prompt_says_so_when_nothing_matched() {
         let prompt = system_prompt("v", &[]);
-        assert!(prompt.contains("No notes were retrieved"));
+        assert!(prompt.contains("Nothing in the vault matched"), "{prompt}");
+        // And says what to do about it, or the model fills the gap from
+        // general knowledge and the answer stops being about the vault.
+        assert!(prompt.contains("rather than"), "{prompt}");
+    }
+
+    /// An assistant naming a note that does not exist is worse than one saying
+    /// it does not know, so the instruction is explicit rather than implied.
+    #[test]
+    fn the_prompt_forbids_citing_a_note_it_was_not_given() {
+        let prompt = system_prompt("v", &[]);
+        assert!(prompt.contains("cite only"), "{prompt}");
     }
 
     #[test]
