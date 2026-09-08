@@ -2,8 +2,10 @@
 id: 31
 title: Inline images and dataview, and why not yet
 type: docs
-status: planned
+status: done
 milestone: v0.7
+assignee: Oddur Sigurdsson
+claimed: 2026-09-08
 depends_on:
 - 58
 created: 2026-09-07
@@ -107,3 +109,48 @@ inside the markdown*. A note containing a query is no longer a note — it is a
 program that only one reader can run, and it stops being portable to the
 Obsidian and `git diff` this vault is also read with. The sidecar (0054) exists
 so that derived things can be rich without the files stopping being files.
+
+## Settled by v0.7, 2026-09-08
+
+**Embeddings — refused, on evidence.** 0058 built the cheap answer and measured
+it over the 66 notes with no outgoing link: 0 of 20 had no candidate, 18 of 20
+top suggestions were in the same project, and all 20 had a same-project note in
+the top three, at 30ms for twenty. Same-project is a conservative proxy — a good
+cross-folder suggestion counts against it — and both notes that "missed"
+suggested the AI/ML research notes from an AI product project, which a reader
+would take.
+
+So the second provider, the second key and the outbound traffic are not bought.
+This reopens if grounding (0060) turns out to need paraphrase matching, which is
+a different question with a different failure mode: suggestion offers five and
+a wrong one costs a glance, while an answer cannot be skimmed the same way.
+
+**Time as an axis — refused, and it was half-designed.** 42 commits, all dated
+2026-05-01. What the same look found instead became 0061, which is about the
+present disagreeing with the record rather than about the past.
+
+**Dataview-style query blocks in note text — refused on design.** The queries
+are real and shipped in 0056; what is refused is writing their *syntax into the
+markdown*. A note containing a query is no longer a note — it is a program only
+one reader can run — and it stops being portable to the Obsidian and `git diff`
+this vault is also read with. `.trafford/cache/` exists so derived things can be
+rich without files stopping being files.
+
+**Inline images — still refused, and the count has not moved.** Nine embeds.
+
+## What the milestone taught about this file
+
+Three of v0.7's items were wrong as filed, and every correction came from
+running the thing against a real vault rather than from re-reading the plan:
+
+- **The vault's schema is in its tags, not its keys.** `type:reference` would
+  have answered "no note has a property named type" — true, and useless.
+- **`.trafford/` was already taken.** It holds `config.toml`, versioned with
+  the notes on purpose; the sidecar would have gitignored the reader's own
+  configuration. Derived state went to `.trafford/cache/`, which `init` had
+  been scaffolding a `.gitignore` for all along.
+- **28 orphans were 9.** The roadmap figure came from matching filename stems
+  against link text, which misses every link written as a relative path.
+
+The general point, which is worth more than any of the three: a plan measured
+once is a plan measured at one moment, and the vault is the thing that knows.

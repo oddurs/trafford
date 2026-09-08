@@ -87,17 +87,14 @@ Obsidian is closed source, so there is nothing to read. The vault is not: its
 
 ## v0.7 — It can answer questions about itself
 
-`##########` 91% · 10 of 11 done · due 2027-02-28
+`##########` 100% · 11 of 11 done · due 2027-02-28
 
 Obsidian asks you to build the structure by hand, and then browse it. Measured
-
-### planned
-
-- [ ] `0031` Inline images and dataview, and why not yet <sup>docs · p3 · docs</sup>
 
 ### done
 
 - [x] `0027` Every unfinished task in the vault, in one place <sup>feature · p1 · vault</sup>
+- [x] `0031` Inline images and dataview, and why not yet <sup>docs · p3 · docs</sup>
 - [x] `0054` A sidecar for state the vault does not own <sup>chore · p0 · config</sup>
 - [x] `0055` Frontmatter properties are first-class <sup>feature · p0 · vault</sup>
 - [x] `0056` A query layer over the whole vault <sup>feature · p0 · vault</sup>

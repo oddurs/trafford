@@ -267,6 +267,71 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
   in the broken colour — concealing the brackets must not conceal that it goes
   nowhere.
 
+## Asking the vault (v0.7)
+
+- **The vault's schema is in its tags, not its keys.** Three frontmatter keys
+  exist in the vault this is built for — `created`, `tags`, `source` — while
+  the type system lives in namespaced tags: `type/*` on 109 notes, `status/*`
+  on 70, `priority/*` on 29. So `query::Vocabulary` carries both, and a field
+  naming a tag namespace reads as that namespace. A real key wins over a
+  namespace of the same name, because a key is what somebody wrote deliberately.
+- **A colon is punctuation far more often than it is syntax.** Reading every
+  `x:y` token as a field made 2,744 real tokens in this vault unsearchable —
+  every URL, every `12:30`, every `TODO:` — mid-keystroke, the moment the colon
+  landed. Only a name the vault answers to is a field; a *near*-miss is still
+  reported, so `stauts:active` suggests `status`, but a word resembling nothing
+  known is text. `assignee:me` therefore searches rather than erroring, which is
+  the deliberate half of that trade.
+- **An empty result and a mistake look identical.** A misspelled field says so
+  where the results would be. Silence is what makes a query language
+  untrustworthy, and `limit:0` is an error for the same reason.
+- **A truncated list must not pass itself off as the whole answer.** `Results`
+  carries the true total beside the hits it kept, so the pane says "200 of 1067"
+  rather than "200". Hits are capped per note as well, or one 102-item checklist
+  is the entire answer.
+- **Results group by note, and the scroll window is over drawn rows.** A note's
+  heading takes a row, so counting hits overflows the pane. Ranking purely by
+  score interleaves notes by where a match happened to sit — unreadable when a
+  query returns many lines from few notes, which is the common case: 470 of
+  1,067 open tasks live in six notes.
+- **Frontmatter is chrome, not content.** The reading column starts at the first
+  real line, and a note with a block opens identically to one without — that
+  identity is the tell, and a test pins it. Properties are drawn in the context
+  pane; in reading posture, where the panes are hidden, tags go to the status
+  line ahead of the editor hint, which in that posture offers a file tree that
+  is not drawn. The editor is untouched: it draws the source.
+- **`.trafford/cache/` is the sidecar, and `.trafford/` is not.** `.trafford/`
+  already holds `config.toml`, which is versioned with the notes on purpose, so
+  ignoring it would untrack the reader's own configuration. The cache holds a
+  `.gitignore` of its own rather than editing the vault's — a program that
+  appends to that file is one that will eventually append twice. Everything
+  there is derived: a file from another format is discarded rather than
+  migrated, and corrupt, stale and absent are one answer because they call for
+  the same handling.
+- **Similarity is lexical, and that was measured rather than assumed.** BM25
+  plus shared tags plus co-citation, with tags scored by the same IDF as words —
+  `#type/reference` on 92 of 148 notes says "this is a vault", not "these two
+  belong together". Frontmatter and fenced code are excluded, or every note
+  recording a `created` date would look alike and any two Rust snippets would
+  share `fn` and `let`. The corpus is 15ms to build and 1.6ms per lookup, so it
+  is built once and dropped on rescan, never per draw.
+- **A suggestion accepted writes a real `[[wikilink]]` into the note; a
+  suggestion declined goes to the sidecar.** Writing to the file is the point —
+  keeping the relationship in the cache produces a vault that is only
+  well-connected inside trafford. Declining is trafford's opinion, not something
+  the author wrote, and is directional: A→B says nothing about B→A.
+- **Retrieval is over sections, and citations are checked.** Notes run p90 2,961
+  words, so a whole one buries the passage that matters; sections come from
+  `ui::fold::headings`, the one heading scanner. Every `[[link]]` in a finished
+  answer is resolved against the index, because an assistant naming a note that
+  does not exist is worse than one saying it does not know — the vault is the
+  one thing in the room that was supposed to be true.
+- **`[[#Section]]` has no target, and `[[Note\|alias]]` has no backslash.** A
+  heading-only link names a heading in its own note; nine of them collapsed into
+  one dead link with an empty name. The escaped pipe is table syntax, and left
+  on the target the link resolves to nothing. Both were found by looking at what
+  a drift report claimed, not by reading the parser.
+
 ## Testing a TUI
 
 Unit tests cover the parts that are pure. They cannot tell you that a pane got
