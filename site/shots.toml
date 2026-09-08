@@ -97,6 +97,35 @@ steps = [
 ]
 
 [[cast]]
+name = "query"
+title = "Asking the vault for every note tagged reference"
+# The fixture carries `tags: [reference]` on three of its five notes, so the
+# query narrows visibly rather than matching everything or nothing — which is
+# the whole point being made and the easiest one to fail to show.
+cols = 120
+rows = 24
+hold = 90
+loop_pause = 1800
+# The last frame. A tag matches whole or not at all, so every frame before it
+# reads `0 hits` — postering any of them advertises the feature not working.
+poster = 9
+# `tag:` is already typed when the recording opens: nine frames of watching a
+# prefix match nothing is not what this is about, and the opening frame should
+# be a query rather than an empty box.
+setup = ["ctrl-f", "t", "a", "g", ":"]
+steps = [
+  { key = "r" },
+  { key = "e" },
+  { key = "f" },
+  { key = "e" },
+  { key = "r" },
+  { key = "e" },
+  { key = "n" },
+  { key = "c" },
+  { key = "e", hold = 2600 },
+]
+
+[[cast]]
 name = "search"
 title = "Searching the vault, with the line each hit came from"
 cols = 120

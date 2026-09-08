@@ -1,4 +1,10 @@
 use super::note::{relative_id, Note};
+use super::query;
+
+/// How many lines one note may contribute before the rest are counted but not
+/// built. Keeps a 102-item checklist from being the whole answer, and keeps
+/// allocation off the keystroke path.
+const PER_NOTE: usize = 12;
 use anyhow::{Context, Result};
 use ignore::WalkBuilder;
 use std::collections::HashMap;
@@ -10,6 +16,16 @@ pub struct Backlink {
     pub from: String,
     pub line: usize,
     pub context: String,
+}
+
+/// What a query found: the hits worth drawing, and how many there really were.
+///
+/// The two differ, and hiding that is how a pane comes to say "200 hits" over
+/// a vault holding 1,067 of them.
+#[derive(Debug, Default, Clone)]
+pub struct Results {
+    pub hits: Vec<Hit>,
+    pub total: usize,
 }
 
 /// A search hit inside a note.
@@ -221,6 +237,201 @@ impl Vault {
         self.index_of(id).map(|i| &self.notes[i])
     }
 
+    /// Every frontmatter key any note in the vault uses, lowercased and
+    /// deduplicated. This is what lets a query tell a typo apart from a key
+    /// this particular vault happens not to have.
+    pub fn property_keys(&self) -> Vec<String> {
+        let mut keys: Vec<String> = self
+            .notes
+            .iter()
+            .flat_map(|n| n.properties.iter().map(|(k, _)| k.to_ascii_lowercase()))
+            .collect();
+        keys.sort();
+        keys.dedup();
+        keys
+    }
+
+    /// What this vault answers to: its frontmatter keys, and the namespaces
+    /// its tags are grouped under. Recomputed per query — 148 notes is nothing
+    /// to walk, and a cached vocabulary is a second idea of what the vault
+    /// contains.
+    pub fn vocabulary(&self) -> query::Vocabulary {
+        let mut namespaces: Vec<String> = self
+            .notes
+            .iter()
+            .flat_map(|n| n.tags.iter())
+            .filter_map(|t| t.split_once('/'))
+            .map(|(ns, _)| ns.to_ascii_lowercase())
+            .collect();
+        namespaces.sort();
+        namespaces.dedup();
+        query::Vocabulary {
+            properties: self.property_keys(),
+            namespaces,
+        }
+    }
+
+    /// Run a query. Filters narrow the set of notes; terms then look for text
+    /// inside what survives.
+    ///
+    /// A query with filters and no terms answers with notes rather than lines,
+    /// because there is no line to point at — except for `task:`, where the
+    /// lines *are* the answer.
+    pub fn query(&self, input: &str, limit: usize) -> Result<Results, query::QueryError> {
+        let q = query::parse(input, &self.vocabulary())?;
+        if q.is_empty() {
+            return Ok(Results::default());
+        }
+        let limit = q.limit.unwrap_or(limit);
+        let mut hits: Vec<Hit> = Vec::new();
+        let mut total = 0usize;
+        for note in &self.notes {
+            if !self.note_passes(note, &q) {
+                continue;
+            }
+            let wanted_task = q.filters.iter().find_map(|f| match f {
+                query::Filter::Task(state) => Some(*state),
+                _ => None,
+            });
+            if q.terms.is_empty() {
+                match wanted_task {
+                    // The tasks are the answer, so each one is a hit.
+                    Some(state) => {
+                        let mut shown_here = 0;
+                        for (i, line) in note.text.lines().enumerate() {
+                            let ticked = match query::checkbox(line) {
+                                Some(t) => t,
+                                None => continue,
+                            };
+                            if ticked != matches!(state, query::TaskState::Done) {
+                                continue;
+                            }
+                            total += 1;
+                            // A checklist of 102 must not crowd out every other
+                            // note. Ranking by line number did exactly that:
+                            // it interleaved unrelated notes by where a task
+                            // happened to sit, and everything past the top of
+                            // a long list became unreachable.
+                            if shown_here >= PER_NOTE {
+                                continue;
+                            }
+                            shown_here += 1;
+                            hits.push(Hit {
+                                id: note.id.clone(),
+                                title: note.title.clone(),
+                                line: i,
+                                context: line.trim().to_string(),
+                                score: 500,
+                            });
+                        }
+                    }
+                    None => {
+                        total += 1;
+                        hits.push(Hit {
+                            id: note.id.clone(),
+                            title: note.title.clone(),
+                            line: 0,
+                            context: note.id.clone(),
+                            score: 500,
+                        })
+                    }
+                }
+                continue;
+            }
+            // Terms: every one has to appear somewhere in the note, and a line
+            // holding any of them is worth showing.
+            if !q
+                .terms
+                .iter()
+                .all(|t| note.haystack.contains(t) || note.title.to_lowercase().contains(t))
+            {
+                continue;
+            }
+            let title_match = q
+                .terms
+                .iter()
+                .all(|t| note.title.to_lowercase().contains(t));
+            let mut shown_here = 0;
+            for (i, (folded, raw)) in note.haystack.lines().zip(note.text.lines()).enumerate() {
+                // Every term, on the one line. Any-of listed lines holding only
+                // one word of a two-word query, so a result could not be read
+                // as an answer to what was asked.
+                if q.terms.iter().all(|t| folded.contains(t)) {
+                    total += 1;
+                    if shown_here >= PER_NOTE {
+                        continue;
+                    }
+                    shown_here += 1;
+                    hits.push(Hit {
+                        id: note.id.clone(),
+                        title: note.title.clone(),
+                        line: i,
+                        context: raw.trim().to_string(),
+                        score: if title_match { 1000 } else { 100 } - i as i64,
+                    });
+                }
+            }
+            if shown_here == 0 {
+                total += 1;
+                hits.push(Hit {
+                    id: note.id.clone(),
+                    title: note.title.clone(),
+                    line: 0,
+                    context: String::new(),
+                    score: 900,
+                });
+            }
+        }
+        match q.sort {
+            Some(query::Sort::Modified) => {
+                hits.sort_by_key(|h| std::cmp::Reverse(self.modified_of(&h.id)))
+            }
+            Some(query::Sort::Title) => hits.sort_by(|a, b| a.title.cmp(&b.title)),
+            Some(query::Sort::Path) => hits.sort_by(|a, b| a.id.cmp(&b.id)),
+            _ => hits.sort_by_key(|h| std::cmp::Reverse(h.score)),
+        }
+        hits.truncate(limit);
+        Ok(Results { hits, total })
+    }
+
+    fn modified_of(&self, id: &str) -> std::time::SystemTime {
+        self.by_id
+            .get(id)
+            .map(|i| self.notes[*i].modified)
+            .unwrap_or(std::time::UNIX_EPOCH)
+    }
+
+    /// Whether every filter in the query holds for this note.
+    fn note_passes(&self, note: &Note, q: &query::Query) -> bool {
+        q.filters.iter().all(|f| match f {
+            query::Filter::Property { key, value } => note.property_is(key, value),
+            query::Filter::Tag(tag) => note.tags.iter().any(|t| t.eq_ignore_ascii_case(tag)),
+            query::Filter::Task(state) => note
+                .text
+                .lines()
+                .any(|l| query::checkbox(l) == Some(matches!(state, query::TaskState::Done))),
+            query::Filter::Orphan => self.backlinks_for(&note.id).is_empty(),
+            query::Filter::Broken => note.links.iter().any(|l| !self.resolves(&l.target)),
+            query::Filter::LinksTo(target) => {
+                let wanted = self.resolve_target(target);
+                note.links.iter().any(|l| match wanted {
+                    Some(i) => self.resolve_target(&l.target) == Some(i),
+                    None => l.target.eq_ignore_ascii_case(target),
+                })
+            }
+            query::Filter::Path(needle) => note.id.to_lowercase().contains(needle),
+            query::Filter::Modified { when, date } => {
+                let at: chrono::DateTime<chrono::Local> = note.modified.into();
+                let stamp = at.format("%Y-%m-%d").to_string();
+                match when {
+                    query::When::On => stamp.as_str() == date.as_str(),
+                    query::When::After => stamp.as_str() > date.as_str(),
+                    query::When::Before => stamp.as_str() < date.as_str(),
+                }
+            }
+        })
+    }
+
     pub fn backlinks_for(&self, id: &str) -> &[Backlink] {
         self.backlinks.get(id).map(|v| v.as_slice()).unwrap_or(&[])
     }
@@ -265,46 +476,6 @@ impl Vault {
 
     /// Full-text search over note bodies. Case-insensitive substring match,
     /// ranked so that title matches float above body matches.
-    pub fn search(&self, query: &str, limit: usize) -> Vec<Hit> {
-        let q = query.trim().to_lowercase();
-        if q.is_empty() {
-            return Vec::new();
-        }
-        let mut hits = Vec::new();
-        for note in &self.notes {
-            let title_match = note.title.to_lowercase().contains(&q);
-            let mut found_in_body = false;
-            // Match against the folded copy, but display the line as written.
-            for (i, (folded, raw)) in note.haystack.lines().zip(note.text.lines()).enumerate() {
-                if folded.contains(&q) {
-                    found_in_body = true;
-                    hits.push(Hit {
-                        id: note.id.clone(),
-                        title: note.title.clone(),
-                        line: i,
-                        context: raw.trim().to_string(),
-                        score: if title_match { 1000 } else { 100 } - i as i64,
-                    });
-                    if hits.len() > limit * 4 {
-                        break;
-                    }
-                }
-            }
-            if title_match && !found_in_body {
-                hits.push(Hit {
-                    id: note.id.clone(),
-                    title: note.title.clone(),
-                    line: 0,
-                    context: String::new(),
-                    score: 900,
-                });
-            }
-        }
-        hits.sort_by_key(|h| std::cmp::Reverse(h.score));
-        hits.truncate(limit);
-        hits
-    }
-
     /// Rank whole notes against a natural-language question. Used to build
     /// context for the assistant: term overlap, weighted toward titles.
     pub fn relevant(&self, question: &str, limit: usize) -> Vec<&Note> {
@@ -586,6 +757,189 @@ mod tests {
         let dir = crate::testing::TempDir::with_files(files);
         let vault = Vault::open(dir.path()).unwrap();
         (dir, vault)
+    }
+
+    /// A vault shaped like the real one: typed frontmatter, checklists, a
+    /// dead link and a note nothing points at.
+    fn typed_vault() -> (crate::testing::TempDir, Vault) {
+        scratch(&[
+            (
+                "ref.md",
+                "---\ntype: reference\nstatus: active\ntags:\n  - topic/computability\n---\n# Ref\nsee [[proj]]\n",
+            ),
+            (
+                "proj.md",
+                "---\ntype: project\nstatus: active\n---\n# Proj\n- [ ] pack\n- [x] book\nsee [[nowhere]]\n",
+            ),
+            ("lonely.md", "---\ntype: reference\n---\n# Lonely\nno links here\n"),
+        ])
+    }
+
+    #[test]
+    fn a_property_query_finds_the_notes_that_wrote_it() {
+        let (_d, vault) = typed_vault();
+        let hits = vault.query("type:reference", 50).unwrap().hits;
+        let mut ids: Vec<_> = hits.iter().map(|h| h.id.clone()).collect();
+        ids.sort();
+        assert_eq!(ids, vec!["lonely.md", "ref.md"]);
+    }
+
+    #[test]
+    fn filters_combine_rather_than_widen() {
+        let (_d, vault) = typed_vault();
+        // `lonely` is a reference but not active, so asking for both excludes it.
+        let hits = vault
+            .query("type:reference status:active", 50)
+            .unwrap()
+            .hits;
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, "ref.md");
+    }
+
+    #[test]
+    fn orphan_finds_what_nothing_links_to() {
+        let (_d, vault) = typed_vault();
+        let ids: Vec<_> = vault
+            .query("orphan", 50)
+            .unwrap()
+            .hits
+            .iter()
+            .map(|h| h.id.clone())
+            .collect();
+        // `proj` is linked from `ref`, so only the other two are orphans.
+        assert!(ids.contains(&"lonely.md".to_string()));
+        assert!(ids.contains(&"ref.md".to_string()));
+        assert!(!ids.contains(&"proj.md".to_string()));
+    }
+
+    #[test]
+    fn broken_finds_a_link_that_goes_nowhere() {
+        let (_d, vault) = typed_vault();
+        let hits = vault.query("broken", 50).unwrap().hits;
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, "proj.md");
+    }
+
+    #[test]
+    fn a_task_query_answers_with_the_task_lines_themselves() {
+        let (_d, vault) = typed_vault();
+        let open = vault.query("task:open", 50).unwrap().hits;
+        assert_eq!(open.len(), 1, "one unfinished box");
+        assert_eq!(open[0].context, "- [ ] pack");
+        // The line has to be the real one, or opening the hit lands wrong.
+        assert_eq!(open[0].line, 5);
+        let done = vault.query("task:done", 50).unwrap().hits;
+        assert_eq!(done[0].context, "- [x] book");
+    }
+
+    #[test]
+    fn links_to_resolves_the_way_following_the_link_would() {
+        let (_d, vault) = typed_vault();
+        // Written as `[[proj]]`, asked for as a full id — the same note.
+        let hits = vault.query("links-to:proj.md", 50).unwrap().hits;
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, "ref.md");
+    }
+
+    #[test]
+    fn a_tag_is_one_namespace_whether_it_was_frontmatter_or_inline() {
+        let (_d, vault) = typed_vault();
+        let hits = vault.query("tag:topic/computability", 50).unwrap().hits;
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, "ref.md");
+    }
+
+    #[test]
+    fn a_misspelled_field_reports_itself_rather_than_answering_with_nothing() {
+        let (_d, vault) = typed_vault();
+        let err = vault.query("stauts:active", 50).unwrap_err();
+        assert!(err.to_string().contains("status"), "{err}");
+        // And the correctly spelled one still works, so the vault really does
+        // know the key — the error was about the query, not the data.
+        assert!(!vault.query("status:active", 50).unwrap().hits.is_empty());
+    }
+
+    #[test]
+    fn text_still_searches_the_way_it_always_did() {
+        let (_d, vault) = typed_vault();
+        let hits = vault.query("links", 50).unwrap().hits;
+        assert!(hits.iter().any(|h| h.id == "lonely.md"));
+    }
+
+    #[test]
+    fn a_filter_and_text_narrow_together() {
+        let (_d, vault) = typed_vault();
+        assert!(vault.query("type:project pack", 50).unwrap().hits.len() == 1);
+        assert!(vault
+            .query("type:reference pack", 50)
+            .unwrap()
+            .hits
+            .is_empty());
+    }
+
+    #[test]
+    fn property_keys_are_what_the_vault_actually_wrote() {
+        let (_d, vault) = typed_vault();
+        assert_eq!(vault.property_keys(), vec!["status", "tags", "type"]);
+    }
+
+    /// A truncated list must not pass itself off as the whole answer, and one
+    /// long checklist must not be the whole answer either.
+    #[test]
+    fn a_long_checklist_is_counted_in_full_but_does_not_crowd_out_the_rest() {
+        let long: String = (0..60).map(|i| format!("- [ ] item {i}\n")).collect();
+        let (_d, vault) = scratch(&[
+            ("big.md", &format!("# Big\n{long}")),
+            ("small.md", "# Small\n- [ ] one thing\n"),
+        ]);
+        let r = vault.query("task:open", 200).unwrap();
+        assert_eq!(r.total, 61, "every task is counted");
+        assert!(r.hits.len() < 61, "not every task is built");
+        assert!(
+            r.hits.iter().any(|h| h.id == "small.md"),
+            "the small note is reachable, not buried under the big one"
+        );
+    }
+
+    /// Every term on the line. Any-of listed lines holding one word of a
+    /// two-word query, which cannot be read as an answer to what was asked.
+    #[test]
+    fn a_multi_word_query_wants_every_word_on_the_line() {
+        let (_d, vault) = scratch(&[(
+            "n.md",
+            "# N\nkleene alone\nrecursion alone\nkleene and recursion together\n",
+        )]);
+        let r = vault.query("kleene recursion", 50).unwrap();
+        assert_eq!(r.hits.len(), 1);
+        assert!(r.hits[0].context.contains("together"));
+    }
+
+    /// A URL is text somebody is looking for, not a field called `https`.
+    #[test]
+    fn searching_for_a_url_searches_rather_than_failing() {
+        let (_d, vault) = scratch(&[("n.md", "# N\nsee https://example.com/x for more\n")]);
+        let r = vault.query("https://example.com/x", 50).unwrap();
+        assert_eq!(r.hits.len(), 1, "the URL is found");
+    }
+
+    /// A bare date means that day, and the day it names is included.
+    #[test]
+    fn a_bare_date_includes_the_day_it_names() {
+        let (_d, vault) = scratch(&[("n.md", "# N\n")]);
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        assert_eq!(
+            vault
+                .query(&format!("modified:{today}"), 50)
+                .unwrap()
+                .hits
+                .len(),
+            1
+        );
+        assert!(vault
+            .query(&format!("modified:>{today}"), 50)
+            .unwrap()
+            .hits
+            .is_empty());
     }
 
     #[test]
@@ -988,7 +1342,7 @@ mod tests {
             ("rust.md", "# rust\nnotes\n"),
             ("other.md", "mentions rust once\n"),
         ]);
-        let hits = vault.search("rust", 10);
+        let hits = vault.query("rust", 10).unwrap().hits;
         assert!(!hits.is_empty());
         assert_eq!(hits[0].id, "rust.md");
     }
@@ -996,7 +1350,7 @@ mod tests {
     #[test]
     fn search_context_keeps_its_original_case() {
         let (_d, vault) = scratch(&[("a.md", "The Quick Brown Fox\n")]);
-        let hits = vault.search("quick", 10);
+        let hits = vault.query("quick", 10).unwrap().hits;
         assert_eq!(hits[0].context, "The Quick Brown Fox");
     }
 

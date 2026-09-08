@@ -56,6 +56,14 @@ about getting them there.
 >
 > ![[search.cast.json|Searching the vault, with the line each hit came from]]
 
+> [!note] The same box queries the vault
+> Your tags, frontmatter, checkboxes and links are already structure.
+> `type:reference status:active sort:modified` asks for it, and so do
+> `task:open`, `orphan` and `links-to:"A Note"`. Bare words still just search,
+> and nothing has to be written into a note to run it.
+>
+> ![[query.cast.json|Asking the vault for every note tagged reference]]
+
 > [!note] Everything by name
 > `ctrl-k` finds any command, `ctrl-p` any note. The keys beside each entry are
 > the ones that would have done it without the menu.

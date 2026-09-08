@@ -677,7 +677,7 @@ fn sticky(
 /// At most two rows, and nothing is dropped — a key nobody anticipated still
 /// appears, it just appears out of the way.
 fn properties(
-    pairs: &[(String, String)],
+    pairs: &crate::vault::note::Properties,
     renderer: &markdown::Renderer<'_>,
 ) -> Vec<markdown::Rendered> {
     let theme = renderer.theme;
@@ -685,9 +685,12 @@ fn properties(
 
     let tags: Vec<String> = pairs
         .iter()
-        .filter(|(k, _)| k == "tags" || k == "tag")
-        .flat_map(|(_, v)| v.split(','))
-        .map(|t| t.trim().trim_matches('"').trim_start_matches('#'))
+        .filter(|(k, _)| {
+            let k = k.to_ascii_lowercase();
+            k == "tags" || k == "tag"
+        })
+        .flat_map(|(_, v)| v.iter())
+        .map(|t| t.trim().trim_start_matches('#'))
         .filter(|t| !t.is_empty())
         .map(str::to_string)
         .collect();
@@ -712,9 +715,12 @@ fn properties(
     // understood is still visible rather than silently swallowed.
     let rest: Vec<String> = pairs
         .iter()
-        .filter(|(k, _)| k != "tags" && k != "tag")
+        .filter(|(k, _)| {
+            let k = k.to_ascii_lowercase();
+            k != "tags" && k != "tag"
+        })
         .filter(|(_, v)| !v.is_empty())
-        .map(|(k, v)| format!("{k} {v}"))
+        .map(|(k, v)| format!("{k} {}", v.join(", ")))
         .collect();
     if !rest.is_empty() {
         out.push(markdown::Rendered::default().suffixed(&rest.join("  ·  "), theme.faded()));
@@ -1778,7 +1784,19 @@ fn draw_picker(f: &mut Frame, theme: &Theme, picker: &Picker, area: Rect) -> Rec
 fn draw_search(f: &mut Frame, theme: &Theme, pane: &crate::app::SearchPane, area: Rect) -> Rect {
     let rect = centred(area, 74, 22);
     f.render_widget(Clear, rect);
-    let block = overlay_block(theme, format!("search · {} hits", pane.hits.len()));
+    let block = overlay_block(
+        theme,
+        // "0 hits" over an empty box reads as a search that failed, and none
+        // has been made yet.
+        if pane.problem.is_some() || pane.query.is_empty() {
+            "search".to_string()
+        } else {
+            match pane.total > pane.hits.len() {
+                true => format!("search · {} of {} hits", pane.hits.len(), pane.total),
+                false => format!("search · {} hits", pane.hits.len()),
+            }
+        },
+    );
     let inner = block.inner(rect);
     f.render_widget(block, rect);
     if inner.height < 2 {
@@ -1790,6 +1808,51 @@ fn draw_search(f: &mut Frame, theme: &Theme, pane: &crate::app::SearchPane, area
         Span::styled(pane.query.clone(), Style::default().fg(theme.fg)),
         Span::styled("▏", Style::default().fg(theme.accent)),
     ])];
+
+    // A query that could not be read says so where the results would be. An
+    // empty list and a mistake look identical, and only one of them is an
+    // answer to the question that was asked.
+    if let Some(problem) = &pane.problem {
+        lines.push(Line::from(""));
+        // Wrapped through the one layout model rather than a second idea of
+        // where a line breaks.
+        let held = [problem.clone()];
+        let wrapped = crate::layout::Layout::new(&held, width.saturating_sub(2), true);
+        for row in (0..wrapped.row_count()).filter_map(|i| wrapped.row(i)) {
+            let text: String = problem
+                .chars()
+                .skip(row.start)
+                .take(row.end().saturating_sub(row.start))
+                .collect();
+            lines.push(Line::from(vec![
+                Span::raw("  "),
+                Span::styled(text, Style::default().fg(theme.broken)),
+            ]));
+        }
+        f.render_widget(Paragraph::new(lines), inner);
+        return inner;
+    }
+
+    // An empty box says what it can do. The syntax is invisible otherwise, and
+    // a query language nobody knows about is one nobody uses.
+    if pane.query.is_empty() {
+        for (example, what) in [
+            ("type:reference", "a tag namespace, or a frontmatter key"),
+            ("status:active", "several narrow together"),
+            ("task:open", "unfinished checkboxes"),
+            ("orphan", "notes nothing links to"),
+            ("broken", "links that go nowhere"),
+            ("sort:modified limit:20", "ordering, and how much"),
+        ] {
+            lines.push(Line::from(vec![
+                Span::raw("  "),
+                Span::styled(format!("{example:<24}"), Style::default().fg(theme.tag)),
+                Span::styled(what, theme.faded()),
+            ]));
+        }
+        f.render_widget(Paragraph::new(lines), inner);
+        return inner;
+    }
 
     let height = inner.height as usize - 1;
     let offset = scroll_offset(pane.cursor, pane.hits.len(), height);
@@ -3236,6 +3299,8 @@ mod tests {
                     query: "welcome".into(),
                     hits: vec![],
                     cursor: 0,
+                    problem: None,
+                    total: 0,
                 }),
                 Overlay::Prompt(Prompt {
                     kind: PromptKind::NewNote,

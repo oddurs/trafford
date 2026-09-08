@@ -363,7 +363,14 @@ impl Menu {
 pub struct SearchPane {
     pub query: String,
     pub hits: Vec<crate::vault::Hit>,
+    /// How many there were before the list was cut to what fits. Shown when it
+    /// differs, so a truncated answer cannot pass itself off as the whole one.
+    pub total: usize,
     pub cursor: usize,
+    /// What is wrong with the query, if anything. A misspelled field reports
+    /// itself here rather than returning nothing — an empty result and a
+    /// mistake look identical, and only one of them is an answer.
+    pub problem: Option<String>,
 }
 
 #[derive(Debug, Default)]

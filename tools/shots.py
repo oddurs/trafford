@@ -224,11 +224,16 @@ def record(cast, vault):
         for key in cast.get("setup", []):
             session.send(keystrokes(key), 0.25)
             settle(session, 2.0)
-        grab(cast.get("hold", 900))
+        default_hold = cast.get("hold", 900)
+        grab(default_hold)
         for step in cast["steps"]:
             session.send(keystrokes(step["key"]), 0.25)
             settle(session, 2.0)
-            grab(step["hold"])
+            # The cast's own `hold` is the default here as well as above. It
+            # used to default only for the opening frame, so a step that left
+            # it out raised `KeyError` a hundred lines from the manifest that
+            # caused it — for a key the manifest documents as the default.
+            grab(step.get("hold", default_hold))
         return frames
     finally:
         session.close()
