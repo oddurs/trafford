@@ -2,8 +2,9 @@
 id: 48
 title: Take the vault's settings from Obsidian's own config
 type: feature
-status: backlog
+status: doing
 milestone: v0.6
+assignee: Oddur Sigurdsson
 created: 2026-09-07
 updated: 2026-09-07
 priority: p1
@@ -41,12 +42,16 @@ configuration the reader already keeps, rather than asking for it again.
 
 ## Acceptance criteria
 
-- [ ] `newFileFolderPath` becomes the default for new notes
-- [ ] `attachmentFolderPath` is where a pasted or written attachment goes
-- [ ] `readableLineLength: false` turns the reading measure off
-- [ ] Anything set in `config.toml` beats anything in `app.json`
-- [ ] A vault with no `.obsidian/` is unchanged
-- [ ] Malformed or partial JSON is ignored rather than fatal — a vault whose
+- [x] `newFileFolderPath` becomes the default for new notes
+- [ ] `attachmentFolderPath` is where a pasted or written attachment goes —
+      **not done, and not doable yet**: trafford has nothing that writes an
+      attachment, so there is nothing to point at the folder. Reading the
+      setting and storing it would be a promise it is not keeping. Revisit with
+      whatever first writes one.
+- [x] `readableLineLength: false` turns the reading measure off
+- [x] Anything set in `config.toml` beats anything in `app.json`
+- [x] A vault with no `.obsidian/` is unchanged
+- [x] Malformed or partial JSON is ignored rather than fatal — a vault whose
       Obsidian config is half-written still opens
 
 ## Notes

@@ -609,13 +609,6 @@ impl PreviewView {
     }
 }
 
-/// How wide prose is held while reading, when nothing else says.
-///
-/// `wrap_column` defaults to the pane, which is right for an editor and wrong
-/// for a reading view: prose stretched across a hundred and fifty columns is
-/// harder to read than prose at seventy, not easier.
-const READING_MEASURE: u16 = 72;
-
 /// Rows of context kept beyond the reading cursor, so a line never arrives hard
 /// against the edge with nothing after it.
 const READING_MARGIN: usize = 3;
@@ -806,8 +799,10 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     // table wider than the prose measure keeps its cells instead of being
     // truncated to a rule that is about paragraphs.
     let reading_width = pane.width.saturating_sub(1) as usize;
-    let measure = match app.config.wrap_column {
-        0 => READING_MEASURE,
+    // `reading_measure` of 0 means the pane, which is what Obsidian's
+    // `readableLineLength: false` asks for.
+    let measure = match app.config.reading_measure {
+        0 => pane.width,
         n => n,
     }
     .min(pane.width.saturating_sub(1)) as usize;

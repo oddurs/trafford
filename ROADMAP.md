@@ -73,22 +73,22 @@ Preview stops being the editor with the syntax hidden. A note's structure folds,
 
 ## v0.6 — It fits the vault it is given
 
-`###·······` 25% · 1 of 4 done · due 2027-02-14
+`#####·····` 50% · 2 of 4 done · due 2027-02-14
 
 Obsidian is closed source, so there is nothing to read. The vault is not: its
 
 ### backlog
 
-- [ ] `0048` Take the vault's settings from Obsidian's own config <sup>feature · p1 · config</sup>
 - [ ] `0050` Daily and weekly notes where this vault keeps them <sup>feature · p1 · vault</sup>
 
-### done
+### in progress
 
-- [x] `0051` Delete to the vault's trash, not to nowhere <sup>bug · p1 · vault</sup>
+- [ ] `0048` Take the vault's settings from Obsidian's own config <sup>feature · p1 · config</sup>
 
 ### done
 
 - [x] `0049` Expand a template when a note is made from one <sup>feature · p1 · vault</sup>
+- [x] `0051` Delete to the vault's trash, not to nowhere <sup>bug · p1 · vault</sup>
 
 ## later — Someday
 
