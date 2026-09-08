@@ -452,7 +452,7 @@ pre code {
 .callout-success .callout-title,
 .callout-check .callout-title,
 .callout-done .callout-title {
-  color: var(--added);
+  color: var(--added-text);
 }
 
 .callout-warning,
@@ -466,7 +466,7 @@ pre code {
 .callout-caution .callout-title,
 .callout-danger .callout-title,
 .callout-bug .callout-title {
-  color: var(--modified);
+  color: var(--modified-text);
 }
 
 blockquote {
@@ -535,7 +535,9 @@ th.center {
 
 .shot > svg,
 .shot img,
-.prose .cast img {
+.shot > .shot-palette,
+.prose .cast img,
+.prose .cast > .shot-palette {
   display: block;
   width: 100%;
   height: auto;
@@ -558,7 +560,10 @@ th.center {
   padding: 0;
   border: none;
   border-radius: 0;
-  background: none;
+  /* The terminal's own ground, in whichever theme the reader chose — not the
+     page's `--bg`, which is lifted for prose contrast. A player that let the
+     poster show through instead was gotham-coloured under a Paper page. */
+  background: var(--term-bg);
   overflow: hidden;
   line-height: 1.45;
   font-variant-ligatures: none;

@@ -34,7 +34,11 @@ pub fn stylesheet() -> Result<String> {
         .iter()
         .find(|(_, t)| t.dark)
         .ok_or_else(|| anyhow!("no dark theme to default to"))?;
-    let default_vars = vars(&dark.1).with_context(|| format!("theme {}", dark.0))?;
+    let default_vars = format!(
+        "{}{}",
+        vars(&dark.1).with_context(|| format!("theme {}", dark.0))?,
+        terminal_vars(&dark.1)?
+    );
     let light = themes.iter().find(|(_, t)| !t.dark);
 
     let mut css = String::new();
@@ -47,17 +51,47 @@ pub fn stylesheet() -> Result<String> {
         let _ = writeln!(
             css,
             "@media (prefers-color-scheme: light) {{\n  :root:not([data-theme]) {{\n{}  }}\n}}\n",
-            indent(&vars(light)?)
+            indent(&format!("{}{}", vars(light)?, terminal_vars(light)?))
         );
     }
     for (name, theme) in &themes {
         let _ = writeln!(
             css,
-            "[data-theme=\"{name}\"] {{\n{}}}\n",
-            vars(theme).with_context(|| format!("theme {name}"))?
+            "[data-theme=\"{name}\"] {{\n{}{}}}\n",
+            vars(theme).with_context(|| format!("theme {name}"))?,
+            terminal_vars(theme).with_context(|| format!("theme {name}"))?
         );
     }
     Ok(css)
+}
+
+/// Every translatable theme's roles, as JSON.
+///
+/// `tools/shots.py` reads this rather than parsing `themes/*.toml`: a theme
+/// file may leave a role unstated and have it derived, and a second reader of
+/// the format would get a different answer from the program. One table, from
+/// the same `Theme` the app draws with.
+pub fn as_json() -> Result<String> {
+    let mut out = String::from("{\n  \"roles\": [");
+    for (i, role) in ROLES.iter().enumerate() {
+        let _ = write!(out, "{}\"{role}\"", if i == 0 { "" } else { ", " });
+    }
+    out.push_str("],\n  \"themes\": {\n");
+    let themes = translatable()?;
+    for (n, (name, theme)) in themes.iter().enumerate() {
+        let colours = role_colours(theme).with_context(|| format!("theme {name}"))?;
+        let _ = write!(out, "    \"{name}\": {{");
+        for (i, (role, colour)) in ROLES.iter().zip(&colours).enumerate() {
+            let _ = write!(
+                out,
+                "{}\"{role}\": \"{colour}\"",
+                if i == 0 { "" } else { ", " }
+            );
+        }
+        let _ = writeln!(out, "}}{}", if n + 1 == themes.len() { "" } else { "," });
+    }
+    out.push_str("  }\n}\n");
+    Ok(out)
 }
 
 /// The built-in themes that have colours of their own.
@@ -86,13 +120,117 @@ pub fn builtins() -> Result<Vec<(String, Theme)>> {
         .collect()
 }
 
+/// Every role a theme names, as the recordings refer to them.
+///
+/// The order is the theme file's. `shots.py` records through a theme whose
+/// colours are sentinels — one unique value per entry here — so a captured
+/// cell maps back to exactly one role. Reversing a real palette instead is
+/// ambiguous: gotham draws `faint` and `selection` in the same hex, and they
+/// are nowhere near each other in paper.
+pub const ROLES: [&str; 23] = [
+    "bg",
+    "surface",
+    "overlay",
+    "fg",
+    "muted",
+    "faint",
+    "border",
+    "border-focus",
+    "selection",
+    "cursorline",
+    "accent",
+    "secondary",
+    "heading",
+    "link",
+    "broken",
+    "code",
+    "tag",
+    "added",
+    "removed",
+    "modified",
+    "mode-normal",
+    "mode-insert",
+    "mode-visual",
+];
+
+/// One theme's roles, in `ROLES` order, as `rrggbb` with no leading `#`.
+pub fn role_colours(t: &Theme) -> Result<Vec<String>> {
+    let colours = [
+        t.bg,
+        t.surface,
+        t.overlay,
+        t.fg,
+        t.muted,
+        t.faint,
+        t.border,
+        t.border_focus,
+        t.selection,
+        t.cursorline,
+        t.accent,
+        t.secondary,
+        t.heading,
+        t.link,
+        t.broken,
+        t.code,
+        t.tag,
+        t.added,
+        t.removed,
+        t.modified,
+        t.mode_normal,
+        t.mode_insert,
+        t.mode_visual,
+    ];
+    colours
+        .into_iter()
+        .map(|c| Ok(hex(rgb(c)?).trim_start_matches('#').to_string()))
+        .collect()
+}
+
+/// The terminal's own colours, for the recordings.
+///
+/// Deliberately not run through `lift`: a recording is a picture of a terminal,
+/// drawn in the terminal's colours on the terminal's own ground, and raising
+/// one of them for contrast against the *page* would be showing the reader
+/// something the program does not draw. `tools/look.py` refuses to
+/// contrast-check inside a recording for the same reason.
+fn terminal_vars(t: &Theme) -> Result<String> {
+    let mut out = String::new();
+    for (role, colour) in ROLES.iter().zip(role_colours(t)?) {
+        let _ = writeln!(out, "  --term-{role}: #{colour};");
+    }
+    Ok(out)
+}
+
 /// The custom properties for one theme.
 fn vars(t: &Theme) -> Result<String> {
+    let mut out = String::new();
+    for (name, colour) in page_roles(t)? {
+        let _ = writeln!(out, "  --{name}: {};", hex(colour));
+    }
+    let _ = writeln!(
+        out,
+        "  color-scheme: {};",
+        if t.dark { "dark" } else { "light" }
+    );
+    Ok(out)
+}
+
+/// One role and the colour it resolved to.
+type Resolved = (&'static str, (u8, u8, u8));
+
+/// Every page role, resolved — the one place any of them is decided.
+///
+/// `swatches()` reads this rather than working the colours out again. It did
+/// work them out again, and the day `accent-text` started lifting against the
+/// panel as well as the page, the specimen went on showing the old number:
+/// a page whose whole purpose is that it cannot disagree with the site,
+/// disagreeing with the site.
+fn page_roles(t: &Theme) -> Result<Vec<Resolved>> {
     let bg = rgb(t.bg)?;
     let surface = rgb(t.surface)?;
     // Text roles sit on the page ground; `code` sits on the surface panels, so
     // that is what it has to be legible against.
-    let pairs: [(&str, (u8, u8, u8)); 21] = [
+    let pairs: [Resolved; 23] = [
         ("bg", bg),
         ("surface", surface),
         ("overlay", rgb(t.overlay)?),
@@ -110,7 +248,7 @@ fn vars(t: &Theme) -> Result<String> {
         // The same colour used for *words* needs 4.5:1, and in the light theme
         // the two are far enough apart to matter. One role each rather than a
         // compromise that is wrong for both.
-        ("accent-text", lift(rgb(t.accent)?, bg, AA)),
+        ("accent-text", legible(rgb(t.accent)?, bg, surface)),
         ("secondary", lift(rgb(t.secondary)?, bg, AA_LARGE)),
         ("heading", lift(rgb(t.heading)?, bg, AA)),
         ("link", lift(rgb(t.link)?, bg, AA)),
@@ -120,17 +258,23 @@ fn vars(t: &Theme) -> Result<String> {
         ("added", lift(rgb(t.added)?, bg, AA_LARGE)),
         ("removed", lift(rgb(t.removed)?, bg, AA_LARGE)),
         ("modified", lift(rgb(t.modified)?, bg, AA_LARGE)),
+        // A callout titles itself in the colour of its kind, which makes these
+        // three words rather than the bars they are beside.
+        ("added-text", legible(rgb(t.added)?, bg, surface)),
+        ("modified-text", legible(rgb(t.modified)?, bg, surface)),
     ];
-    let mut out = String::new();
-    for (name, colour) in pairs {
-        let _ = writeln!(out, "  --{name}: {};", hex(colour));
-    }
-    let _ = writeln!(
-        out,
-        "  color-scheme: {};",
-        if t.dark { "dark" } else { "light" }
-    );
-    Ok(out)
+    Ok(pairs.to_vec())
+}
+
+/// A colour that carries as words on either ground the page has.
+///
+/// Lifting against `bg` alone is not enough: a callout sits on `surface`, and
+/// in paper that is the *darker* of the two, so a colour that just clears AA
+/// on the page ground misses on the panel. Every one of the three callout
+/// titles did — the worst at 3.88:1 — and only in the light theme, which is
+/// the one nobody was looking at.
+fn legible(colour: (u8, u8, u8), bg: (u8, u8, u8), surface: (u8, u8, u8)) -> (u8, u8, u8) {
+    lift(lift(colour, bg, AA), surface, AA)
 }
 
 fn indent(block: &str) -> String {
@@ -299,25 +443,17 @@ pub fn swatches() -> Result<String> {
         .find(|(_, t)| t.dark)
         .ok_or_else(|| anyhow!("no dark theme to describe"))?;
     let bg = rgb(theme.bg)?;
+    let resolved = page_roles(&theme)?;
 
     let mut out = format!(
         "<h2 id=\"colour\"><a class=\"anchor\" href=\"#colour\">Colour</a></h2>\n         <p>Generated from the application's own theme files — the ratios below are          measured against <code>--bg</code> and are what the {name} theme achieves.          A role used for words is lifted until it clears 4.5:1; a role used for a          shape needs 3:1, which is why <code>--accent</code> and          <code>--accent-text</code> are two roles rather than a compromise.</p>\n         <div class=\"swatches\">\n"
     );
     for (role, use_for, is_text) in roles {
-        let colour = match role {
-            "bg" => bg,
-            "surface" => rgb(theme.surface)?,
-            "fg" => lift(rgb(theme.fg)?, bg, AA),
-            "muted" => lift(rgb(theme.muted)?, bg, AA),
-            "faint" => lift(rgb(theme.faint)?, bg, AA),
-            "heading" => lift(rgb(theme.heading)?, bg, AA),
-            "link" => lift(rgb(theme.link)?, bg, AA),
-            "accent" => lift(rgb(theme.accent)?, bg, AA_LARGE),
-            "accent-text" => lift(rgb(theme.accent)?, bg, AA),
-            "code" => lift(rgb(theme.code)?, rgb(theme.surface)?, AA),
-            "tag" => lift(rgb(theme.tag)?, bg, AA),
-            _ => rgb(theme.border)?,
-        };
+        let colour = resolved
+            .iter()
+            .find(|(name, _)| *name == role)
+            .map(|(_, c)| *c)
+            .ok_or_else(|| anyhow!("the specimen names --{role}, which is not a role"))?;
         let ratio = contrast(colour, bg);
         let against = if is_text {
             format!("{ratio:.1}:1")
@@ -333,6 +469,40 @@ pub fn swatches() -> Result<String> {
         );
     }
     out.push_str("</div>\n");
+    out.push_str(&terminal_swatches()?);
+    Ok(out)
+}
+
+/// The terminal's own palette, which is a second set and not a variant of the
+/// first.
+///
+/// These are what the recordings are painted in, and they are deliberately
+/// *not* lifted: a recording is a picture of a terminal on the terminal's own
+/// ground, and raising one of its colours for contrast against the page would
+/// be showing a reader something the program does not draw.
+fn terminal_swatches() -> Result<String> {
+    let mut out = String::from(
+        "<h2 id=\"terminal\"><a class=\"anchor\" href=\"#terminal\">The terminal palette</a></h2>\n\
+         <p>A recording carries the <em>role</em> that drew each cell rather than a \
+         colour, so it is painted in whichever theme you are reading in — switch \
+         themes and every recording on this site follows. These are the values it \
+         resolves through, unlifted, because a picture of a terminal should show \
+         what the terminal shows.</p>\n",
+    );
+    for (name, theme) in translatable()? {
+        let colours = role_colours(&theme)?;
+        let _ = writeln!(out, "<h3>{name}</h3>\n<div class=\"swatches\">");
+        for (role, colour) in ROLES.iter().zip(&colours) {
+            let _ = writeln!(
+                out,
+                "<div class=\"swatch\">\
+                 <span class=\"chip\" style=\"background: #{colour}\"></span>\
+                 <code>--term-{role}</code>\
+                 <span class=\"swatch-ratio\">#{colour}</span></div>"
+            );
+        }
+        out.push_str("</div>\n");
+    }
     Ok(out)
 }
 
@@ -416,5 +586,90 @@ mod tests {
         assert_eq!(indexed(231), (255, 255, 255));
         assert_eq!(indexed(196), (255, 0, 0));
         assert_eq!(indexed(232), (8, 8, 8));
+    }
+
+    /// Every role a recording names is one the stylesheet defines.
+    ///
+    /// The recordings carry roles rather than colours so the reader's theme
+    /// reaches them, which couples three things that live apart: `ROLES`
+    /// here, the theme `shots.py` records through, and the `var(--term-…)`
+    /// the player asks for. Rename a role and every recording silently draws
+    /// in the fallback colour — the failure looks like nothing at all.
+    #[test]
+    fn every_role_the_recordings_name_is_one_the_stylesheet_defines() {
+        let img = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("docs/img");
+        let css = stylesheet().unwrap();
+
+        let mut seen = std::collections::BTreeSet::new();
+        for entry in std::fs::read_dir(&img).unwrap() {
+            let path = entry.unwrap().path();
+            let name = path.file_name().unwrap().to_string_lossy().to_string();
+            let body = std::fs::read_to_string(&path).unwrap();
+            if name.ends_with(".cast.json") {
+                // `"styles":[["accent","bg",false,…],…]` — the first two of
+                // each entry. A literal recording carries hex, and is skipped.
+                for role in body
+                    .split('"')
+                    .filter(|s| s.chars().all(|c| c.is_ascii_lowercase() || c == '-'))
+                    .filter(|s| !s.is_empty())
+                {
+                    if ROLES.contains(&role) {
+                        seen.insert(role.to_string());
+                    }
+                }
+            } else if name.ends_with(".svg") && body.contains("shot-palette") {
+                for capture in body.split("var(--term-").skip(1) {
+                    let role = capture.split(',').next().unwrap_or("");
+                    seen.insert(role.to_string());
+                }
+            }
+        }
+
+        assert!(
+            !seen.is_empty(),
+            "no recording named a role — has shots.py stopped recording through the sentinel theme?"
+        );
+        for role in &seen {
+            assert!(
+                ROLES.contains(&role.as_str()),
+                "a recording draws with `{role}`, which is not a role"
+            );
+            assert!(
+                css.contains(&format!("--term-{role}:")),
+                "recordings draw with `{role}` and the stylesheet never defines --term-{role}"
+            );
+        }
+    }
+
+    /// The player asks for the roles rather than for colours.
+    #[test]
+    fn the_player_paints_through_the_terminal_roles() {
+        let js = include_str!("../assets/site.js");
+        assert!(
+            js.contains("var(--term-"),
+            "site.js no longer paints a recording through the theme"
+        );
+    }
+
+    /// Every theme answers for every role, so no recording falls back.
+    #[test]
+    fn every_theme_defines_every_terminal_role() {
+        let css = stylesheet().unwrap();
+        for (name, _) in translatable().unwrap() {
+            let block = css
+                .split(&format!("[data-theme=\"{name}\"] {{"))
+                .nth(1)
+                .unwrap_or_else(|| panic!("no block for theme {name}"));
+            let block = block.split('}').next().unwrap();
+            for role in ROLES {
+                assert!(
+                    block.contains(&format!("--term-{role}:")),
+                    "theme {name} does not define --term-{role}"
+                );
+            }
+        }
     }
 }

@@ -198,6 +198,39 @@ a user's is. Five things about it are load-bearing.
   named in a `data-` attribute the browser ignores and fetched on approach —
   six of them eagerly would be a megabyte before a word is read — and a test
   asserts that too.
+- **A recording carries roles, not colours.** `shots.py` records through a
+  *sentinel* theme — one unique colour per role, written into the recording
+  vault's own `.trafford/themes/` — so a captured cell maps back to exactly one
+  role. Reversing a real palette cannot work: gotham draws `faint` and
+  `selection` in one hex and `link` and `muted` in another, and in paper those
+  pairs are nowhere near each other. The cast JSON then names roles, `site.js`
+  paints `var(--term-<role>)`, and every recording wears whatever theme the
+  reader picked — which is what the theme section claims and what every
+  recording used to contradict, being gotham on a cream page. The sentinel goes
+  in the *vault* rather than the user config directory, which is
+  `~/Library/Application Support` on macOS and `~/.config` on Linux: written to
+  one it is invisible on the other, and the symptom is every recording coming
+  out in two colours with nothing failing.
+- **A still is one file that wears two schemes.** The SVG carries role classes
+  and a `<style>` of its own, `fill: var(--term-r, #hex)`. Inlined — which the
+  hero is — the variable resolves and it follows the chosen theme; loaded as an
+  `<img>`, nothing of the page reaches in and the fallback draws, so the media
+  query swaps the *fallback* rather than the variable. The rules are scoped
+  under `.shot-palette` because an inlined `<style>` is a document-wide rule and
+  the page has other inline SVG for a bare `.accent { fill: … }` to repaint.
+- **A shot that names a theme means it.** The theme strip is three palettes side
+  by side and must not follow the reader's, so naming a theme in `shots.toml`
+  opts out of roles and records literal colour.
+- **`page_roles` decides a colour once.** `vars()` formats it and `swatches()`
+  reads it. The specimen used to work the colours out a second time, and the day
+  `accent-text` began lifting against the panel as well as the page, the
+  specimen went on printing the old ratio — a page whose whole purpose is that
+  it cannot disagree with the site, disagreeing with the site.
+- **A callout title is words on a panel, so it is lifted against both grounds.**
+  `legible()` clears AA against `bg` *and* `surface`. Lifting against the page
+  alone is not enough: in paper `surface` is the darker of the two, and all
+  three callout titles missed there — the worst at 3.88:1 — in the one theme
+  nobody was looking at.
 - **The reload client exists only in `serve`.** `build` never writes it, and a
   test asserts that of every page. A deployed page carrying a livereload script
   is the standard way this leaks.

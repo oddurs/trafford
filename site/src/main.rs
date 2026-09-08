@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, bail, Result};
 use trafford_site::build::{self, Options};
-use trafford_site::{keys, serve, watch};
+use trafford_site::{keys, palette, serve, watch};
 
 const USAGE: &str = "\
 site — build and serve trafford's documentation and landing page
@@ -14,6 +14,7 @@ USAGE
     site build [OPTIONS]    write the site to the output directory
     site serve [OPTIONS]    build it, then serve it and rebuild as you write
     site sync               regenerate the docs that are generated from code
+    site palette            every theme's roles as JSON, for tools/shots.py
 
 OPTIONS
     --docs <DIR>       source vault (default: docs)
@@ -55,6 +56,10 @@ fn main() -> Result<()> {
             serve_it(opts, flags)
         }
         "sync" => sync(&args[1..]),
+        "palette" => {
+            print!("{}", palette::as_json()?);
+            Ok(())
+        }
         other => bail!("unknown command `{other}`\n\n{USAGE}"),
     }
 }
