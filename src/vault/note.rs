@@ -30,6 +30,12 @@ pub struct Note {
     pub path: PathBuf,
     pub title: String,
     pub tags: Vec<String>,
+    /// Every frontmatter key this note wrote, in the order it wrote them.
+    ///
+    /// Not a chosen few: the vault's own type system lives here — 92 notes
+    /// carrying `type/reference`, 62 `status/active` — and a key nobody
+    /// anticipated is still somebody's schema.
+    pub properties: Properties,
     pub links: Vec<WikiLink>,
     pub headings: Vec<Heading>,
     pub words: usize,
@@ -44,6 +50,25 @@ pub struct Note {
 }
 
 impl Note {
+    /// Every value written under `key`, matched case-insensitively — someone
+    /// who wrote `Status:` and a query that says `status:` mean the same key.
+    /// The values themselves keep the case they were written in.
+    pub fn property(&self, key: &str) -> &[String] {
+        self.properties
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(key))
+            .map(|(_, v)| v.as_slice())
+            .unwrap_or(&[])
+    }
+
+    /// Whether `key` was written with `value` under it, both compared
+    /// case-insensitively.
+    pub fn property_is(&self, key: &str, value: &str) -> bool {
+        self.property(key)
+            .iter()
+            .any(|v| v.eq_ignore_ascii_case(value))
+    }
+
     /// The line a `#anchor` names, matching either the heading's text or its
     /// slug — a link may be written either way, and both should work.
     ///
@@ -74,10 +99,15 @@ impl Note {
         let mut tags = Vec::new();
         let mut title = None;
 
-        for (key, value) in frontmatter {
-            match key.as_str() {
-                "title" => title = Some(value.trim_matches('"').to_string()),
-                "tags" => tags.extend(parse_tag_list(&value)),
+        for (key, values) in &frontmatter {
+            match key.to_ascii_lowercase().as_str() {
+                "title" => title = values.first().cloned(),
+                "tags" | "tag" => tags.extend(
+                    values
+                        .iter()
+                        .map(|v| v.trim_start_matches('#').trim().to_string())
+                        .filter(|v| !v.is_empty()),
+                ),
                 _ => {}
             }
         }
@@ -128,6 +158,7 @@ impl Note {
             path: path.to_path_buf(),
             title,
             tags,
+            properties: frontmatter,
             links,
             headings,
             words,
@@ -196,37 +227,75 @@ pub fn relative_id(root: &Path, path: &Path) -> String {
         .replace('\\', "/")
 }
 
-/// Returns the key/value pairs of a YAML-ish frontmatter block and the line
-/// index at which the body starts. Only flat `key: value` pairs and simple
-/// `- item` lists are understood, which covers ordinary Obsidian frontmatter.
-fn split_frontmatter(text: &str) -> (Vec<(String, String)>, usize) {
+/// One frontmatter key and every value written under it, in the order they
+/// were written. A scalar key holds one value; a `- item` list or an inline
+/// `[a, b]` holds several. A key written with nothing under it holds none,
+/// which is not the same as a key nobody wrote.
+pub type Properties = Vec<(String, Vec<String>)>;
+
+/// Returns a note's frontmatter properties and the line index at which the
+/// body starts. Only flat `key: value` pairs, `- item` lists and inline
+/// `[a, b]` arrays are understood, which covers ordinary Obsidian
+/// frontmatter.
+///
+/// Values keep the case they were written in. Matching them case-insensitively
+/// is a decision for whoever is asking, and lowercasing here would make the
+/// vault disagree with Obsidian about its own contents.
+fn split_frontmatter(text: &str) -> (Properties, usize) {
     let mut lines = text.lines();
     if lines.next().map(|l| l.trim_end()) != Some("---") {
         return (Vec::new(), 0);
     }
-    let mut pairs: Vec<(String, String)> = Vec::new();
+    let mut props: Properties = Vec::new();
     let mut last_key: Option<String> = None;
     for (i, line) in text.lines().enumerate().skip(1) {
         if line.trim_end() == "---" {
-            return (pairs, i + 1);
+            return (props, i + 1);
         }
         let trimmed = line.trim();
         if let Some(item) = trimmed.strip_prefix("- ") {
             if let Some(key) = &last_key {
-                if let Some(slot) = pairs.iter_mut().find(|(k, _)| k == key) {
-                    slot.1.push(',');
-                    slot.1.push_str(item.trim());
+                if let Some(slot) = props.iter_mut().find(|(k, _)| k == key) {
+                    slot.1.push(unquote(item.trim()));
                 }
             }
             continue;
         }
         if let Some((key, value)) = trimmed.split_once(':') {
             let key = key.trim().to_string();
-            pairs.push((key.clone(), value.trim().to_string()));
+            props.push((key.clone(), scalar_or_array(value.trim())));
             last_key = Some(key);
         }
     }
-    (pairs, 0)
+    (props, 0)
+}
+
+/// A frontmatter value as either an inline `[a, b]` array or a single scalar.
+///
+/// The comma only separates when the value is bracketed. `title: Hello, world`
+/// is one value, and splitting it would invent a second.
+fn scalar_or_array(value: &str) -> Vec<String> {
+    if value.is_empty() {
+        return Vec::new();
+    }
+    if let Some(inner) = value.strip_prefix('[').and_then(|v| v.strip_suffix(']')) {
+        return inner
+            .split(',')
+            .map(|v| unquote(v.trim()))
+            .filter(|v| !v.is_empty())
+            .collect();
+    }
+    vec![unquote(value)]
+}
+
+fn unquote(value: &str) -> String {
+    let trimmed = value.trim();
+    for q in ['"', '\''] {
+        if trimmed.len() >= 2 && trimmed.starts_with(q) && trimmed.ends_with(q) {
+            return trimmed[1..trimmed.len() - 1].to_string();
+        }
+    }
+    trimmed.to_string()
 }
 
 /// The frontmatter block at the top of a note: its key/value pairs, and the
@@ -235,7 +304,7 @@ fn split_frontmatter(text: &str) -> (Vec<(String, String)>, usize) {
 /// `None` when there is none, or when the block is never closed — an
 /// unterminated `---` is not frontmatter, it is a note that begins with a
 /// horizontal rule and should be shown as written.
-pub fn frontmatter_block(lines: &[String]) -> Option<(Vec<(String, String)>, usize)> {
+pub fn frontmatter_block(lines: &[String]) -> Option<(Properties, usize)> {
     if lines.first().map(|l| l.trim_end()) != Some("---") {
         return None;
     }
@@ -245,29 +314,8 @@ pub fn frontmatter_block(lines: &[String]) -> Option<(Vec<(String, String)>, usi
     if body == 0 {
         return None;
     }
-    // A `- item` list accumulates onto an empty value, so it comes back with a
-    // leading comma. That is an artefact of how it is gathered rather than
-    // anything the author wrote, and `parse_tag_list` drops it silently — but
-    // anything that shows the value to a reader has to.
-    let pairs = pairs
-        .into_iter()
-        .map(|(k, v)| (k, v.trim_start_matches(',').to_string()))
-        .collect();
-    Some((pairs, body))
-}
 
-fn parse_tag_list(value: &str) -> Vec<String> {
-    value
-        .trim_matches(|c| c == '[' || c == ']')
-        .split(',')
-        .map(|t| {
-            t.trim()
-                .trim_matches('"')
-                .trim_start_matches('#')
-                .to_string()
-        })
-        .filter(|t| !t.is_empty())
-        .collect()
+    Some((pairs, body))
 }
 
 fn parse_heading(line: &str, idx: usize) -> Option<Heading> {
@@ -441,7 +489,7 @@ mod tests {
             .collect();
         let (pairs, body) = frontmatter_block(&src).expect("a block");
         assert_eq!(body, 4, "the line after the closing ---");
-        assert_eq!(pairs, vec![("tags".to_string(), "one".to_string())]);
+        assert_eq!(pairs, vec![("tags".to_string(), vec!["one".to_string()])]);
     }
 
     #[test]
