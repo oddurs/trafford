@@ -109,6 +109,7 @@
     var at = 0;
     var screen = null;
     var grid = null;
+    var progress = null;
     var asked = false;
 
     function label(text) {
@@ -117,6 +118,9 @@
     }
 
     function build() {
+      progress = document.createElement("div");
+      progress.className = "cast-progress";
+      host.appendChild(progress);
       screen = document.createElement("pre");
       screen.className = "cast-screen";
       screen.setAttribute("aria-hidden", "true");
@@ -169,6 +173,11 @@
 
     function step() {
       paint(cast.frames[at]);
+      // Stepped rather than smooth: a recording of a terminal advances one
+      // frame per keystroke, and a bar that slides pretends otherwise.
+      if (progress) {
+        progress.style.width = ((at + 1) / cast.frames.length) * 100 + "%";
+      }
       var last = at === cast.frames.length - 1;
       var wait = last ? cast.loop : cast.frames[at].d;
       at = last ? 0 : at + 1;
@@ -196,6 +205,7 @@
          `HTMLElement.hidden` is not a property SVG elements have. */
       poster.style.visibility = "hidden";
       screen.style.visibility = "visible";
+      if (progress) progress.style.opacity = "1";
       resize();
       step();
     }
@@ -204,6 +214,7 @@
       clearTimeout(timer);
       timer = null;
       label("Play");
+      if (progress) progress.style.opacity = "0";
     }
 
     function load() {
@@ -295,7 +306,80 @@
     });
   }
 
+  /* Click a theme in the strip and the page wears it.
+   *
+   * The strip is three recordings of one screen in three palettes, and the
+   * palettes are the same ones the stylesheet carries — so making them
+   * clickable costs almost nothing and is the only genuinely live thing on the
+   * page. Without JavaScript they are three captioned pictures, which is what
+   * they were. */
+  function setUpThemeStrip() {
+    var names = themes();
+    if (names.length < 2) return;
+
+    document.querySelectorAll("figure.shot").forEach(function (figure) {
+      var caption = figure.querySelector("figcaption");
+      if (!caption) return;
+      var name = caption.textContent.trim().toLowerCase();
+      if (names.indexOf(name) === -1) return;
+
+      figure.classList.add("wearable");
+      figure.tabIndex = 0;
+      figure.setAttribute("role", "button");
+      figure.setAttribute("aria-label", "Use the " + caption.textContent.trim() + " theme");
+
+      function wear() {
+        document.documentElement.setAttribute("data-theme", name);
+        try {
+          localStorage.setItem(KEY, name);
+        } catch (e) {}
+        var label = document.querySelector(".theme-toggle .theme-name");
+        if (label) label.textContent = name;
+      }
+
+      figure.addEventListener("click", wear);
+      figure.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          wear();
+        }
+      });
+    });
+  }
+
+  /* Sections arrive rather than being there.
+   *
+   * The hidden state is added by script, so with JavaScript off every section
+   * is simply visible — a reveal that hides content when the script does not
+   * run is a page that does not work. The hero is left alone: it is above the
+   * fold and animating it would delay the only thing a reader came for. */
+  function setUpReveal() {
+    if (!window.IntersectionObserver) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    var sections = document.querySelectorAll(".prose > .showcase");
+    if (!sections.length) return;
+
+    var seen = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          e.target.classList.add("shown");
+          seen.unobserve(e.target);
+        });
+      },
+      { rootMargin: "0px 0px -12% 0px" }
+    );
+
+    sections.forEach(function (section) {
+      section.classList.add("reveal");
+      seen.observe(section);
+    });
+  }
+
   setUpTheme();
   setUpCopy();
   setUpCasts();
+  setUpThemeStrip();
+  setUpReveal();
 })();

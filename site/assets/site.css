@@ -364,6 +364,23 @@ pre {
   font-family: var(--mono);
 }
 
+/* A key is not a snippet. The renderer emits `<kbd>` for anything that reads as
+   a keystroke, which on a page about a keyboard-driven program is most of the
+   inline code on it. */
+kbd {
+  display: inline-block;
+  font-size: 0.82em;
+  line-height: 1.4;
+  padding: 0.05em 0.4em;
+  color: var(--fg);
+  background: var(--surface);
+  border: var(--rule);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  white-space: nowrap;
+  vertical-align: 0.05em;
+}
+
 :not(pre) > code {
   background: var(--surface);
   color: var(--code);
@@ -550,6 +567,27 @@ th.center {
   height: 1.45em;
 }
 
+/* Stepped, one segment per frame, at the foot of the recording. It exists so a
+   playing recording reads as a recording rather than as an image that might be
+   broken. */
+.cast-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 0;
+  background: var(--accent);
+  opacity: 0;
+  transition: width 180ms linear, opacity 200ms;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cast-progress {
+    transition: none;
+  }
+}
+
 .cast-control {
   position: absolute;
   right: 0.75rem;
@@ -580,6 +618,37 @@ th.center {
 @media (prefers-reduced-motion: reduce) {
   .cast-control {
     opacity: 1;
+  }
+}
+
+/* A theme in the strip is a control: clicking it dresses the page in it. The
+   affordance is added by script, so without it these stay three pictures. */
+.wearable {
+  cursor: pointer;
+  transition: border-color 160ms, transform 160ms;
+}
+
+.wearable:hover,
+.wearable:focus-visible {
+  border-color: var(--border-focus);
+}
+
+.wearable:hover {
+  transform: translateY(-2px);
+}
+
+.wearable:hover figcaption,
+.wearable:focus-visible figcaption {
+  color: var(--fg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wearable {
+    transition: none;
+  }
+
+  .wearable:hover {
+    transform: none;
   }
 }
 
@@ -684,6 +753,14 @@ figcaption {
   border-color: var(--border-focus);
 }
 
+/* Counted at build time, not typed. Small, and stated once. */
+.facts {
+  margin: 1.5rem 0 0;
+  font-size: 0.78rem;
+  color: var(--faint);
+  letter-spacing: 0.01em;
+}
+
 .hero .secondary {
   color: var(--accent-text);
   font-size: 0.9rem;
@@ -704,7 +781,17 @@ figcaption {
   max-width: none;
 }
 
+/* The editor numbers its lines down the left. The page numbers its sections in
+   the same place, which is the one piece of chrome worth borrowing from the
+   program — it is free, it gives the page a spine, and on a narrow screen it
+   folds away rather than crowding the text. */
+.landing .prose {
+  counter-reset: section;
+}
+
 .showcase {
+  counter-increment: section;
+  position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0 1.25rem;
@@ -714,6 +801,22 @@ figcaption {
 
 .showcase:first-of-type {
   border-top: none;
+}
+
+.showcase::before {
+  content: counter(section, decimal-leading-zero);
+  position: absolute;
+  left: -3.25rem;
+  top: clamp(3.5rem, 8vw, 6rem);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+}
+
+@media (max-width: 78rem) {
+  .showcase::before {
+    display: none;
+  }
 }
 
 /* A section header is a claim and a line under it, spanning the width. The
@@ -830,6 +933,21 @@ figcaption {
   color: var(--muted);
   font-size: 0.8rem;
   letter-spacing: 0.04em;
+}
+
+/* ── Arrival ─────────────────────────────────────────────────────────────── */
+
+/* `.reveal` is added by script, never by the markup, so a page without
+   JavaScript is simply a page where every section is visible. */
+.reveal {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 520ms ease-out, transform 520ms ease-out;
+}
+
+.reveal.shown {
+  opacity: 1;
+  transform: none;
 }
 
 /* ── The closing claim ───────────────────────────────────────────────────── */

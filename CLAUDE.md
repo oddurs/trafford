@@ -417,6 +417,11 @@ pictures of a terminal, drawn in the terminal's colours on the terminal's own
 ground, and checking them reported forty false failures and hid the one real
 one.
 
+||||||| d8dc0ed
+
+Whether it belongs in CI is #0169: a hundred megabytes of browser against a
+job that finishes in two minutes.
+
 ## Testing a TUI
 
 Unit tests cover the parts that are pure. They cannot tell you that a pane got

@@ -610,7 +610,10 @@ impl<'a, 'b> Writer<'a, 'b> {
             match &piece.kind {
                 Inline::Text => out.push_str(&escape(&piece.raw)),
                 Inline::Code { inner } => {
-                    let _ = write!(out, "<code>{}</code>", escape(inner));
+                    // A key is not a snippet, and a page about a keyboard-driven
+                    // program is mostly keys. `<kbd>` is what they are.
+                    let tag = if is_key(inner) { "kbd" } else { "code" };
+                    let _ = write!(out, "<{tag}>{}</{tag}>", escape(inner));
                 }
                 Inline::Strong { inner } => {
                     let _ = write!(out, "<strong>{}</strong>", escape(inner));
@@ -813,6 +816,36 @@ fn align_attr(align: Option<&table::Align>) -> &'static str {
 
 const SECTION: &str = "<section class=\"showcase\">";
 const CLOSING: &str = "<section class=\"showcase closing\">";
+
+/// Whether a code span is a keystroke rather than a snippet.
+///
+/// The rule has to keep `git`, `main` and `.gitignore` out while letting `zM`,
+/// `t` and `ctrl-e` in, which is why length is part of it: in this project's
+/// writing a one- or two-character code span is always a key, and three
+/// characters is `git` about as often as it is anything else.
+fn is_key(text: &str) -> bool {
+    const NAMED: [&str; 11] = [
+        "esc",
+        "enter",
+        "tab",
+        "space",
+        "backspace",
+        "delete",
+        "up",
+        "down",
+        "left",
+        "right",
+        "menu key",
+    ];
+    let modified = ["ctrl-", "alt-", "shift-", "cmd-"]
+        .iter()
+        .any(|m| text.starts_with(m) && text.len() > m.len());
+    let function = text.strip_prefix('f').is_some_and(|n| {
+        !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()) && n.parse() != Ok(0u8)
+    });
+    let short = text.chars().count() <= 2 && text.chars().all(char::is_alphanumeric);
+    modified || function || short || NAMED.contains(&text)
+}
 
 /// What an embed reads as: the alias if it has one, otherwise the target.
 fn embed_label(embed: &str) -> Option<String> {
