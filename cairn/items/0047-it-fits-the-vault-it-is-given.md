@@ -1,15 +1,15 @@
 ---
 id: 47
-title: It fits the vault it is given
 key: v0.6
+title: It fits the vault it is given
 type: milestone
-status: backlog
-created: 2026-09-07
-updated: 2026-09-07
-priority: p2
-due: 2027-02-14
+status: done
 depends_on:
 - 36
+created: 2026-09-07
+updated: 2026-09-08
+priority: p2
+due: 2027-02-14
 ---
 
 Obsidian is closed source, so there is nothing to read. The vault is not: its

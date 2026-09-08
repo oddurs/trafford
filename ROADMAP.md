@@ -85,20 +85,37 @@ Obsidian is closed source, so there is nothing to read. The vault is not: its
 - [x] `0051` Delete to the vault's trash, not to nowhere <sup>bug · p1 · vault</sup>
 - [x] `0052` The command palette cannot find a command by its own name <sup>bug · p1 · chrome</sup>
 
+## v0.7 — It can answer questions about itself
+
+`··········` 0% · 0 of 10 done · due 2027-02-28
+
+Obsidian asks you to build the structure by hand, and then browse it. Measured
+
+### planned
+
+- [ ] `0027` Every unfinished task in the vault, in one place <sup>feature · p1 · vault</sup>
+- [ ] `0031` Inline images and dataview, and why not yet <sup>docs · p3 · docs</sup>
+- [ ] `0054` A sidecar for state the vault does not own <sup>chore · p0 · config</sup>
+- [ ] `0055` Frontmatter properties are first-class <sup>feature · p0 · vault</sup>
+- [ ] `0056` A query layer over the whole vault <sup>feature · p0 · vault</sup>
+- [ ] `0057` Somewhere for a query to land <sup>feature · p1 · chrome</sup>
+- [ ] `0058` Is lexical similarity enough, or does this need embeddings? <sup>spike · p1 · assistant</sup>
+- [ ] `0059` Related notes, and the sixty-six orphans <sup>feature · p2 · assistant</sup>
+- [ ] `0060` Ask the vault, and cite it <sup>feature · p1 · assistant</sup>
+- [ ] `0061` What has drifted <sup>feature · p1 · git</sup>
+
 ## later — Someday
 
-`##········` 14% · 1 of 7 done
+`##········` 20% · 1 of 5 done
 
 Good ideas without a date yet.
 
 ### backlog
 
 - [ ] `0026` A rail showing the shape of the note beside it <sup>feature · p2 · chrome</sup>
-- [ ] `0027` Every unfinished task in the vault, in one place <sup>feature · p1 · vault</sup>
 - [ ] `0028` Show where you came from, and reopen where you left off <sup>feature · p3 · chrome</sup>
 - [ ] `0029` Read two notes side by side <sup>feature · p3 · chrome</sup>
 - [ ] `0030` Should the editor render in place, the way Obsidian does? <sup>spike · p2 · editor</sup>
-- [ ] `0031` Inline images and dataview, and why not yet <sup>docs · p3 · docs</sup>
 
 ### done
 

@@ -3,8 +3,9 @@ id: 32
 key: v0.1
 title: It reads a real vault
 type: milestone
-status: backlog
+status: done
 created: 2026-09-07
+updated: 2026-09-08
 due: 2026-09-06
 ---
 
