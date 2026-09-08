@@ -1521,6 +1521,25 @@ impl App {
         }
     }
 
+    /// What a new note starts as, and which line to put the cursor on.
+    ///
+    /// A template when one is configured and readable, a heading otherwise.
+    /// Anything the expander does not understand is left as written, so a
+    /// template using more of Templater than this degrades to showing its own
+    /// source rather than losing it.
+    fn body_for_new_note(&self, title: &str) -> (String, Option<usize>) {
+        let plain = (format!("# {title}\n\n"), None);
+        let path = self.config.new_note_template.trim();
+        if path.is_empty() {
+            return plain;
+        }
+        let Ok(template) = std::fs::read_to_string(self.vault.path_for(path)) else {
+            return plain;
+        };
+        let out = crate::vault::template::expand(&template, title, chrono::Local::now());
+        (out.text, out.cursor)
+    }
+
     pub fn create_note(&mut self, name: &str) {
         let name = name.trim();
         if name.is_empty() {
@@ -1533,11 +1552,11 @@ impl App {
             .next()
             .unwrap_or(name)
             .trim_end_matches(".md");
-        let body = format!("# {title}\n\n");
+        let (body, cursor) = self.body_for_new_note(title);
         match self.vault.create_note(&rel, &body) {
             Ok(id) => {
                 self.open_note(&id, true);
-                self.editor.buf.goto_line(1);
+                self.editor.buf.goto_line(cursor.unwrap_or(1));
                 self.set_status(format!("created {id}"));
                 self.refresh_git();
             }
@@ -2053,6 +2072,67 @@ mod tests {
         assert!(
             !app.unsaved_notes().contains(&"Two.md".to_string()),
             "nothing is held for a note that is gone"
+        );
+    }
+
+    #[test]
+    fn a_new_note_uses_the_template_when_one_is_configured() {
+        let dir = crate::testing::TempDir::with_files(&[(
+            "_templates/inbox.md",
+            "---\ntags:\n  - type/log\n---\n\n# <% tp.file.title %>\n\n<% tp.file.cursor(0) %>\n",
+        )]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.config.new_note_template = "_templates/inbox.md".into();
+
+        app.create_note("Reading list");
+        let text = app.editor.buf.text();
+        assert!(
+            text.contains("# Reading list"),
+            "the title went in: {text:?}"
+        );
+        assert!(
+            text.contains("type/log"),
+            "and the frontmatter came with it"
+        );
+        assert!(!text.contains("<%"), "nothing left unexpanded");
+        assert_eq!(
+            app.editor.buf.row, 7,
+            "the cursor landed where the template asked"
+        );
+    }
+
+    #[test]
+    fn a_new_note_without_a_template_is_what_it_always_was() {
+        let dir = crate::testing::TempDir::with_files(&[("Seed.md", "# Seed\n")]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.create_note("Plain");
+        assert_eq!(app.editor.buf.text(), "# Plain\n\n");
+    }
+
+    #[test]
+    fn a_template_that_cannot_be_read_falls_back_rather_than_failing() {
+        let dir = crate::testing::TempDir::with_files(&[("Seed.md", "# Seed\n")]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.config.new_note_template = "_templates/missing.md".into();
+        app.create_note("Still Fine");
+        assert_eq!(app.editor.buf.text(), "# Still Fine\n\n");
+    }
+
+    #[test]
+    fn making_a_note_never_changes_the_template() {
+        let dir =
+            crate::testing::TempDir::with_files(&[("_templates/t.md", "# <% tp.file.title %>\n")]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.config.new_note_template = "_templates/t.md".into();
+        app.create_note("A Note");
+        let template = std::fs::read_to_string(dir.path().join("_templates/t.md")).unwrap();
+        assert_eq!(
+            template, "# <% tp.file.title %>\n",
+            "the template is untouched"
         );
     }
 

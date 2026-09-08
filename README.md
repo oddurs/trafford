@@ -196,6 +196,7 @@ so they cannot drift from the format.
 ```toml
 theme = "gotham"         # a built-in, a theme file, or a Ghostty theme
 new_note_dir = ""        # where ctrl-n puts notes
+new_note_template = ""   # a template to start new notes from, e.g. "_templates/note.md"
 sidebar_width = 32       # columns; a deep vault wants more
 daily_note_dir = "journal"
 daily_note_format = "%Y-%m-%d"

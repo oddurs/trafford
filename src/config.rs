@@ -32,6 +32,9 @@ pub struct Config {
     /// While previewing, hide the side panes and the line-number gutter and
     /// hold prose to a measure. Set false to keep the editor's chrome.
     pub reading_focus: bool,
+    /// Template used for a new note, relative to the vault. Empty means a
+    /// heading and nothing else, which is what trafford did before templates.
+    pub new_note_template: String,
     /// Show the sidebar on startup.
     pub sidebar: bool,
     /// Sidebar width in columns. A deep vault wants more room for the tree.
@@ -59,6 +62,7 @@ impl Default for Config {
             // to Obsidian's "local" and already has a `.trash/` in it.
             trash: "local".into(),
             reading_focus: true,
+            new_note_template: String::new(),
             sidebar: true,
             sidebar_width: 32,
             context_pane: true,
