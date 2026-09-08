@@ -1,0 +1,5 @@
+# The fixture vault's config. Pinned so a screenshot does not change because
+# someone's own settings did.
+theme = "gotham"
+sidebar_width = 26
+wrap = true

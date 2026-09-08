@@ -1,0 +1,153 @@
+# What the website shows, and how it was recorded.
+#
+# One entry is one image or one recording. `tools/shots.py` drives the real
+# binary against an emulated terminal and writes the screen out as SVG — real
+# text, selectable, a few kilobytes, and diffable in a pull request the way a
+# PNG is not. A `[[cast]]` is the same run with the frames kept, and emits its
+# own poster from the same recording so the two cannot drift.
+#
+# Every recording gets its own copy of the fixture, outside this repository: in
+# place, trafford walks up, finds *this* repo, and puts its dirty-file count in
+# the status bar of every shot. A copy also lets one entry ask for a theme or
+# for a dirty working tree without leaking either into the next.
+
+vault = "fixture"
+out = "../docs/img"
+
+# ─── Casts ───────────────────────────────────────────────────────────────────
+#
+# `hold` is how long the frame a key produced stays on screen, in milliseconds.
+# Three seconds and one idea each: a loop nobody waits out is worse than a
+# still.
+
+[[cast]]
+name = "hero"
+title = "Opening a note by name, then reading it"
+# The same geometry as the stills, deliberately: a cast is drawn over its
+# poster and the poster is what reserves the space.
+cols = 120
+rows = 24
+hold = 1100
+loop_pause = 1600
+poster = 6
+steps = [
+  { key = "ctrl-p", hold = 650 },
+  { key = "l", hold = 110 },
+  { key = "i", hold = 110 },
+  { key = "n", hold = 110 },
+  { key = "k", hold = 420 },
+  { key = "enter", hold = 1300 },
+  { key = "ctrl-e", hold = 2100 },
+  { key = "ctrl-e", hold = 900 },
+]
+
+[[cast]]
+name = "backlinks"
+title = "Following a backlink to the line that mentions this note"
+cols = 120
+rows = 24
+hold = 1000
+loop_pause = 1800
+poster = 1
+# The note is opened *before* recording starts. Recording the opening too made
+# this identical to the folding cast for its first two seconds, and two cards
+# side by side playing the same thing reads as one broken player.
+setup = ["ctrl-p", "l", "i", "n", "k", "enter"]
+steps = [
+  { key = "ctrl-t", hold = 2400 },
+  { key = "down", hold = 900 },
+  { key = "enter", hold = 2400 },
+]
+
+[[cast]]
+name = "folding"
+title = "A long note folded to its headings, and opened again"
+cols = 120
+rows = 24
+hold = 1600
+loop_pause = 1800
+# The folded frame, which is the point of the recording. `za` on one section
+# was the first idea and needed the cursor moved onto a heading first, which is
+# arithmetic over a layout that folding has just changed — `zR` says the same
+# thing and cannot be off by a row.
+poster = 2
+setup = ["ctrl-p", "d", "e", "e", "enter", "ctrl-e"]
+steps = [
+  { key = "z", hold = 60 },
+  { key = "M", hold = 2800 },
+  { key = "z", hold = 60 },
+  { key = "R", hold = 1800 },
+]
+
+[[cast]]
+name = "search"
+title = "Searching the vault, with the line each hit came from"
+cols = 120
+rows = 24
+hold = 700
+loop_pause = 1800
+poster = 5
+steps = [
+  { key = "ctrl-f", hold = 550 },
+  { key = "n", hold = 120 },
+  { key = "o", hold = 120 },
+  { key = "t", hold = 120 },
+  { key = "e", hold = 2400 },
+]
+
+# ─── Stills ──────────────────────────────────────────────────────────────────
+
+[[shot]]
+name = "palette"
+title = "The command palette"
+cols = 120
+rows = 24
+keys = ["ctrl-k"]
+
+[[shot]]
+name = "git"
+title = "The git panel, over a working tree with a change in it"
+cols = 120
+rows = 24
+# `d` opens the diff of the change under the cursor. Without it the panel is
+# mostly an empty pane, which is a poor argument for having one — and the pane
+# it replaces was the commit list, which draws how *old* a commit is. That is a
+# function of today's date rather than of anything this project does, so a shot
+# of it would go stale when the calendar turned rather than when the program
+# changed. Keep it that way: no recording should show a relative time.
+keys = ["ctrl-g", "d"]
+# A clean tree makes a poor argument for a git panel either.
+dirty = { "Welcome.md" = "\n## Today\n\nAn edit that is not committed yet.\n" }
+
+[[shot]]
+name = "tree"
+title = "The file tree, and the tags beside it"
+cols = 120
+rows = 24
+keys = ["tab", "t"]
+
+# One screen, three palettes. The claim the README makes and nobody can check.
+
+[[shot]]
+name = "theme-gotham"
+title = "Gotham"
+theme = "gotham"
+cols = 74
+rows = 20
+keys = ["ctrl-p", "d", "e", "e", "enter", "ctrl-e"]
+
+[[shot]]
+name = "theme-night"
+title = "Night"
+theme = "night"
+cols = 74
+rows = 20
+keys = ["ctrl-p", "d", "e", "e", "enter", "ctrl-e"]
+
+[[shot]]
+name = "theme-paper"
+title = "Paper"
+theme = "paper"
+cols = 74
+rows = 20
+keys = ["ctrl-p", "d", "e", "e", "enter", "ctrl-e"]

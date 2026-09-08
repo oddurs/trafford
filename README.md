@@ -220,9 +220,15 @@ Anything left out is taken from the vault's own `.obsidian/app.json` when there
 is one — where new notes go, what deleting means, whether prose is held to a
 measure. Whatever you write here wins.
 
+## Docs
+
+<https://oddurs.github.io/trafford> — generated from `docs/`, which is a vault,
+by the program it documents.
+
 ## Development
 
-The repository is a Cargo workspace; `trafford/` is the application.
+The repository is a Cargo workspace: `trafford/` is the application, `site/`
+builds the website and never ships inside the binary.
 
 ```sh
 cargo test          # unit tests live beside the code they cover
@@ -230,7 +236,12 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --all --check
 
 python3 tools/probe.py sizes /tmp/vault   # drive the real TUI in a pty
+
+cargo run -p trafford-site -- serve       # the docs, on a port the OS picks
 ```
+
+`serve` takes no port by default. Several worktrees run at once here, and a
+fixed port means the browser quietly keeps showing another checkout's build.
 
 Where it is going: [ROADMAP.md](ROADMAP.md), generated from the items in
 `cairn/items`. Working on this with an agent? Read [CLAUDE.md](CLAUDE.md) for

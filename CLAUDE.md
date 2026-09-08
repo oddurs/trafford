@@ -13,8 +13,16 @@ cargo run -p trafford -- init /tmp/v        # scaffold a throwaway vault
 cargo run -p trafford -- /tmp/v             # open it
 ```
 
-The repository is a Cargo workspace, so a member has to be named: `cargo
-install --path .` at the root finds a virtual manifest and stops.
+The repository is a Cargo workspace. `trafford/` is the application; `site/`
+builds the documentation and landing page and is never a dependency of the
+binary — `cargo tree -p trafford` is the check, and it is in CI.
+
+```sh
+cargo run -p trafford-site -- serve   # build the site, watch, and serve it
+cargo run -p trafford-site -- build   # write it to target/site
+cargo run -p trafford-site -- sync    # regenerate docs/keys.md from the keymap
+.venv/bin/python tools/shots.py       # regenerate the screenshots
+```
 
 CI runs the **latest stable** toolchain, which knows lints yours may not. A
 clean local clippy is not proof the build is green — `rustup update stable`
@@ -25,6 +33,7 @@ first, or run `cargo +<version> clippy` with the version CI reports. Two
 
 | Path | What lives there |
 | --- | --- |
+<<<<<<< HEAD
 | `trafford/src/vault/note.rs` | Parsing one note: frontmatter, headings, `#tags`, `[[wikilinks]]` |
 | `trafford/src/vault/index.rs` | The vault: scanning, link resolution, backlinks, search, rename |
 | `trafford/src/editor/buffer.rs` | Text buffer — cursor, edits, undo. No key handling. |
@@ -34,9 +43,38 @@ first, or run `cargo +<version> clippy` with the version CI reports. Two
 | `trafford/src/app.rs` | Application state, note navigation, assistant plumbing |
 | `trafford/src/keymap.rs` | Key routing, the command palette, the help table |
 | `trafford/src/ui/` | Theme, markdown-to-spans renderer, tables, and all drawing |
-| `src/watch.rs` | Watching the vault: debounced filesystem events |
 | `trafford/src/main.rs` | CLI, terminal setup, event loop |
-| `trafford/src/lib.rs` | The modules, made public so a second crate can read them |
+| `trafford/src/lib.rs` | What the site can reach: `vault`, `ui::fold`, `ui::table`, `ui::callout`, `ui::markdown::scan`, `ui::theme` |
+| `site/src/html.rs` | Notes to HTML, through the app's scanners. No markdown parser |
+| `site/src/build.rs` | The build: pages, assets, link checking, the atomic swap |
+| `site/src/serve.rs` | The development server. Binds `127.0.0.1:0` |
+| `site/src/palette.rs` | `ui::theme` to CSS custom properties |
+| `docs/` | The documentation, which is a vault the app can open |
+| `tools/shots.py` | The website's screenshots, driven out of the real binary |
+||||||| 493de26
+| `src/vault/note.rs` | Parsing one note: frontmatter, headings, `#tags`, `[[wikilinks]]` |
+| `src/vault/index.rs` | The vault: scanning, link resolution, backlinks, search, rename |
+| `src/editor/buffer.rs` | Text buffer — cursor, edits, undo. No key handling. |
+| `src/editor/mod.rs` | Modal layer: normal/insert/visual, operators, counts |
+| `src/git.rs` | Git by shelling out to `git`. Porcelain parsing, commit, push, pull |
+| `src/llm.rs` | Anthropic streaming client; runs on a worker thread |
+| `src/app.rs` | Application state, note navigation, assistant plumbing |
+| `src/keymap.rs` | Key routing, the command palette, the help table |
+| `src/ui/` | Theme, markdown-to-spans renderer, tables, and all drawing |
+| `src/main.rs` | CLI, terminal setup, event loop |
+=======
+| `src/vault/note.rs` | Parsing one note: frontmatter, headings, `#tags`, `[[wikilinks]]` |
+| `src/vault/index.rs` | The vault: scanning, link resolution, backlinks, search, rename |
+| `src/editor/buffer.rs` | Text buffer — cursor, edits, undo. No key handling. |
+| `src/editor/mod.rs` | Modal layer: normal/insert/visual, operators, counts |
+| `src/git.rs` | Git by shelling out to `git`. Porcelain parsing, commit, push, pull |
+| `src/llm.rs` | Anthropic streaming client; runs on a worker thread |
+| `src/app.rs` | Application state, note navigation, assistant plumbing |
+| `src/keymap.rs` | Key routing, the command palette, the help table |
+| `src/ui/` | Theme, markdown-to-spans renderer, tables, and all drawing |
+| `src/watch.rs` | Watching the vault: debounced filesystem events |
+| `src/main.rs` | CLI, terminal setup, event loop |
+>>>>>>> origin/main
 
 The dependency direction is one-way: `vault` and `editor` know nothing about
 the UI; `ui` reads `App` but never mutates it except for viewport bookkeeping.
@@ -109,6 +147,111 @@ the UI; `ui` reads `App` but never mutates it except for viewport bookkeeping.
 - **Only the mouse modes we use are enabled.** `MOUSE_ON` in `main.rs`
   deliberately omits 1003 (all-motion): the loop redraws per event and nothing
   reacts to a hover, so hover tracking would be pure cost.
+
+## The docs site
+
+`site/` renders `docs/` — which is a vault, opened by `vault::Index` exactly as
+a user's is. Five things about it are load-bearing.
+
+- **There is no markdown parser in `site/`.** Headings come from
+  `ui::fold::headings`, tables from `ui::table::parse`, callouts from
+  `ui::callout::parse`, frontmatter from `note::frontmatter_block`, inline
+  markup from `ui::markdown::scan`. The HTML renderer is a second *backend*,
+  not a second parser — which is why `[[wikilinks]]`, `> [!note]` and
+  `[[Note\|alias]]` inside a table work on the website. A generator with its own
+  parser is the "second heading scanner" failure, shipped deliberately.
+- **The development server binds port zero.** Work here happens in several
+  worktrees at once. A fixed port does not usually fail loudly — the second
+  server does not start, the browser keeps showing the first worktree's build,
+  and you review a change that is not there. The port is read *after* binding;
+  probing for a free one and then binding it is a race. `target/.serve.json`
+  carries the URL for anything that would rather not scrape stdout, and is
+  never trusted on its own — a killed process leaves one behind, so ask the
+  port with `serve::alive`.
+- **Every href is relative to the page that holds it.** That is what makes one
+  build correct at a domain root, under the GitHub Pages project subpath, and
+  over `file://` with no server. There is no `--base-url`; `--site-url` exists
+  only for the canonical tags and the sitemap, which have to be absolute.
+- **Anything generated is checked by regenerating it.** `docs/keys.md` comes
+  from `keymap::HELP` via `site sync`; the screenshots come from the real
+  binary via `tools/shots.py`; the palette comes from `ui::theme`. CI
+  regenerates and diffs. A generated file edited by hand is reverted by the
+  next sync, and CI says so first.
+- **The landing page follows obsidian.md's rhythm, in this project's clothes.**
+  A claim at four times the body size, the program full width beneath it, then
+  section header → cards, and a claim again at the end. Taken from the
+  reference: the layout. Not taken: the sans, the purple, and the gem — a
+  geometric sans is right for a GUI app and wearing it here would be borrowing
+  an identity rather than learning from a layout.
+- **A card puts its copy at the top and lets the recording bleed off the
+  bottom.** The eye finishes on the words rather than on a cut-off pixel, which
+  is why this reads better than cropping to the right — which is what the first
+  version did.
+- **The last section of a landing note is its closing**, marked in
+  `Writer::finish` rather than by anything in the markdown. It is always the
+  last one, so a rule beats a marker.
+- **The landing page is a run of showcases, and every one is the program.**
+  Each H2 opens a `<section>` (`html::render_sectioned`), so the note stays
+  ordinary markdown and the layout is a selector. A recording has to be of the
+  thing its heading claims: the first backlinks cast ran `ctrl-t` on whichever
+  note the app opens by default, which has none, and was a cast of an empty
+  pane.
+- **A player keeps its poster until it actually starts.** Loading used to
+  reveal the recording's *first* frame, which is the least interesting one —
+  the poster was chosen for being worth looking at.
+- **The recording styles live in their own section of `site.css`.** They were
+  written inside the landing block once and were deleted with it when that
+  block was rewritten, which left every recording unstyled and drawn at
+  whatever size the box happened to imply.
+- **A cell crops a recording rather than scaling it.** A third of the page is
+  380 pixels and a terminal is 120 columns; scaled to fit, the text is four
+  pixels tall. The bento cells keep the picture readable and clip it, which
+  reads as a piece of a real interface rather than an illegible whole.
+- **No recording shows a relative time.** The git panel draws how old a commit
+  is, which is a function of today's date rather than of anything this project
+  does — a shot of it goes stale when the calendar turns. The commit date is
+  pinned (which pins the hash, which the panel also draws) and the git shot
+  opens a *diff* rather than the commit list.
+- **The hero is a recording, and the still is the content.** `tools/shots.py`
+  keeps the frames as well as the last one; `site.js` paints them over the
+  still, which stays in the flow with `visibility: hidden` so nothing moves
+  when the frames land. With no JavaScript, with reduced motion, or before the
+  fetch returns, the still is what a reader sees — which is why it is still
+  generated. Every control on the page ships `hidden` and is revealed by
+  script, and a test asserts that of every button on every page. Casts are
+  named in a `data-` attribute the browser ignores and fetched on approach —
+  six of them eagerly would be a megabyte before a word is read — and a test
+  asserts that too.
+- **The reload client exists only in `serve`.** `build` never writes it, and a
+  test asserts that of every page. A deployed page carrying a livereload script
+  is the standard way this leaks.
+
+Four smaller things that each cost time to find.
+
+The recordings run against a *copy* of `site/fixture` in a temp directory, with
+`HOME` pointed there too, and the copy is made into a git repository with the
+branch, the identity and both dates pinned. In place, trafford walks up and
+finds *this* repository, so its dirty-file count went into the status bar and
+every shot changed whenever anything else did; without a repository at all the
+status bar reads `no git`, which is an odd thing to show under a claim about
+git being in the status bar; and `Theme::resolve` reads
+`~/.config/trafford/themes/` *before* the built-ins, so a developer's own
+gotham.toml would take a different screenshot from CI.
+
+The recorder waits for the screen to stop changing rather than for a fixed
+pause. A guess broke silently the moment startup grew a git poll: the first
+keystroke arrived before the program was listening and the shot recorded the
+wrong note without failing.
+
+`mono` is not offered as a site theme, because it sets its background and
+foreground to `reset`, meaning "whatever the terminal already is", which a
+browser cannot answer.
+
+The typeface is subset to the characters the built site draws, and the subset
+is derived from the built HTML rather than listed by hand — a character the
+subset lacks falls back mid-word and reads as one broken glyph. `--check` also
+pins the advance width at 0.6em, which every fallback in the stack shares, so
+the swap when the font lands moves nothing.
 
 ## Obsidian compatibility
 
