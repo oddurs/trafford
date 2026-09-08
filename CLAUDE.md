@@ -33,7 +33,6 @@ first, or run `cargo +<version> clippy` with the version CI reports. Two
 
 | Path | What lives there |
 | --- | --- |
-<<<<<<< HEAD
 | `trafford/src/vault/note.rs` | Parsing one note: frontmatter, headings, `#tags`, `[[wikilinks]]` |
 | `trafford/src/vault/index.rs` | The vault: scanning, link resolution, backlinks, search, rename |
 | `trafford/src/editor/buffer.rs` | Text buffer — cursor, edits, undo. No key handling. |
@@ -43,6 +42,7 @@ first, or run `cargo +<version> clippy` with the version CI reports. Two
 | `trafford/src/app.rs` | Application state, note navigation, assistant plumbing |
 | `trafford/src/keymap.rs` | Key routing, the command palette, the help table |
 | `trafford/src/ui/` | Theme, markdown-to-spans renderer, tables, and all drawing |
+| `trafford/src/watch.rs` | Watching the vault: debounced filesystem events |
 | `trafford/src/main.rs` | CLI, terminal setup, event loop |
 | `trafford/src/lib.rs` | What the site can reach: `vault`, `ui::fold`, `ui::table`, `ui::callout`, `ui::markdown::scan`, `ui::theme` |
 | `site/src/html.rs` | Notes to HTML, through the app's scanners. No markdown parser |
@@ -51,30 +51,6 @@ first, or run `cargo +<version> clippy` with the version CI reports. Two
 | `site/src/palette.rs` | `ui::theme` to CSS custom properties |
 | `docs/` | The documentation, which is a vault the app can open |
 | `tools/shots.py` | The website's screenshots, driven out of the real binary |
-||||||| 493de26
-| `src/vault/note.rs` | Parsing one note: frontmatter, headings, `#tags`, `[[wikilinks]]` |
-| `src/vault/index.rs` | The vault: scanning, link resolution, backlinks, search, rename |
-| `src/editor/buffer.rs` | Text buffer — cursor, edits, undo. No key handling. |
-| `src/editor/mod.rs` | Modal layer: normal/insert/visual, operators, counts |
-| `src/git.rs` | Git by shelling out to `git`. Porcelain parsing, commit, push, pull |
-| `src/llm.rs` | Anthropic streaming client; runs on a worker thread |
-| `src/app.rs` | Application state, note navigation, assistant plumbing |
-| `src/keymap.rs` | Key routing, the command palette, the help table |
-| `src/ui/` | Theme, markdown-to-spans renderer, tables, and all drawing |
-| `src/main.rs` | CLI, terminal setup, event loop |
-=======
-| `src/vault/note.rs` | Parsing one note: frontmatter, headings, `#tags`, `[[wikilinks]]` |
-| `src/vault/index.rs` | The vault: scanning, link resolution, backlinks, search, rename |
-| `src/editor/buffer.rs` | Text buffer — cursor, edits, undo. No key handling. |
-| `src/editor/mod.rs` | Modal layer: normal/insert/visual, operators, counts |
-| `src/git.rs` | Git by shelling out to `git`. Porcelain parsing, commit, push, pull |
-| `src/llm.rs` | Anthropic streaming client; runs on a worker thread |
-| `src/app.rs` | Application state, note navigation, assistant plumbing |
-| `src/keymap.rs` | Key routing, the command palette, the help table |
-| `src/ui/` | Theme, markdown-to-spans renderer, tables, and all drawing |
-| `src/watch.rs` | Watching the vault: debounced filesystem events |
-| `src/main.rs` | CLI, terminal setup, event loop |
->>>>>>> origin/main
 
 The dependency direction is one-way: `vault` and `editor` know nothing about
 the UI; `ui` reads `App` but never mutates it except for viewport bookkeeping.
