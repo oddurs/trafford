@@ -2,8 +2,9 @@
 id: 51
 title: Delete to the vault's trash, not to nowhere
 type: bug
-status: backlog
+status: done
 milestone: v0.6
+assignee: Oddur Sigurdsson
 created: 2026-09-07
 updated: 2026-09-07
 priority: p1
@@ -42,11 +43,11 @@ another is the one thing it must not do.
 
 ## Acceptance criteria
 
-- [ ] A deleted note appears in `.trash/`
-- [ ] Deleting two notes with the same name keeps both
-- [ ] `.trash/` stays out of the index, as it already is
-- [ ] `trashOption: "none"` still unlinks, for anyone who wants that
-- [ ] Deleting still rewrites nothing else — links to it go broken, as now
+- [x] A deleted note appears in `.trash/`
+- [x] Deleting two notes with the same name keeps both
+- [x] `.trash/` stays out of the index, as it already is
+- [x] `trashOption: "none"` still unlinks, for anyone who wants that
+- [x] Deleting still rewrites nothing else — links to it go broken, as now
 
 ## Notes
 

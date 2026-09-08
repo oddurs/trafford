@@ -1599,8 +1599,19 @@ impl App {
 
     pub fn delete_note(&mut self, id: &str) {
         let path = self.vault.path_for(id);
-        match std::fs::remove_file(&path) {
-            Ok(()) => {
+        // `none` is for anyone who genuinely wants the file gone; everything
+        // else goes to the vault's own trash, which is where the rest of this
+        // vault's deletions already are.
+        let outcome = if self.config.trash == "none" {
+            std::fs::remove_file(&path).map(|()| None)
+        } else {
+            self.vault
+                .trash_note(id)
+                .map(Some)
+                .map_err(|e| std::io::Error::other(format!("{e:#}")))
+        };
+        match outcome {
+            Ok(where_it_went) => {
                 let _ = self.vault.rescan();
                 if self.current.as_deref() == Some(id) {
                     self.current = None;
@@ -1609,7 +1620,12 @@ impl App {
                         self.open_note(&next, false);
                     }
                 }
-                self.set_status(format!("deleted {id}"));
+                self.folded.forget(id);
+                self.unsaved.remove(id);
+                self.set_status(match where_it_went {
+                    Some(to) => format!("moved {id} to {to}"),
+                    None => format!("deleted {id}"),
+                });
                 self.refresh_git();
             }
             Err(err) => self.set_status(format!("delete failed: {err}")),
@@ -1995,6 +2011,49 @@ mod tests {
         std::fs::remove_file(dir.path().join("Note.md")).unwrap();
         absorb(&mut app, &[&dir.path().join("Note.md")], true);
         assert!(app.editor.buf.text().contains("Original."));
+    }
+
+    #[test]
+    fn deleting_moves_the_note_to_the_trash_and_says_where() {
+        let (dir, mut app) = two_note_app();
+        app.delete_note("Two.md");
+        assert!(
+            dir.path().join(".trash/Two.md").exists(),
+            "it is in the trash"
+        );
+        assert!(
+            app.status_text().is_some_and(|m| m.contains(".trash")),
+            "and the reader is told where it went: {:?}",
+            app.status_text()
+        );
+        assert!(app.vault.get("Two.md").is_none(), "gone from the index");
+    }
+
+    #[test]
+    fn trash_none_still_unlinks_for_anyone_who_wants_that() {
+        let (dir, mut app) = two_note_app();
+        app.config.trash = "none".into();
+        app.delete_note("Two.md");
+        assert!(!dir.path().join(".trash/Two.md").exists());
+        assert!(!dir.path().join("Two.md").exists(), "genuinely gone");
+    }
+
+    #[test]
+    fn deleting_a_note_forgets_what_was_being_held_for_it() {
+        // A held buffer or a fold set for a note that no longer exists is a
+        // stale key waiting to be applied to whatever takes its place.
+        let (_dir, mut app) = two_note_app();
+        app.open_note("Two.md", true);
+        app.editor.buf.lines.push("typed".into());
+        app.editor.buf.dirty = true;
+        app.open_note("One.md", true);
+        assert!(app.unsaved_notes().contains(&"Two.md".to_string()));
+
+        app.delete_note("Two.md");
+        assert!(
+            !app.unsaved_notes().contains(&"Two.md".to_string()),
+            "nothing is held for a note that is gone"
+        );
     }
 
     #[test]

@@ -123,6 +123,13 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
 - **A template's H1 is not a title.** Templater files carry
   `<% tp.file.title %>` there. Fall back to the filename, which is what
   Obsidian displays.
+- **Deleting moves a note to `.trash/`, it does not unlink it.** Obsidian puts
+  deletions there and a real vault already has a `.trash/` full of them, so
+  unlinking made trafford the one program that could take a note away for good.
+  The name is flattened (`a/b/Note.md` → `a-b-Note.md`) and a name already taken
+  gets a suffix — the trash holds last copies, and overwriting one deleted note
+  with another is the single thing it must not do. `trash = "none"` unlinks, for
+  anyone who wants that.
 - **`.gitignore` is respected** by the walker, which is why Obsidian's
   `.trash/` stays out of the index without a special case.
 - **Frontmatter** `title:` and `tags:` are read, including the `- item` list

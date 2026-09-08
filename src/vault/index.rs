@@ -345,6 +345,41 @@ impl Vault {
         self.root.join(id)
     }
 
+    /// Move a note into the vault's `.trash/`, and say where it went.
+    ///
+    /// Deleting is not undoing. Obsidian puts deletions here and this vault
+    /// already has a `.trash/` full of them; unlinking meant trafford was the
+    /// one program that could take a note away for good.
+    ///
+    /// A name already in the trash gets a suffix rather than replacing what is
+    /// there. The trash holds last copies, and quietly overwriting one deleted
+    /// note with another is the single thing it must not do.
+    pub fn trash_note(&self, id: &str) -> Result<String> {
+        let from = self.path_for(id);
+        let trash = self.root.join(".trash");
+        std::fs::create_dir_all(&trash).context("making the vault's .trash")?;
+
+        // Flattened: `a/b/Note.md` becomes `a-b-Note.md`, because a trash full
+        // of empty directory trees is harder to look through than a flat list.
+        let flat = id.replace('/', "-");
+        let (stem, ext) = match flat.rsplit_once('.') {
+            Some((s, e)) => (s.to_string(), format!(".{e}")),
+            None => (flat.clone(), String::new()),
+        };
+        let mut to = trash.join(&flat);
+        let mut n = 1;
+        while to.exists() {
+            n += 1;
+            to = trash.join(format!("{stem} {n}{ext}"));
+        }
+        std::fs::rename(&from, &to).with_context(|| format!("moving {id} to {}", to.display()))?;
+        Ok(to
+            .strip_prefix(&self.root)
+            .unwrap_or(&to)
+            .to_string_lossy()
+            .to_string())
+    }
+
     /// The id of the note at a path, if the vault holds one there.
     ///
     /// An id is a relative path with `/` separators, so this is the inverse of
@@ -879,6 +914,57 @@ mod tests {
         std::fs::write(dir.path().join("new.md"), "# New\n").unwrap();
         vault.refresh_note("new.md").unwrap();
         assert_eq!(vault.notes.len(), 2, "the new note should have been found");
+    }
+
+    #[test]
+    fn a_deleted_note_goes_to_the_vaults_trash() {
+        let dir = crate::testing::TempDir::with_files(&[("Note.md", "# Note\n")]);
+        let vault = Vault::open(dir.path()).unwrap();
+        let to = vault.trash_note("Note.md").unwrap();
+        assert_eq!(to, ".trash/Note.md");
+        assert!(!dir.path().join("Note.md").exists(), "gone from the vault");
+        assert!(
+            dir.path().join(".trash/Note.md").exists(),
+            "and in the trash"
+        );
+    }
+
+    #[test]
+    fn a_nested_note_is_flattened_rather_than_rebuilding_its_tree() {
+        let dir = crate::testing::TempDir::with_files(&[("a/b/Deep.md", "# Deep\n")]);
+        let vault = Vault::open(dir.path()).unwrap();
+        let to = vault.trash_note("a/b/Deep.md").unwrap();
+        assert_eq!(
+            to, ".trash/a-b-Deep.md",
+            "a flat trash is easier to look through"
+        );
+    }
+
+    #[test]
+    fn deleting_two_notes_of_the_same_name_keeps_both() {
+        // The trash holds last copies. Overwriting one deleted note with
+        // another is the one thing it must not do.
+        let dir = crate::testing::TempDir::with_files(&[
+            ("Note.md", "the first one\n"),
+            ("other/Note.md", "the second one\n"),
+        ]);
+        let vault = Vault::open(dir.path()).unwrap();
+        let first = vault.trash_note("Note.md").unwrap();
+        std::fs::rename(dir.path().join("other/Note.md"), dir.path().join("Note.md")).unwrap();
+        let second = vault.trash_note("Note.md").unwrap();
+        assert_ne!(first, second);
+        assert_eq!(second, ".trash/Note 2.md");
+        let kept = std::fs::read_to_string(dir.path().join(&first)).unwrap();
+        assert_eq!(kept, "the first one\n", "the earlier one survived");
+    }
+
+    #[test]
+    fn the_trash_stays_out_of_the_index() {
+        let dir = crate::testing::TempDir::with_files(&[("Note.md", "# Note\n")]);
+        let mut vault = Vault::open(dir.path()).unwrap();
+        vault.trash_note("Note.md").unwrap();
+        vault.rescan().unwrap();
+        assert!(vault.notes.is_empty(), "a trashed note is not a note");
     }
 
     #[test]
