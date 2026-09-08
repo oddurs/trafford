@@ -14,7 +14,7 @@ pub const COMMANDS: &[(&str, &str, &str)] = &[
     ("search", "Search vault", "ctrl-f"),
     ("new-note", "New note", "ctrl-n"),
     ("daily-note", "Open today's daily note", ""),
-    ("weekly-note", "Open the weekly note", ""),
+    ("weekly-note", "Open this week's note", ""),
     ("insert-link", "Insert link to a note", "ctrl-l"),
     ("backlinks", "Jump to a note that links here", "ctrl-t"),
     ("save", "Save note", "ctrl-s"),
@@ -1512,6 +1512,59 @@ pub const HELP: &[(&str, &str)] = &[
 #[cfg(test)]
 mod tests {
 
+    use super::{escape_target, Escape};
+    use crate::app::{fuzzy_match, Overlay};
+
+    /// A match must be a match on the label or on the key, whole — never one
+    /// that starts in the label and finishes in the key. Concatenating the two
+    /// into one haystack made "close" answer with `outdent-selection`.
+    #[test]
+    fn a_match_never_straddles_the_label_and_the_key() {
+        use crate::app::fuzzy_match;
+        for q in ["close", "note", "he", "ask", "git", "save", "elect", "olde"] {
+            let mut picker = crate::app::Picker::new("Commands", super::palette_items());
+            for c in q.chars() {
+                picker.push(c);
+            }
+            for (i, _) in &picker.matches {
+                let item = &picker.items[*i];
+                let shown = if item.detail.is_empty() {
+                    item.label.clone()
+                } else {
+                    format!("{} {}", item.label, item.detail)
+                };
+                assert!(
+                    fuzzy_match(q, &shown).is_some() || fuzzy_match(q, &item.key).is_some(),
+                    "{q:?} matched {:?} only by straddling label and key",
+                    item.key
+                );
+            }
+        }
+    }
+
+    /// Typing a command's name puts that command first, not merely somewhere
+    /// in the list. Folding the key into the haystack lengthened it for every
+    /// item, which is exactly the shape of change that quietly reorders a
+    /// palette.
+    #[test]
+    fn typing_a_command_name_ranks_it_first() {
+        for (key, _, _) in super::COMMANDS {
+            let mut picker = crate::app::Picker::new("Commands", super::palette_items());
+            for c in key.chars() {
+                picker.push(c);
+            }
+            let top = picker
+                .matches
+                .first()
+                .map(|(i, _)| picker.items[*i].key.clone());
+            assert_eq!(
+                top.as_deref(),
+                Some(*key),
+                "typing {key:?} put {top:?} first"
+            );
+        }
+    }
+
     /// Every command must be reachable by typing the words in its own name.
     ///
     /// The palette matches on the *label*, not the key, so a command can be
@@ -1550,8 +1603,6 @@ mod tests {
             "every command is offered"
         );
     }
-    use super::{escape_target, Escape};
-    use crate::app::{fuzzy_match, Overlay};
 
     #[test]
     fn escape_from_the_diff_returns_to_the_git_pane() {
