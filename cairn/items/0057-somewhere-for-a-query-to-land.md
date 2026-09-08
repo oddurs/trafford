@@ -2,8 +2,10 @@
 id: 57
 title: Somewhere for a query to land
 type: feature
-status: planned
+status: done
 milestone: v0.7
+assignee: Oddur Sigurdsson
+claimed: 2026-09-08
 depends_on:
 - 56
 created: 2026-09-08
@@ -45,3 +47,33 @@ A results pane, drawn under the existing pane rules.
       it, and toggling it by hand clears `chrome_before_preview`
 - [ ] A probe run at several terminal widths finds no panic and no row that
       exceeds its pane
+
+## What shipped
+
+The results landed in the search overlay rather than a new pane — see 0056 for
+why: text with no `field:` in it still parses to plain terms, so there is one
+search surface, not two. What this item added is what makes that surface
+readable.
+
+**Results group by note.** The note says its name once, with a count, and its
+matching lines sit under it with their line numbers. Ranking purely by score
+interleaves notes by where a match happened to sit, which is unreadable when a
+query returns many lines from few notes — and 0027 shows that is the common
+case, not the exception.
+
+The scroll window is over *drawn rows* rather than hits, because a note's
+heading takes a row too. Counting hits made the pane overflow its own rect the
+moment grouping was added.
+
+**Saved queries live in `config.toml`** and appear in the palette by name:
+
+```toml
+[queries]
+stale = "status:active modified:<2026-06-01"
+```
+
+`ctrl-k → stale` runs it. They are findable by their own name because 0052 made
+that true of everything in the palette.
+
+Probed at 40×12, 60×16, 80×24, 100×30, 140×40 and 200×50: no panic, and no row
+wider than its pane.

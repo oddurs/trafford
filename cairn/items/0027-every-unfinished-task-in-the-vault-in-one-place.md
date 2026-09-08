@@ -2,8 +2,10 @@
 id: 27
 title: Every unfinished task in the vault, in one place
 type: feature
-status: planned
+status: done
 milestone: v0.7
+assignee: Oddur Sigurdsson
+claimed: 2026-09-08
 depends_on:
 - 56
 - 57
@@ -98,3 +100,32 @@ missing something and this item is the thing that will find it.
 The 1% completion rate is worth not designing around. It is not a problem to
 solve with nudges; it is evidence that these boxes are structure, not
 commitments.
+
+## What shipped
+
+`task:open` in the search box, grouped by note. Not a bespoke pane: it is a
+query (0056) drawn by the results surface (0057), which is what the recount
+above argued for — the grouping is the feature, and grouping is not specific to
+tasks.
+
+On the real vault it reads as intended: the note's name once with its count,
+then its task lines with the line numbers that open them.
+
+```
+DIY Hardware Calculator  5
+     9 - [ ] Architecture: logic gates vs microcontroller vs FPGA
+    10 - [ ] Display type: 7-segment LED, LCD, OLED
+    …
+Book Idea: The Greatest Stories of Revenge in History  7
+   174 - [ ] Decide on book structure
+```
+
+The header says `200 of 1067 hits` rather than `200 hits`, so a checklist of
+102 cannot pass its first few rows off as the whole answer. Hits are capped per
+note, so one long checklist does not crowd out every other note — a defect a
+review caught in 0056 before this item was built on top of it.
+
+The 1% completion rate is not designed around. `space` already toggles a task
+on the current line, and opening a hit lands on that line, so ticking one from
+here is two keystrokes — but nothing nudges, and the count is not shown as a
+number to bring down. Those boxes are structure, not commitments.

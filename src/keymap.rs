@@ -97,7 +97,18 @@ impl App {
     }
 
     pub fn open_palette(&mut self) {
-        self.overlay = Some(Overlay::Palette(Picker::new("Commands", palette_items())));
+        let mut items = palette_items();
+        // Saved queries are commands as far as a reader is concerned, and they
+        // are findable by their own name because 0052 made that true of
+        // everything in the palette.
+        for (name, query) in &self.config.queries {
+            items.push(PickItem {
+                label: format!("Query: {name}"),
+                detail: query.clone(),
+                key: format!("query:{name}"),
+            });
+        }
+        self.overlay = Some(Overlay::Palette(Picker::new("Commands", items)));
     }
 
     pub fn open_git_pane(&mut self) {
@@ -347,6 +358,15 @@ impl App {
             },
             "git-panel" => self.open_git_pane(),
             "drift" => self.open_drift_pane(),
+            _ if key.starts_with("query:") => {
+                let name = &key["query:".len()..];
+                match self.config.queries.get(name).cloned() {
+                    Some(q) => self.open_search_with(&q),
+                    // The palette listed it a moment ago, so this can only
+                    // happen if the config changed underneath.
+                    None => self.set_status(format!("no saved query named {name}")),
+                }
+            }
             "git-commit" => {
                 if self.repo.is_none() {
                     self.set_status("not a git repository");
