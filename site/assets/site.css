@@ -1,0 +1,1463 @@
+/* trafford's docs and landing page.
+ *
+ * Every colour is a var(--…) written by site/src/palette.rs from the app's own
+ * themes. A hex literal in this file is a colour that will drift from the
+ * screenshots the moment a theme is adjusted, so there are none.
+ *
+ * One typeface, and it is monospaced. Not mono-for-code-and-sans-for-prose:
+ * mono for everything. For a terminal knowledge base that is a statement
+ * rather than a default, and it costs one file instead of two. It is
+ * self-hosted and subset — a font service would be a request leaving the
+ * origin, which no page here makes. */
+
+@font-face {
+  font-family: "JetBrains Mono";
+  /* Filled in at build time; the URL carries a hash of the font's own bytes. */
+  src: url("FONT_URL") format("woff2");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root {
+  /* The two things the generated scales cannot state: the family, whose
+     fallbacks all advance at 0.6em like JetBrains Mono so the swap moves
+     nothing, and the hairline the whole grid is made of. */
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, "DejaVu Sans Mono",
+    monospace;
+  --rule: 1px solid var(--border);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--mono);
+  /* Monospace reads small. The size is up and the leading is loose, which is
+     most of what makes people say mono is unreadable when it is neither. */
+  font-size: var(--text-md);
+  line-height: var(--leading-body);
+  font-feature-settings: "calt" 1, "liga" 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* A flex item's default `min-width: auto` refuses to shrink below its content,
+   which is how a page acquires a horizontal scrollbar from one wide child. The
+   screenshot is deliberately wider than a phone and scrolls inside its own box;
+   this is what keeps that from becoming the page's problem. */
+body > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* ── Focus and skip link ─────────────────────────────────────────────────── */
+
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--surface);
+  color: var(--fg);
+  padding: var(--space-3) var(--space-4);
+  z-index: 10;
+}
+
+.skip:focus {
+  left: 0;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+
+.top {
+  display: flex;
+  align-items: center;
+  /* The links sit beside the wordmark, not across the page from it. That one
+     difference is most of what separates a product page from a docs page. */
+  gap: var(--space-6);
+  padding-block: var(--space-3);
+  border-bottom: 1px solid var(--border);
+  /* Translucent, so a section band sliding under the bar is visible as motion
+     rather than disappearing at a hard edge. `--bg` is the fallback where
+     `color-mix` or the blur is not available, and it is not a worse bar — only
+     a more opaque one. */
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+@supports (backdrop-filter: blur(1px)) and (background: color-mix(in srgb, red, blue)) {
+  .top {
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter: blur(10px);
+  }
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--fg);
+  text-decoration: none;
+}
+
+/* The mark takes the accent from the stylesheet through `currentColor`, so it
+   changes with the theme like everything else. An `<svg>` with no width fills
+   whatever it is given, which is the whole navbar. */
+.brand svg {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: none;
+  color: var(--accent);
+}
+
+.wordmark {
+  font-weight: 700;
+  font-size: var(--text-md);
+  letter-spacing: var(--tracking-tight);
+}
+
+/* The scale calls `--text-sm` "navigation" and the bar was drawing it two
+   steps down, at the size meant for chips. */
+.top-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.theme-toggle {
+  margin-left: auto;
+}
+
+/* A link is a target, so it has a target's padding and a shape to land on.
+   Bare words with 24px between them are a smaller thing to hit than they look,
+   and nothing tells you which one you are on. */
+.top-nav a {
+  color: var(--muted);
+  text-decoration: none;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  transition: color var(--motion-fast) var(--ease),
+    background-color var(--motion-fast) var(--ease);
+}
+
+.top-nav a:hover {
+  color: var(--fg);
+  background: var(--surface);
+}
+
+/* Where you are, said once. The page it points at is the one you are reading,
+   so it is the only link in the bar that is not an invitation. */
+.top-nav a[aria-current="page"] {
+  color: var(--heading);
+  background: var(--surface);
+}
+
+.theme-toggle {
+  font: inherit;
+  font-size: var(--text-2xs);
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  color: var(--fg);
+  border-color: var(--border-focus);
+}
+
+/* ── Documentation layout ────────────────────────────────────────────────── */
+
+.layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: var(--sidebar) minmax(0, 1fr) var(--rail);
+  gap: var(--space-6);
+  width: 100%;
+  padding-block: var(--space-7) var(--space-8);
+}
+
+/* A page with no headings to list still reserved fourteen rems for the list.
+   The specimen page is the first one without a table of contents, and it read
+   as a column squeezed by nothing.
+   
+   Behind a min-width, because `:not(:has(…))` outspecifies the plain `.layout`
+   rule that collapses the grid on a narrow screen — so without the query this
+   kept two columns at 380px and left the content 76 pixels wide. */
+@media (min-width: 62rem) {
+  .layout:not(:has(.toc)) {
+    grid-template-columns: var(--sidebar) minmax(0, 1fr);
+  }
+}
+
+.sidebar,
+.rail {
+  position: sticky;
+  /* Clear of the bar, which is now a known height rather than whatever the
+     padding happened to make it. */
+  top: 4.5rem;
+  align-self: start;
+  max-height: calc(100vh - 6rem);
+  overflow-y: auto;
+  font-size: var(--text-sm);
+}
+
+/* Three columns of text with nothing between them read as one ragged column,
+   so the navigation gets an edge — the same hairline the program draws between
+   its own panes.
+   
+   One line, not two. The table of contents is an aside whose length is
+   whatever the page happens to have, and a rule beside it stops wherever the
+   list does, which reads as a line that failed to finish rather than as the
+   edge of a column. The navigation is the same on every page and can be given
+   the height to be an edge. */
+.sidebar {
+  border-right: var(--rule);
+  padding-right: var(--space-5);
+  min-height: calc(100vh - 6rem);
+}
+
+.nav,
+.toc ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nav a,
+.toc a {
+  display: block;
+  padding: var(--space-1) 0 var(--space-1) var(--space-3);
+  color: var(--muted);
+  text-decoration: none;
+  border-left: 2px solid transparent;
+}
+
+.nav a:hover,
+.toc a:hover {
+  color: var(--fg);
+  border-left-color: var(--border);
+}
+
+/* The same left marker the app draws beside the note you are in. */
+.nav a[aria-current="page"] {
+  color: var(--fg);
+  border-left-color: var(--accent);
+  font-weight: 600;
+}
+
+.nav-section,
+.toc-title {
+  font-family: var(--mono);
+  font-size: var(--text-3xs);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--faint);
+  margin: var(--space-5) 0 var(--space-2);
+}
+
+.nav-section:first-child,
+.toc-title {
+  margin-top: 0;
+}
+
+.toc-3 a {
+  padding-left: var(--space-5);
+  font-size: var(--text-xs);
+}
+
+/* ── Prose ───────────────────────────────────────────────────────────────── */
+
+.prose {
+  max-width: var(--measure);
+  min-width: 0;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  color: var(--heading);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-snug);
+  margin: var(--space-6) 0 var(--space-3);
+}
+
+.prose h1 {
+  font-size: var(--text-2xl);
+  margin-top: 0;
+}
+
+.prose h2 {
+  font-size: var(--text-xl);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.prose h3 {
+  font-size: var(--text-lg);
+}
+
+.prose h2 a,
+.prose h3 a,
+.prose h1 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* The anchor is on the heading itself; the mark only appears on approach so
+   the page does not read as a list of links. */
+.prose h2 a::after,
+.prose h3 a::after {
+  content: " #";
+  color: var(--faint);
+  opacity: 0;
+}
+
+.prose h2 a:hover::after,
+.prose h3 a:hover::after,
+.prose h2 a:focus-visible::after,
+.prose h3 a:focus-visible::after {
+  opacity: 1;
+}
+
+.prose p,
+.prose ul,
+.prose ol {
+  margin: 0 0 var(--space-4);
+}
+
+.prose a {
+  color: var(--link);
+  text-underline-offset: 0.15em;
+}
+
+.prose .broken {
+  color: var(--broken);
+  text-decoration: underline wavy;
+}
+
+.prose li {
+  margin: var(--space-1) 0;
+}
+
+.prose li.task {
+  list-style: none;
+  margin-left: calc(-1 * var(--space-5));
+}
+
+.prose li.task.done {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.prose hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: var(--space-6) 0;
+}
+
+.prose mark {
+  background: var(--accent);
+  color: var(--bg);
+  padding: 0 0.15em;
+  border-radius: var(--radius-sm);
+}
+
+/* A screenshot in the prose is the same SVG the hero inlines, dropped in as an
+   image. Wider than the column on purpose, and scrolling inside its own box. */
+.prose img {
+  display: block;
+  width: 100%;
+  min-width: 34rem;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin: 0 0 var(--space-5);
+}
+
+.prose p:has(> img) {
+  overflow-x: auto;
+}
+
+.tag {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  color: var(--tag);
+}
+
+/* ── Code ────────────────────────────────────────────────────────────────── */
+
+code,
+kbd,
+pre {
+  font-family: var(--mono);
+}
+
+/* A key is not a snippet. The renderer emits `<kbd>` for anything that reads as
+   a keystroke, which on a page about a keyboard-driven program is most of the
+   inline code on it. */
+kbd {
+  display: inline-block;
+  font-size: 0.85em;
+  line-height: var(--leading-snug);
+  padding: 0.05em 0.4em;
+  color: var(--fg);
+  background: var(--surface);
+  border: var(--rule);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  vertical-align: 0.05em;
+}
+
+:not(pre) > code {
+  background: var(--surface);
+  color: var(--code);
+  padding: 0.12em 0.35em;
+  border-radius: var(--radius-sm);
+  font-size: 0.88em;
+  overflow-wrap: break-word;
+}
+
+pre {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  overflow-x: auto;
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+  margin: 0 0 var(--space-5);
+}
+
+pre code {
+  background: none;
+  padding: 0;
+  color: var(--fg);
+  white-space: pre;
+}
+
+/* ── Callouts ────────────────────────────────────────────────────────────── */
+
+.callout {
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  padding: var(--space-3) var(--space-4);
+  margin: 0 0 var(--space-5);
+}
+
+.callout > :last-child {
+  margin-bottom: 0;
+}
+
+.callout-title {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--accent-text);
+  margin: 0 0 var(--space-2);
+}
+
+/* Three colours, mapped onto roles the themes already define, so a Ghostty
+   import governs the callouts too. */
+.callout-tip,
+.callout-success,
+.callout-check,
+.callout-done {
+  border-left-color: var(--added);
+}
+
+.callout-tip .callout-title,
+.callout-success .callout-title,
+.callout-check .callout-title,
+.callout-done .callout-title {
+  color: var(--added-text);
+}
+
+.callout-warning,
+.callout-caution,
+.callout-danger,
+.callout-bug {
+  border-left-color: var(--modified);
+}
+
+.callout-warning .callout-title,
+.callout-caution .callout-title,
+.callout-danger .callout-title,
+.callout-bug .callout-title {
+  color: var(--modified-text);
+}
+
+blockquote {
+  margin: 0 0 var(--space-5);
+  padding-left: var(--space-4);
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ── Tables ──────────────────────────────────────────────────────────────── */
+
+/* Wide content scrolls inside its own box. The page body never does. */
+.table-scroll {
+  overflow-x: auto;
+  margin: 0 0 var(--space-5);
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: var(--text-sm);
+}
+
+th,
+td {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+th {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+td.right,
+th.right {
+  text-align: right;
+}
+
+td.center,
+th.center {
+  text-align: center;
+}
+
+/* ── Recordings ─────────────────────────────────────────────────────────── */
+
+/* Its own section, not part of any layout. These rules were written inside the
+   landing block once and were deleted with it, which left every recording
+   unstyled and drawn at whatever size the box happened to imply. */
+
+.shot {
+  position: relative;
+  margin: 0;
+  border: var(--rule);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: var(--space-3);
+  overflow-x: auto;
+}
+
+.shot > svg,
+.shot img,
+.shot > .shot-palette,
+.prose .cast img,
+.prose .cast > .shot-palette {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-width: 34rem;
+  border: none;
+  border-radius: 0;
+}
+
+/* A player is drawn over its poster, and the poster is what reserves the box.
+   Both need a positioned ancestor of exactly the poster's size. */
+.cast {
+  position: relative;
+  display: block;
+}
+
+.cast-screen {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  /* The terminal's own ground, in whichever theme the reader chose — not the
+     page's `--bg`, which is lifted for prose contrast. A player that let the
+     poster show through instead was gotham-coloured under a Paper page. */
+  background: var(--term-bg);
+  overflow: hidden;
+  line-height: 1.45;
+  font-variant-ligatures: none;
+  /* The recording is a grid of cells; a space in it is content. */
+  white-space: pre;
+  tab-size: 8;
+}
+
+.shot > .cast-screen {
+  inset: 0.6rem;
+}
+
+.cast-screen div {
+  height: 1.45em;
+}
+
+/* Stepped, one segment per frame, at the foot of the recording. It exists so a
+   playing recording reads as a recording rather than as an image that might be
+   broken. */
+.cast-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 0;
+  background: var(--accent);
+  opacity: 0;
+  transition: width var(--motion-base) var(--ease), opacity var(--motion-base);
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cast-progress {
+    transition: none;
+  }
+}
+
+.cast-control {
+  position: absolute;
+  right: 0.75rem;
+  /* Top, not bottom: the terminal's own status line lives along the bottom
+     edge and the control was sitting on top of the word count. */
+  top: 0.75rem;
+  font: inherit;
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-wide);
+  color: var(--muted);
+  background: var(--bg);
+  border: var(--rule);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+  opacity: 0;
+  z-index: 1;
+}
+
+.shot:hover .cast-control,
+.cast:hover .cast-control,
+.cast-control:focus-visible {
+  opacity: 1;
+}
+
+/* Someone who asked for less motion is not being asked to hunt for the control
+   that starts it. */
+@media (prefers-reduced-motion: reduce) {
+  .cast-control {
+    opacity: 1;
+  }
+}
+
+/* A theme in the strip is a control: clicking it dresses the page in it. The
+   affordance is added by script, so without it these stay three pictures. */
+.wearable {
+  cursor: pointer;
+  transition: border-color var(--motion-fast), transform var(--motion-fast);
+}
+
+.wearable:hover,
+.wearable:focus-visible {
+  border-color: var(--border-focus);
+}
+
+.wearable:hover {
+  transform: translateY(-2px);
+}
+
+.wearable:hover figcaption,
+.wearable:focus-visible figcaption {
+  color: var(--fg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wearable {
+    transition: none;
+  }
+
+  .wearable:hover {
+    transform: none;
+  }
+}
+
+figcaption {
+  margin-top: var(--space-3);
+  font-size: var(--text-2xs);
+  color: var(--muted);
+}
+
+/* A figure under its own heading already has a caption: the heading. */
+.showcase > figure:only-of-type > figcaption {
+  display: none;
+}
+
+/* ── Landing ────────────────────────────────────────────────────────────── */
+
+/* The rhythm: a claim, then the program; a section header, then cards; a claim
+   again at the end. Borrowed from obsidian.md, which is the same kind of
+   product sold to the same kind of person — but wearing this project's
+   clothes: one hairline, one accent, and monospace throughout. */
+
+/* `main`, not `<html>` — which also carries this class, so the rule that was
+   meant to centre one column was boxing the whole document. The header and the
+   footer are its siblings, so both were inset by the same amount: the sticky
+   bar's rule stopped short of the viewport on either side, content scrolled
+   through the gap, and `--page` could never be reached because the gutter was
+   applied twice. */
+main.landing {
+  flex: 1;
+  width: 100%;
+}
+
+/* Every band on the page runs the full width and holds its content in the same
+   column.
+   
+   `max(gutter, (100% - page) / 2)` is that column without an extra element per
+   band: the gutter on a narrow screen, and whatever centres `--page` on a wide
+   one. It is one declaration rather than the `max-width` / `margin: auto` /
+   `padding` trio repeated at every band, which is how the trio came to be
+   written on `<html>` in the first place. */
+.top,
+.hero,
+.showcase,
+.bottom,
+.layout {
+  padding-inline: max(var(--space-gutter), (100% - var(--page)) / 2);
+}
+
+/* ── Hero ────────────────────────────────────────────────────────────────── */
+
+/* Stacked, not split. The claim is the biggest thing on the page and the
+   program runs the full width beneath it — a picture beside a paragraph is a
+   feature list, a picture under a claim is an argument. */
+/* `padding-block`, not the shorthand: the band inset above is `padding-inline`
+   and a shorthand written afterwards resets it, which put the claim hard
+   against the left edge of the window. */
+.hero {
+  padding-block: var(--space-section) 0;
+}
+
+.hero h1 {
+  font-size: var(--text-4xl);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-display);
+  margin: 0;
+  color: var(--heading);
+  max-width: 18ch;
+}
+
+.hero .tagline {
+  font-size: var(--text-lg);
+  line-height: var(--leading-body);
+  color: var(--muted);
+  max-width: 52ch;
+  margin: var(--space-5) 0 0;
+}
+
+.hero .actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-5);
+  margin: var(--space-6) 0 0;
+}
+
+/* The command *is* the call to action for a program you install with one. A
+   solid button would be a link to a page that shows you this command. */
+.install {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--surface);
+  border: var(--rule);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  font-size: var(--text-xs);
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.install code {
+  background: none;
+  padding: 0;
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+.copy {
+  font: inherit;
+  font-size: var(--text-3xs);
+  color: var(--muted);
+  background: var(--bg);
+  border: var(--rule);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+  flex: none;
+  position: sticky;
+  right: 0;
+}
+
+.copy:hover {
+  color: var(--fg);
+  border-color: var(--border-focus);
+}
+
+/* Counted at build time, not typed. Small, and stated once. */
+.facts {
+  margin: var(--space-5) 0 0;
+  font-size: var(--text-2xs);
+  color: var(--faint);
+  letter-spacing: var(--tracking-wide);
+}
+
+.hero .secondary {
+  color: var(--accent-text);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+
+.hero .secondary:hover {
+  text-decoration: underline;
+}
+
+.hero .shot {
+  margin: var(--space-8) 0 0;
+}
+
+/* ── Sections ────────────────────────────────────────────────────────────── */
+
+.landing .prose {
+  max-width: none;
+}
+
+/* The editor numbers its lines down the left. The page numbers its sections in
+   the same place, which is the one piece of chrome worth borrowing from the
+   program — it is free, it gives the page a spine, and on a narrow screen it
+   folds away rather than crowding the text. */
+.landing .prose {
+  counter-reset: section;
+}
+
+/* A band, not a block: it runs the full width and the inset above holds its
+   content in the page column, so a section can change ground without the
+   change stopping at a margin. */
+.showcase {
+  counter-increment: section;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--space-5);
+  padding-block: var(--space-section);
+}
+
+/* Alternating ground, one step of the elevation the palette already has:
+   `--bg` is the page, `--surface` is a band on it, `--overlay` is a card on a
+   band. Three roles that already exist rather than a fourth invented for the
+   landing page — and every theme answers for all three, so this costs nothing
+   in Paper that it does not cost in Gotham.
+   
+   It is deliberately a small step. In gotham the two differ by two points of
+   luminance, which reads as a change of air rather than as a stripe. */
+.showcase:nth-of-type(even) {
+  background: var(--surface);
+}
+
+/* A seam where two bands meet, for the case the tint is too quiet to read as
+   a division on its own — which in the dark themes it very nearly is. */
+.showcase + .showcase {
+  border-top: var(--rule);
+}
+
+/* A card on a tinted band steps up rather than disappearing into it. */
+.showcase:nth-of-type(even) > .callout {
+  background: var(--overlay);
+}
+
+/* The editor numbers its lines down the left; the page numbers its sections in
+   the same place. It sits in the band's own inset — the margin the content
+   column is centred by — rather than outside a box, which is what it used to
+   do back when `<html>` was providing a margin by accident. */
+.showcase::before {
+  content: counter(section, decimal-leading-zero);
+  position: absolute;
+  left: calc((100% - var(--page)) / 2 - var(--space-6));
+  top: var(--space-section);
+  font-size: var(--text-3xs);
+  letter-spacing: var(--tracking-label);
+  color: var(--faint);
+}
+
+/* Only where that inset is wide enough to hold it. `--page` is 78rem, so at
+   88rem there are two clear rems either side and the number reads as a spine;
+   below it there is nothing to sit in and it would crowd the text. */
+@media (max-width: 88rem) {
+  .showcase::before {
+    display: none;
+  }
+}
+
+/* A section header is a claim and a line under it, spanning the width. The
+   cards come after it, not around it. */
+.showcase > h2 {
+  grid-column: 1 / -1;
+  border-top: none;
+  padding-top: 0;
+  margin: 0;
+  font-size: var(--text-3xl);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+}
+
+.showcase > p,
+.showcase > ul {
+  grid-column: 1 / -1;
+  max-width: 56ch;
+  color: var(--muted);
+  margin: var(--space-4) 0 0;
+}
+
+.showcase > figure {
+  grid-column: 1 / -1;
+  margin: var(--space-6) 0 0;
+}
+
+/* ── Cards ───────────────────────────────────────────────────────────────── */
+
+/* Copy at the top, the program bleeding off the bottom edge. The eye finishes
+   on the words rather than on a cut-off pixel, which is the whole reason this
+   reads better than cropping to the right. */
+.showcase > .callout {
+  grid-column: auto;
+  margin: var(--space-6) 0 0;
+  padding: var(--space-5) var(--space-5) 0;
+  background: var(--surface);
+  border: var(--rule);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.showcase:has(> .callout:nth-of-type(3)) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.showcase > .callout .callout-title {
+  color: var(--heading);
+  font-size: var(--text-md);
+  letter-spacing: var(--tracking-snug);
+  text-transform: none;
+  margin: 0 0 var(--space-3);
+}
+
+.showcase > .callout p:not(.callout-title) {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+/* The bottom padding is left off so a recording can bleed through it. A card
+   without one needs it back, or its last line sits on the border. */
+.showcase > .callout:not(:has(figure)) {
+  padding-bottom: var(--space-5);
+}
+
+.showcase > .callout figure {
+  margin: var(--space-5) calc(-1 * var(--space-5)) 0 0;
+  height: 15rem;
+  overflow: hidden;
+  border: var(--rule);
+  border-right: none;
+  border-bottom: none;
+  border-radius: var(--radius-lg) 0 0 0;
+  background: var(--bg);
+  padding: var(--space-2) 0 0 var(--space-2);
+}
+
+.showcase > .callout figure img,
+.showcase > .callout figure .cast {
+  width: 46rem;
+  max-width: none;
+  min-width: 0;
+  border: none;
+  border-radius: 0;
+}
+
+.showcase > .callout figcaption {
+  display: none;
+}
+
+/* ── The theme strip ─────────────────────────────────────────────────────── */
+
+/* Three recordings of one screen, in three palettes, each with its name under
+   it. A section that holds three figures is a strip; one figure is a figure.
+   Without the captions a reader is looking at three colour schemes and cannot
+   name any of them. */
+.showcase:has(> figure:nth-of-type(3)) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: var(--space-5);
+}
+
+.showcase:has(> figure:nth-of-type(3)) > figure {
+  grid-column: auto;
+  padding: var(--space-2);
+}
+
+.showcase:has(> figure:nth-of-type(3)) > figure img {
+  min-width: 0;
+}
+
+.showcase:has(> figure:nth-of-type(3)) > figure figcaption {
+  text-align: center;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-wide);
+}
+
+/* ── Arrival ─────────────────────────────────────────────────────────────── */
+
+/* `.reveal` is added by script, never by the markup, so a page without
+   JavaScript is simply a page where every section is visible. */
+.reveal {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity var(--motion-slow) var(--ease), transform var(--motion-slow) var(--ease);
+}
+
+.reveal.shown {
+  opacity: 1;
+  transform: none;
+}
+
+/* ── The closing claim ───────────────────────────────────────────────────── */
+
+/* A section written with no cards and no picture ends the page: centred, with
+   the claim large and the command under it. */
+.showcase.closing {
+  /* One column. With two, `justify-items: center` centres each item in *its*
+     column, which put the command at a quarter of the way across and looked
+     like a bug. */
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  text-align: center;
+  border-top: var(--rule);
+  /* Back to the page's own ground, whichever band the alternation would have
+     given it. The footer is a tinted band, and a tinted closing ran straight
+     into it — the last thing the page says and the sitemap under it read as
+     one block. */
+  background: var(--bg);
+  padding-block: var(--space-9);
+}
+
+/* The closing has no number: it is the page finishing rather than another
+   section of it. */
+.showcase.closing::before {
+  content: none;
+}
+
+.showcase.closing > h2 {
+  font-size: var(--text-4xl);
+  max-width: 20ch;
+}
+
+.showcase.closing > p {
+  max-width: 48ch;
+  margin-top: var(--space-5);
+}
+
+.showcase.closing .install {
+  margin: var(--space-6) auto 0;
+}
+
+/* ── 404 ─────────────────────────────────────────────────────────────────── */
+
+.notfound {
+  max-width: var(--measure);
+  margin: var(--space-9) auto;
+  padding: 0 var(--space-5);
+  font-family: var(--mono);
+}
+
+/* The scale's display step, not a number picked for this one page — which is
+   what `4rem` was, and it sat a fifth outside the step above it. */
+.notfound h1 {
+  font-size: var(--text-4xl);
+  margin: 0;
+  color: var(--accent);
+}
+
+/* ── The specimen ───────────────────────────────────────────────────────── */
+
+/* `/design` draws every token at the size it is. The samples are the only
+   place on the site where a style attribute is written, and they are written
+   by the generator from the token's own name — a swatch that says one thing
+   and a stylesheet that does another is the failure this page exists to make
+   impossible. */
+
+.specimen {
+  max-width: none;
+}
+
+table.tokens {
+  table-layout: auto;
+}
+
+/* A token name is one word. `overflow-wrap: break-word` on inline code is
+   right in a paragraph and wrong in a table cell, where it broke `--text-3xs`
+   across three lines. */
+table.tokens code {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+/* A fluid value is three numbers and it may wrap; a token name is one word and
+   may not. Letting the value wrap is what leaves the "for" column room to say
+   anything. */
+.token-value {
+  overflow-wrap: anywhere;
+}
+
+table.tokens th:first-child,
+table.tokens td:first-child {
+  width: 1%;
+}
+
+table.tokens td:last-child,
+table.tokens th:last-child {
+  width: 9rem;
+  text-align: right;
+}
+
+.token-value {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.specimen-type {
+  color: var(--heading);
+  line-height: var(--leading-tight);
+}
+
+.specimen-space {
+  display: inline-block;
+  height: var(--space-3);
+  background: var(--accent);
+  border-radius: var(--radius-sm);
+  vertical-align: middle;
+}
+
+.specimen-radius {
+  display: inline-block;
+  width: var(--space-6);
+  height: var(--space-6);
+  background: var(--surface);
+  border: var(--rule);
+}
+
+.specimen-leading {
+  display: inline-block;
+  color: var(--muted);
+  font-size: var(--text-2xs);
+}
+
+/* The one place motion is the subject rather than the manner. */
+.specimen-motion {
+  display: inline-block;
+  width: var(--space-6);
+  height: var(--space-3);
+  background: var(--accent);
+  border-radius: var(--radius-sm);
+  animation: slide 2.4s var(--ease) infinite alternate;
+}
+
+@keyframes slide {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(var(--space-7));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .specimen-motion {
+    animation: none;
+  }
+}
+
+.swatches {
+  display: grid;
+  gap: 0;
+  border: var(--rule);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin: var(--space-5) 0 var(--space-6);
+}
+
+.swatch {
+  display: grid;
+  grid-template-columns: var(--space-6) 10rem 1fr auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-top: var(--rule);
+  font-size: var(--text-sm);
+}
+
+.swatch:first-child {
+  border-top: none;
+}
+
+.swatch .chip {
+  width: var(--space-6);
+  height: var(--space-5);
+  border: var(--rule);
+  border-radius: var(--radius-sm);
+}
+
+.swatch-use {
+  color: var(--muted);
+}
+
+.swatch-ratio {
+  color: var(--faint);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 52rem) {
+  .swatch {
+    /* `minmax(0, 1fr)` rather than `1fr`: a grid track sized `1fr` still
+       refuses to go below its content, and `--bg` in a code span was enough to
+       push the whole page sideways at 380px. */
+    grid-template-columns: var(--space-6) minmax(0, 1fr) auto;
+    gap: var(--space-3);
+  }
+
+  .swatch-use {
+    display: none;
+  }
+
+  .swatch code {
+    overflow-wrap: anywhere;
+  }
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+
+/* A sitemap rather than a line. The thing an open-source site has that a
+   company's cannot fake is that the work is visible — the roadmap, the source,
+   the licence — and this is where that goes. */
+
+.bottom {
+  border-top: var(--rule);
+  padding-block: var(--space-8);
+  margin-top: auto;
+  background: var(--surface);
+}
+
+.foot-grid {
+  display: grid;
+  grid-template-columns: 2fr repeat(3, minmax(0, 1fr));
+  gap: var(--space-7) var(--space-5);
+}
+
+.foot-brand .brand {
+  margin-bottom: var(--space-3);
+}
+
+.foot-brand p {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  max-width: 34ch;
+  margin: 0 0 var(--space-2);
+}
+
+.foot-fine {
+  color: var(--faint);
+}
+
+.foot-title {
+  color: var(--muted);
+  font-size: var(--text-3xs);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  margin: 0 0 var(--space-3);
+}
+
+.bottom ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.bottom a:not(.brand) {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-decoration: none;
+}
+
+.bottom a:not(.brand):hover {
+  color: var(--fg);
+  text-decoration: underline;
+}
+
+@media (max-width: 52rem) {
+  .foot-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .foot-brand {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ── The development server's error banner ───────────────────────────────── */
+
+.build-error {
+  position: fixed;
+  inset: auto 0 0 0;
+  background: var(--surface);
+  border-top: 3px solid var(--removed);
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  white-space: pre-wrap;
+  padding: var(--space-4) var(--space-5);
+  max-height: 40vh;
+  overflow: auto;
+  z-index: 20;
+}
+
+/* ── Narrow ──────────────────────────────────────────────────────────────── */
+
+@media (max-width: 62rem) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    padding-top: var(--space-5);
+  }
+
+  .sidebar,
+  .rail {
+    position: static;
+    max-height: none;
+  }
+
+  .rail {
+    order: -1;
+  }
+
+  .sidebar {
+    order: 2;
+    border-top: var(--rule);
+    padding-top: var(--space-5);
+    margin-top: var(--space-6);
+  }
+
+  /* The split collapses; the rule between the halves becomes the rule under
+     the claim, which is the same job in one column. */
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--space-6);
+  }
+
+  .hero .shot,
+  .hero h1,
+  .hero .tagline,
+  .hero .install {
+    grid-area: auto;
+    grid-column: 1;
+  }
+
+  .landing .prose {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .landing .prose > .callout,
+  .landing .prose > .callout:nth-of-type(2n) {
+    border-right: none;
+  }
+
+  .shot > svg,
+  .shot img {
+    min-width: 30rem;
+  }
+
+  /* Cards and the theme strip go to one column. Three of them in a phone's
+     width is one word per line. */
+  .showcase,
+  .showcase:has(> .callout:nth-of-type(3)),
+  .prose p:has(> img + img) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .showcase > .callout {
+    margin-top: var(--space-5);
+  }
+
+  .showcase > .callout:first-of-type {
+    margin-top: var(--space-6);
+  }
+
+  /* The strip's cells are separated by a rule either way; horizontally it is
+     the gap, stacked it has to be a border. */
+  .prose p:has(> img + img) {
+    gap: 1px;
+  }
+}
+
+/* A brand, four links and a control do not fit across a phone. Rather than
+   dropping the navigation — the footer has it, but a reader should not have to
+   reach the bottom to find the docs — the bar wraps and the links take the
+   second row. Without this the whole page scrolled sideways. */
+@media (max-width: 34rem) {
+  .top {
+    flex-wrap: wrap;
+    gap: var(--space-3) var(--space-5);
+  }
+
+  .top-nav {
+    order: 2;
+    width: 100%;
+    gap: var(--space-4);
+    overflow-x: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

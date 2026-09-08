@@ -1,0 +1,21 @@
+[package]
+name = "trafford-site"
+version = "0.1.0"
+edition = "2021"
+description = "Builds and serves trafford's documentation and landing page."
+license = "MIT"
+publish = false
+
+# Nothing here is ever a dependency of `trafford`. The direction is checked in
+# CI with `cargo tree -p trafford`, because a guarantee nobody tests is a
+# comment.
+[dependencies]
+trafford = { path = "../trafford" }
+anyhow = "1"
+
+[dev-dependencies]
+trafford = { path = "../trafford", features = ["testing"] }
+
+[[bin]]
+name = "site"
+path = "src/main.rs"

@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1113 555" width="1113" height="555" class="shot-palette" role="img" aria-label="A long note folded to its headings, and opened again" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15.0">
+<title>A long note folded to its headings, and opened again</title>
+<style>.shot-palette .accent{fill:var(--term-accent,#edb54b)}.shot-palette .bg{fill:var(--term-bg,#0a0f14)}.shot-palette .border-focus{fill:var(--term-border-focus,#33859d)}.shot-palette .cursorline{fill:var(--term-cursorline,#0c1a20)}.shot-palette .faint{fill:var(--term-faint,#245361)}.shot-palette .fg{fill:var(--term-fg,#98d1ce)}.shot-palette .heading{fill:var(--term-heading,#d3ebe9)}.shot-palette .mode-normal{fill:var(--term-mode-normal,#edb54b)}.shot-palette .muted{fill:var(--term-muted,#599caa)}.shot-palette .surface{fill:var(--term-surface,#0c1418)}.shot-palette .tag{fill:var(--term-tag,#a3a6c0)}@media(prefers-color-scheme:light){.shot-palette .accent{fill:var(--term-accent,#a8621b)}.shot-palette .bg{fill:var(--term-bg,#f6f2e9)}.shot-palette .border-focus{fill:var(--term-border-focus,#9a8f7c)}.shot-palette .cursorline{fill:var(--term-cursorline,#ece6d8)}.shot-palette .faint{fill:var(--term-faint,#a8a093)}.shot-palette .fg{fill:var(--term-fg,#2e2a24)}.shot-palette .heading{fill:var(--term-heading,#181511)}.shot-palette .mode-normal{fill:var(--term-mode-normal,#a8621b)}.shot-palette .muted{fill:var(--term-muted,#6e675c)}.shot-palette .surface{fill:var(--term-surface,#ede8dc)}.shot-palette .tag{fill:var(--term-tag,#2b5f82)}}</style>
+<rect width="100%" height="100%" class="bg" rx="6"/>
+<rect x="16.5" y="16.5" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="16.5" width="27.0" height="21.8" class="surface"/>
+<rect x="52.5" y="16.5" width="108.0" height="21.8" class="surface"/>
+<rect x="160.5" y="16.5" width="9.0" height="21.8" class="surface"/>
+<rect x="169.5" y="16.5" width="927.0" height="21.8" class="surface"/>
+<rect x="16.5" y="38.2" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="38.2" width="198.0" height="21.8" class="cursorline"/>
+<rect x="223.5" y="38.2" width="90.0" height="21.8" class="cursorline"/>
+<rect x="313.5" y="38.2" width="27.0" height="21.8" class="cursorline"/>
+<rect x="340.5" y="38.2" width="54.0" height="21.8" class="cursorline"/>
+<rect x="394.5" y="38.2" width="693.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="38.2" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="60.0" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="60.0" width="198.0" height="21.8" class="cursorline"/>
+<rect x="223.5" y="60.0" width="135.0" height="21.8" class="cursorline"/>
+<rect x="358.5" y="60.0" width="729.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="60.0" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="81.8" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="81.8" width="1062.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="81.8" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="103.5" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="103.5" width="198.0" height="21.8" class="surface"/>
+<rect x="223.5" y="103.5" width="18.0" height="21.8" class="surface"/>
+<rect x="241.5" y="103.5" width="81.0" height="21.8" class="surface"/>
+<rect x="322.5" y="103.5" width="765.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="103.5" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="125.2" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="125.2" width="1062.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="125.2" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="147.0" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="147.0" width="1062.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="147.0" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="168.8" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="168.8" width="1062.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="168.8" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="190.5" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="190.5" width="1062.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="190.5" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="212.2" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="212.2" width="1062.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="212.2" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="234.0" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="234.0" width="198.0" height="21.8" class="surface"/>
+<rect x="223.5" y="234.0" width="18.0" height="21.8" class="surface"/>
+<rect x="241.5" y="234.0" width="99.0" height="21.8" class="surface"/>
+<rect x="340.5" y="234.0" width="81.0" height="21.8" class="surface"/>
+<rect x="421.5" y="234.0" width="666.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="234.0" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="255.8" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="255.8" width="198.0" height="21.8" class="surface"/>
+<rect x="223.5" y="255.8" width="18.0" height="21.8" class="surface"/>
+<rect x="241.5" y="255.8" width="207.0" height="21.8" class="surface"/>
+<rect x="448.5" y="255.8" width="81.0" height="21.8" class="surface"/>
+<rect x="529.5" y="255.8" width="558.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="255.8" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="277.5" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="277.5" width="198.0" height="21.8" class="surface"/>
+<rect x="223.5" y="277.5" width="18.0" height="21.8" class="surface"/>
+<rect x="241.5" y="277.5" width="189.0" height="21.8" class="surface"/>
+<rect x="430.5" y="277.5" width="81.0" height="21.8" class="surface"/>
+<rect x="511.5" y="277.5" width="576.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="277.5" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="299.2" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="299.2" width="198.0" height="21.8" class="surface"/>
+<rect x="223.5" y="299.2" width="18.0" height="21.8" class="surface"/>
+<rect x="241.5" y="299.2" width="171.0" height="21.8" class="surface"/>
+<rect x="412.5" y="299.2" width="81.0" height="21.8" class="surface"/>
+<rect x="493.5" y="299.2" width="594.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="299.2" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="321.0" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="321.0" width="198.0" height="21.8" class="surface"/>
+<rect x="223.5" y="321.0" width="18.0" height="21.8" class="surface"/>
+<rect x="241.5" y="321.0" width="108.0" height="21.8" class="surface"/>
+<rect x="349.5" y="321.0" width="81.0" height="21.8" class="surface"/>
+<rect x="430.5" y="321.0" width="657.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="321.0" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="342.8" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="342.8" width="198.0" height="21.8" class="surface"/>
+<rect x="223.5" y="342.8" width="18.0" height="21.8" class="surface"/>
+<rect x="241.5" y="342.8" width="126.0" height="21.8" class="surface"/>
+<rect x="367.5" y="342.8" width="81.0" height="21.8" class="surface"/>
+<rect x="448.5" y="342.8" width="639.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="342.8" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="364.5" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="364.5" width="1062.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="364.5" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="386.2" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="386.2" width="1062.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="386.2" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="408.0" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="408.0" width="1062.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="408.0" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="429.8" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="429.8" width="1062.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="429.8" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="451.5" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="451.5" width="1062.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="451.5" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="473.2" width="9.0" height="21.8" class="surface"/>
+<rect x="25.5" y="473.2" width="1062.0" height="21.8" class="surface"/>
+<rect x="1087.5" y="473.2" width="9.0" height="21.8" class="surface"/>
+<rect x="16.5" y="495.0" width="1080.0" height="21.8" class="surface"/>
+<rect x="16.5" y="516.8" width="72.0" height="21.8" class="mode-normal"/>
+<rect x="88.5" y="516.8" width="855.0" height="21.8" class="surface"/>
+<rect x="943.5" y="516.8" width="153.0" height="21.8" class="surface"/>
+<text y="28.5"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">╭</tspan><tspan x="25.5" textLength="27.0" lengthAdjust="spacingAndGlyphs" class="accent" xml:space="preserve"> ● </tspan><tspan x="52.5" textLength="108.0" lengthAdjust="spacingAndGlyphs" class="accent" xml:space="preserve" font-weight="700">Deep work.md</tspan><tspan x="169.5" textLength="927.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">──────────────────────────────────────────────────────────────────────────────────────────────────────╮</tspan></text>
+<text y="50.2"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="223.5" textLength="90.0" lengthAdjust="spacingAndGlyphs" class="tag" xml:space="preserve">#reference</tspan><tspan x="313.5" textLength="27.0" lengthAdjust="spacingAndGlyphs" class="faint" xml:space="preserve"> · </tspan><tspan x="340.5" textLength="54.0" lengthAdjust="spacingAndGlyphs" class="tag" xml:space="preserve">#focus</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="72.0"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="223.5" textLength="135.0" lengthAdjust="spacingAndGlyphs" class="faint" xml:space="preserve">title Deep work</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="93.8"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="115.5"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="223.5" textLength="18.0" lengthAdjust="spacingAndGlyphs" class="accent" xml:space="preserve">▾ </tspan><tspan x="241.5" textLength="81.0" lengthAdjust="spacingAndGlyphs" class="accent" xml:space="preserve" font-weight="700">Deep work</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="137.2"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="159.0"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="25.5" textLength="1062.0" lengthAdjust="spacingAndGlyphs" class="fg" xml:space="preserve">                      Notes from a long read, kept as reference rather than as prose. A                               </tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="180.8"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="25.5" textLength="1062.0" lengthAdjust="spacingAndGlyphs" class="fg" xml:space="preserve">                      heading every few lines, which is what reference material looks like                            </tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="202.5"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="25.5" textLength="1062.0" lengthAdjust="spacingAndGlyphs" class="fg" xml:space="preserve">                      once it is written down rather than imagined.                                                   </tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="224.2"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="246.0"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="223.5" textLength="18.0" lengthAdjust="spacingAndGlyphs" class="accent" xml:space="preserve">▸ </tspan><tspan x="241.5" textLength="99.0" lengthAdjust="spacingAndGlyphs" class="heading" xml:space="preserve" font-weight="700">The premise</tspan><tspan x="340.5" textLength="81.0" lengthAdjust="spacingAndGlyphs" class="faint" xml:space="preserve">  5 lines</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="267.8"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="223.5" textLength="18.0" lengthAdjust="spacingAndGlyphs" class="accent" xml:space="preserve">▸ </tspan><tspan x="241.5" textLength="207.0" lengthAdjust="spacingAndGlyphs" class="heading" xml:space="preserve" font-weight="700">Why it is getting rarer</tspan><tspan x="448.5" textLength="81.0" lengthAdjust="spacingAndGlyphs" class="faint" xml:space="preserve">  5 lines</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="289.5"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="223.5" textLength="18.0" lengthAdjust="spacingAndGlyphs" class="accent" xml:space="preserve">▸ </tspan><tspan x="241.5" textLength="189.0" lengthAdjust="spacingAndGlyphs" class="heading" xml:space="preserve" font-weight="700">The four philosophies</tspan><tspan x="430.5" textLength="81.0" lengthAdjust="spacingAndGlyphs" class="faint" xml:space="preserve">  9 lines</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="311.2"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="223.5" textLength="18.0" lengthAdjust="spacingAndGlyphs" class="accent" xml:space="preserve">▸ </tspan><tspan x="241.5" textLength="171.0" lengthAdjust="spacingAndGlyphs" class="heading" xml:space="preserve" font-weight="700">Rules that survived</tspan><tspan x="412.5" textLength="81.0" lengthAdjust="spacingAndGlyphs" class="faint" xml:space="preserve">  7 lines</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="333.0"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="223.5" textLength="18.0" lengthAdjust="spacingAndGlyphs" class="accent" xml:space="preserve">▸ </tspan><tspan x="241.5" textLength="108.0" lengthAdjust="spacingAndGlyphs" class="heading" xml:space="preserve" font-weight="700">Measuring it</tspan><tspan x="349.5" textLength="81.0" lengthAdjust="spacingAndGlyphs" class="faint" xml:space="preserve">  5 lines</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="354.8"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="223.5" textLength="18.0" lengthAdjust="spacingAndGlyphs" class="accent" xml:space="preserve">▸ </tspan><tspan x="241.5" textLength="126.0" lengthAdjust="spacingAndGlyphs" class="heading" xml:space="preserve" font-weight="700">What it is not</tspan><tspan x="367.5" textLength="81.0" lengthAdjust="spacingAndGlyphs" class="faint" xml:space="preserve">  5 lines</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="376.5"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="398.2"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="420.0"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="441.8"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="463.5"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="485.2"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">│</tspan></text>
+<text y="507.0"><tspan x="16.5" textLength="1080.0" lengthAdjust="spacingAndGlyphs" class="border-focus" xml:space="preserve">╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯</tspan></text>
+<text y="528.8"><tspan x="16.5" textLength="72.0" lengthAdjust="spacingAndGlyphs" class="bg" xml:space="preserve" font-weight="700"> NORMAL </tspan><tspan x="88.5" textLength="855.0" lengthAdjust="spacingAndGlyphs" class="fg" xml:space="preserve">  folded everything                                                                            </tspan><tspan x="943.5" textLength="153.0" lengthAdjust="spacingAndGlyphs" class="muted" xml:space="preserve">  458 words  all </tspan></text>
+</svg>

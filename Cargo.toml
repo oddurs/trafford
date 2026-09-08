@@ -1,5 +1,5 @@
 [workspace]
-members = ["trafford"]
+members = ["trafford", "site"]
 resolver = "2"
 
 # At the workspace root deliberately. A `[profile.release]` left in a member is
