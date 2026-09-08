@@ -20,6 +20,7 @@ Needs pyte, like tools/probe.py:
 """
 
 import argparse
+import difflib
 import json
 import os
 import pathlib
@@ -362,6 +363,41 @@ def to_svg(rows, title):
     return "\n".join(parts) + "\n"
 
 
+def explain(dest, committed, fresh, limit=14):
+    """The first few lines that differ, in a form worth reading.
+
+    A cast is one line of JSON, so a line diff says "line 1 changed". Compare
+    the frames instead and name the first row that moved.
+    """
+    if dest.suffix == ".json":
+        try:
+            a, b = json.loads(committed or "{}"), json.loads(fresh)
+        except json.JSONDecodeError:
+            return [f"{dest.name}: not valid JSON"]
+        out = [f"{dest.name}: {len(a.get('frames', []))} frames committed, "
+               f"{len(b.get('frames', []))} fresh"]
+        for i, (x, y) in enumerate(zip(a.get("frames", []), b.get("frames", []))):
+            if x == y:
+                continue
+            rows = sorted(set(x["rows"]) | set(y["rows"]), key=int)
+            for r in rows:
+                if x["rows"].get(r) != y["rows"].get(r):
+                    text = lambda f: "".join(run[1] for run in f["rows"].get(r, []))
+                    out.append(f"  frame {i}, row {r}:")
+                    out.append(f"    committed  {text(x)[:90]!r}")
+                    out.append(f"    fresh      {text(y)[:90]!r}")
+                    return out[:limit]
+            out.append(f"  frame {i} differs only in styling")
+            return out[:limit]
+        return out[:limit]
+
+    diff = difflib.unified_diff(
+        committed.splitlines(), fresh.splitlines(),
+        "committed", "fresh", lineterm="", n=1,
+    )
+    return [f"{dest.name}:"] + [line[:120] for line in list(diff)[2:limit]]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -372,10 +408,19 @@ def main():
     parser.add_argument("--bin", default=str(BIN))
     args = parser.parse_args()
 
-    if not pathlib.Path(args.bin).exists():
-        raise SystemExit(
-            f"{args.bin} does not exist — run `cargo build --release` first"
+    if args.bin == str(BIN):
+        # Build it here rather than trusting whatever is in `target/`. The
+        # recordings exist to match what the program draws, and this tool
+        # happily recorded a stale binary once — after a branch switch, so the
+        # shots matched a build from another branch and `--check` said they
+        # were current. A no-op when it already is.
+        subprocess.run(
+            ["cargo", "build", "--release", "-p", "trafford"],
+            cwd=ROOT,
+            check=True,
         )
+    elif not pathlib.Path(args.bin).exists():
+        raise SystemExit(f"{args.bin} does not exist")
 
     manifest = tomllib.loads(MANIFEST.read_text())
     base = MANIFEST.parent
@@ -383,6 +428,7 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     stale = []
+    stale_pairs = []
     with tempfile.TemporaryDirectory(prefix="trafford-shots-") as tmp:
         # No user config either: `Theme::resolve` looks in
         # `~/.config/trafford/themes/` *before* the built-ins, so a developer
@@ -424,14 +470,21 @@ def main():
             continue
         if args.check:
             stale.append(dest.relative_to(ROOT))
+            stale_pairs.append((dest, current or "", body))
             continue
         dest.write_text(body)
         print(f"  wrote {dest.relative_to(ROOT)} ({len(body) // 1024} KiB)")
 
     if stale:
         names = "\n".join(f"  {p}" for p in stale)
+        # Say *what* changed, not only that something did. A check that fails
+        # on a machine you do not have — CI, someone else's laptop — is a check
+        # you cannot act on, and this one had to be diagnosed by guessing once.
+        print("\nthe first difference:")
+        for line in explain(*stale_pairs[0]):
+            print(f"  {line}")
         raise SystemExit(
-            "these screenshots no longer match what trafford draws:\n"
+            "\nthese recordings no longer match what trafford draws:\n"
             f"{names}\n\nRun: .venv/bin/python tools/shots.py"
         )
 
