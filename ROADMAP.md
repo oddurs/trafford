@@ -80,12 +80,15 @@ Obsidian is closed source, so there is nothing to read. The vault is not: its
 ### backlog
 
 - [ ] `0048` Take the vault's settings from Obsidian's own config <sup>feature · p1 · config</sup>
-- [ ] `0049` Expand a template when a note is made from one <sup>feature · p1 · vault</sup>
 - [ ] `0050` Daily and weekly notes where this vault keeps them <sup>feature · p1 · vault</sup>
 
 ### done
 
 - [x] `0051` Delete to the vault's trash, not to nowhere <sup>bug · p1 · vault</sup>
+
+### done
+
+- [x] `0049` Expand a template when a note is made from one <sup>feature · p1 · vault</sup>
 
 ## later — Someday
 
