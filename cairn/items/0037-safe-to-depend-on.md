@@ -5,8 +5,9 @@ title: Safe to depend on
 type: milestone
 status: backlog
 depends_on:
-- 36
+- 53
 created: 2026-09-07
+updated: 2026-09-08
 due: 2027-03-01
 ---
 

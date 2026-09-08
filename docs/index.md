@@ -12,7 +12,9 @@ description: trafford is a terminal knowledge base — plain markdown, [[wikilin
 ## Your notes stay yours
 
 trafford opens the same folder Obsidian does, respects the same `.gitignore`,
-reads the same frontmatter, and leaves the files exactly as it found them.
+reads the same frontmatter, and leaves the files exactly as it found them. It
+reads the settings, too — where new notes go, what deleting does, your
+periodic-notes folders — so an existing vault opens already configured.
 
 > [!note] They are files.
 > Plain markdown on your own disk, openable by anything, readable in ten years.
@@ -81,6 +83,21 @@ helper and your signing key all work, because it is your git.
 > [!note] All of it is clickable
 > Right-click any surface for what can be done to it. Copying works over ssh,
 > because it goes out as an OSC 52 escape as well as to the local pasteboard.
+
+> [!note] Peek before you go
+> `K` on a link shows the first lines of the note it points at, over the one
+> you are reading, without moving you. *Is this the one I meant* gets asked
+> often enough that following and coming back was the cost.
+
+> [!note] Open on both at once
+> The vault is watched, so a note written by Obsidian, an agent, or a `git
+> pull` shows up here without a reindex — and typing you have not saved is
+> never overwritten by it.
+
+> [!note] Journals, and the templates you already have
+> Today's note and this week's note are one command, in the folder and date
+> format you already use. Enough of Templater is understood that a journal
+> template comes out with yesterday and tomorrow linked for real.
 
 > [!note] An assistant that cites
 > The open note is always in context and related ones are retrieved by keyword

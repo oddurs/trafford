@@ -2,10 +2,12 @@
 id: 31
 title: Inline images and dataview, and why not yet
 type: docs
-status: backlog
-milestone: later
+status: planned
+milestone: v0.7
+depends_on:
+- 58
 created: 2026-09-07
-updated: 2026-09-07
+updated: 2026-09-08
 priority: p3
 effort: s
 area: docs
@@ -76,3 +78,32 @@ project's roadmap is decided by measuring the vault it serves, not by matching a
 feature list. The same survey that killed these two also promoted callouts from
 "nice" to the best ratio on the board, and caught the table parser being wrong
 about escaped pipes.
+
+## Added 2026-09-08, while planning v0.7
+
+**Time as an axis** — refused, and it was already half-designed when the
+measurement killed it. The proposal was history as a first-class dimension:
+what you thought about something in March, a note's evolution, what moved this
+week. The vault's git log is **42 commits, every one dated 2026-05-01**. There
+is no history to travel through. Building it would have been building for a
+vault nobody has.
+
+What the same measurement *did* justify is 0061: the working tree has drifted
+from that single commit by 21 paths and stayed that way for four months. The
+valuable thing about git here is not the past, it is the disagreement with the
+present.
+
+**Embeddings** — not refused, deferred to 0058, which is a spike rather than a
+plan because the honest answer is not known yet. Anthropic has no embeddings
+endpoint, so this means a second provider, a second key and outbound traffic in
+a program that deliberately keeps peek offline. On 148 notes and 1.3 MB,
+lexical scoring may simply be sufficient. That gets measured before it gets
+bought.
+
+**Dataview-style query blocks written into notes** — refused, and this one is a
+design position rather than a count. The queries in 0056 are real and this
+milestone is built around them; what is refused is putting the query *syntax
+inside the markdown*. A note containing a query is no longer a note — it is a
+program that only one reader can run, and it stops being portable to the
+Obsidian and `git diff` this vault is also read with. The sidecar (0054) exists
+so that derived things can be rich without the files stopping being files.

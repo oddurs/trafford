@@ -56,6 +56,10 @@ the same function.
 get a prompt to write that note — which is how a vault grows. Renaming a note
 rewrites every link that pointed at it.
 
+`K` peeks instead: the first lines of the note the link points at, over the
+one you are reading, without moving you. It is the answer to *is this the note
+I meant* asked often enough that following and coming back was the cost.
+
 A link into the same note works too: `enter` on `[Phase 1](#phase-1)` jumps to
 that heading, matching the slug the way GitHub does, and `[[Note#Heading]]`
 opens the other note *at* the heading rather than at the top.
@@ -65,6 +69,20 @@ opens the other note *at* the heading rather than at the top.
 `![[photo.jpg]]` points at a real file. Non-markdown files are indexed by
 filename and by relative path, so an embed resolves — otherwise a vault with
 images lists its own pictures as notes nobody has written.
+
+## Daily and weekly notes
+
+*Open today's daily note* in the palette writes `journal/2026-09-08.md` if it
+is not there yet and opens it if it is; *Open this week's note* does the same
+for `journal/2026-W37.md`. The folder and the date format are
+[configuration](configuration.md), and if you already have Obsidian's
+periodic-notes plugin set up, its settings are read rather than asked for
+again.
+
+Either can start from a template — including one written for Templater, whose
+`<% tp.date.now(...) %>` expressions are understood well enough that a
+journal template with yesterday and tomorrow linked in its header comes out
+with real links in it.
 
 ## Backlinks
 
@@ -84,3 +102,14 @@ the line the hit was on and open at it.
 `t` in the sidebar swaps the file tree for the tag list. Picking a tag filters
 the tree to the notes carrying it. Tags are clickable wherever they are drawn,
 including in the middle of a paragraph in the reading view.
+
+## Changed underneath you
+
+The vault is watched, so a note written by another program — Obsidian in
+another window, an agent, a `git pull` — appears here without anything being
+asked of you. The index catches up, the tree catches up, and the note you are
+reading redraws.
+
+> [!warning] Unsaved typing is never overwritten
+> If the file under you changed and you have edits nobody has seen, trafford
+> keeps yours and says so. The reload is what waits, not your paragraph.

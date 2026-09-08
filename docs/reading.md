@@ -16,6 +16,12 @@ The side panes are gone, the line numbers with them, and the prose is held to
 a readable measure. Frontmatter has become two rows of properties, and every
 section carries a fold marker and the number of lines it is hiding.
 
+Both of those are settings: `reading_focus` decides whether the panes and the
+gutter go, and `reading_measure` is how many columns the prose gets — `0`
+gives it the whole pane. If the vault has an Obsidian `readableLineLength`,
+that is where the default comes from. See
+[Configuration](configuration.md).
+
 ## What is concealed
 
 Wikilink and markdown-link syntax, `**bold**`, `*italic*`, `==highlight==`,
