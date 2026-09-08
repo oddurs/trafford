@@ -127,11 +127,11 @@
         grid.push(row);
       }
       host.insertBefore(screen, poster);
-      /* `visibility`, not `display`: the poster stays in the flow and keeps
-         reserving the box, so replacing it moves nothing. `hidden` would not
-         have worked for the inline one anyway — it is an <svg>, and
-         `HTMLElement.hidden` is not a property SVG elements have. */
-      poster.style.visibility = "hidden";
+      /* The screen is built but not shown. Loading a recording used to reveal
+         its *first* frame, which is the least interesting one — the poster was
+         chosen for being worth looking at. So the poster stays until the
+         recording actually starts. */
+      screen.style.visibility = "hidden";
       resize();
     }
 
@@ -190,6 +190,12 @@
     function play() {
       if (timer || !cast) return;
       label("Pause");
+      /* `visibility`, not `display`: the poster stays in the flow and keeps
+         reserving the box, so swapping them moves nothing. `hidden` would not
+         have worked for the inline one anyway — it is an <svg>, and
+         `HTMLElement.hidden` is not a property SVG elements have. */
+      poster.style.visibility = "hidden";
+      screen.style.visibility = "visible";
       resize();
       step();
     }

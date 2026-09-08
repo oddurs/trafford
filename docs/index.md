@@ -1,73 +1,90 @@
 ---
 title: trafford
 layout: landing
-tagline: An Obsidian-shaped vault in your terminal — wikilinks, backlinks, tags, a modal editor, git in the status bar, and an assistant that reads your notes before it answers.
+headline: A vault is just a folder.
+tagline: Links that resolve by name, backlinks nobody asked for, tags and daily notes are all ways of reading one. None of it needs a browser engine, and all of it belongs next to git.
 install: cargo install --git https://github.com/oddurs/trafford
 screenshot: hero.svg
 cast: hero.cast.json
 description: trafford is a terminal knowledge base — plain markdown, [[wikilinks]], backlinks and tags, with a modal editor and git built in.
 ---
 
-## A vault is a folder of markdown files
-
-Everything good about Obsidian — links that resolve by name, backlinks that
-appear without being asked for, tags, daily notes — is a way of *reading* that
-folder. None of it needs a browser engine, and all of it belongs next to git.
+## Your notes stay yours
 
 trafford opens the same folder Obsidian does, respects the same `.gitignore`,
 reads the same frontmatter, and leaves the files exactly as it found them.
 
-Everything below is the program, recorded. Not a mockup, not a diagram — the
-same binary, driven against a vault, with the frames kept.
+> [!note] They are files.
+> Plain markdown on your own disk, openable by anything, readable in ten years.
+> No database, no sync service, no account.
 
-## Backlinks you did not ask for
+> [!note] They are a git repository.
+> Branch, dirty count, ahead and behind in the status bar. Stage, diff, commit,
+> push and pull without leaving the note.
 
-The right-hand pane always knows what points here, and the line each one came
-from. `ctrl-t` turns that into a jump list, so following a backlink lands you
-on the sentence that mentioned this note rather than at the top of a file.
+> [!note] They are one binary.
+> No browser engine, no telemetry, no plugin store. It starts in the time it
+> takes a terminal to draw.
 
-Links to notes nobody has written yet are collected as **unwritten** — which
-is usually the most interesting list in the vault.
-
-![[backlinks.cast.json|Following a backlink to the line that mentions this note]]
-
-## Reading is its own posture
-
-`ctrl-e` is not the editor with the syntax hidden. The side panes go, the line
-numbers go, prose is held to a measure, and the note's structure folds.
+## Read it, don't scroll it
 
 A vault has a heading every few lines of body. Nobody reads a note like that
-from the top — they arrive looking for one section. `zM` turns a note into the
-table of contents it always was, with the size of each section beside it.
+from the top — they arrive looking for one section, and everything below is
+about getting them there.
 
-![[folding.cast.json|A long note folded to its headings, and opened again]]
+> [!note] Backlinks you did not ask for
+> The right-hand pane always knows what points here, and the line each one came
+> from. `ctrl-t` turns it into a jump list, so following a backlink lands on the
+> sentence that mentioned this note.
+>
+> ![[backlinks.cast.json|Following a backlink to the line that mentions this note]]
 
-## Search that shows you the line
+> [!note] A note folds to its shape
+> `ctrl-e` is not the editor with the syntax hidden — the side panes go, the
+> line numbers go, and `zM` turns a note into the table of contents it always
+> was, with the size of each section beside it.
+>
+> ![[folding.cast.json|A long note folded to its headings, and opened again]]
 
-`ctrl-f` searches every note and shows the line each hit came from, so you can
-tell the answer from the mention before you open anything.
+## Find it in one keystroke
 
-![[search.cast.json|Searching the vault, with the line each hit came from]]
+> [!note] Search shows you the line
+> `ctrl-f` searches every note and shows the line each hit came from, so you can
+> tell the answer from the mention before you open anything.
+>
+> ![[search.cast.json|Searching the vault, with the line each hit came from]]
 
-## And the rest of it
-
-> [!note] The command palette
-> `ctrl-k` finds any command by name, and `ctrl-p` finds any note. The keys
-> beside each entry are the ones that would have done it.
+> [!note] Everything by name
+> `ctrl-k` finds any command, `ctrl-p` any note. The keys beside each entry are
+> the ones that would have done it without the menu.
 >
 > ![[palette.svg|The command palette, listing every command by name]]
 
-> [!note] Git in the status bar
-> Branch, dirty count, ahead and behind. `ctrl-g` stages, diffs, commits,
-> pushes and pulls — `--rebase --autostash`, which is what a vault wants.
->
-> ![[git.svg|The git panel, over a working tree with a change in it]]
+## Git, without leaving the note
+
+The status bar carries the branch, the dirty count, and how far ahead or behind
+you are. `ctrl-g` opens a panel to stage, unstage, diff, commit, push and pull
+— `--rebase --autostash`, which is what a vault wants rather than a merge commit
+between two machines editing the same notes.
+
+It works by shelling out to `git`, so your hooks, your config, your credential
+helper and your signing key all work, because it is your git.
+
+![[git.svg|The git panel, over a working tree with a change in it]]
+
+## And the rest of it
 
 > [!note] A tree, and the tags beside it
 > Your folders are how you know what a note *is*, so the sidebar shows them.
 > `t` swaps the tree for the tag list; picking a tag filters the tree.
->
-> ![[tree.svg|The file tree, and the tags beside it]]
+
+> [!note] All of it is clickable
+> Right-click any surface for what can be done to it. Copying works over ssh,
+> because it goes out as an OSC 52 escape as well as to the local pasteboard.
+
+> [!note] An assistant that cites
+> The open note is always in context and related ones are retrieved by keyword
+> overlap, so answers come back citing `[[notes]]` you can jump to.
 
 ## Whatever your terminal is wearing
 
@@ -77,13 +94,8 @@ terminal already wears, trafford can wear too. No transcribing.
 
 ![[theme-gotham.svg|Gotham]] ![[theme-night.svg|Night]] ![[theme-paper.svg|Paper]]
 
-## Start here
+## Your notes are already on your disk
 
-[Getting started](getting-started.md) takes about two minutes: install, make a
-vault, open it. After that, [The vault](the-vault.md) explains how links,
-backlinks and tags resolve, and [Keys](keys.md) is the whole keymap on one
-page.
-
-This site is generated by the program it documents — the same link resolver,
-the same heading scanner, the same callout parser. If a `[[wikilink]]` renders
-here, it renders in the editor.
+[Getting started](getting-started.md) takes about two minutes. This site is
+generated by the program it documents — the same link resolver, the same
+heading scanner, the same callout parser.

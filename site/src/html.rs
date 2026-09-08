@@ -226,6 +226,12 @@ impl<'a, 'b> Writer<'a, 'b> {
         if self.section_open {
             self.out.push_str("</section>\n");
         }
+        // The last section of a landing note is its closing: a claim, centred,
+        // with the command under it. A rule rather than a marker in the
+        // markdown, because "the last one" is what it always is.
+        if let Some(at) = self.out.rfind(SECTION) {
+            self.out.replace_range(at..at + SECTION.len(), CLOSING);
+        }
         Rendered {
             html: self.out,
             toc: toc(lines),
@@ -393,7 +399,8 @@ impl<'a, 'b> Writer<'a, 'b> {
             if self.section_open {
                 self.out.push_str("</section>\n");
             }
-            self.out.push_str("<section class=\"showcase\">\n");
+            self.out.push_str(SECTION);
+            self.out.push('\n');
             self.section_open = true;
         }
         let anchor = unique_anchor(&mut self.seen_anchors, text);
@@ -794,6 +801,9 @@ fn align_attr(align: Option<&table::Align>) -> &'static str {
         _ => "",
     }
 }
+
+const SECTION: &str = "<section class=\"showcase\">";
+const CLOSING: &str = "<section class=\"showcase closing\">";
 
 /// The embed on a line that holds nothing else.
 fn lone_embed(line: &str) -> Option<&str> {

@@ -177,13 +177,32 @@ a user's is. Five things about it are load-bearing.
   binary via `tools/shots.py`; the palette comes from `ui::theme`. CI
   regenerates and diffs. A generated file edited by hand is reverted by the
   next sync, and CI says so first.
+- **The landing page follows obsidian.md's rhythm, in this project's clothes.**
+  A claim at four times the body size, the program full width beneath it, then
+  section header → cards, and a claim again at the end. Taken from the
+  reference: the layout. Not taken: the sans, the purple, and the gem — a
+  geometric sans is right for a GUI app and wearing it here would be borrowing
+  an identity rather than learning from a layout.
+- **A card puts its copy at the top and lets the recording bleed off the
+  bottom.** The eye finishes on the words rather than on a cut-off pixel, which
+  is why this reads better than cropping to the right — which is what the first
+  version did.
+- **The last section of a landing note is its closing**, marked in
+  `Writer::finish` rather than by anything in the markdown. It is always the
+  last one, so a rule beats a marker.
 - **The landing page is a run of showcases, and every one is the program.**
   Each H2 opens a `<section>` (`html::render_sectioned`), so the note stays
-  ordinary markdown and the alternation left-to-right is `:nth-of-type(even)`
-  — which has to flip the *template* as well as the content, or the picture
-  lands in the column sized for the prose. A recording has to be of the thing
-  its heading claims: the first backlinks cast ran `ctrl-t` on whichever note
-  the app opens by default, which has none, and was a cast of an empty pane.
+  ordinary markdown and the layout is a selector. A recording has to be of the
+  thing its heading claims: the first backlinks cast ran `ctrl-t` on whichever
+  note the app opens by default, which has none, and was a cast of an empty
+  pane.
+- **A player keeps its poster until it actually starts.** Loading used to
+  reveal the recording's *first* frame, which is the least interesting one —
+  the poster was chosen for being worth looking at.
+- **The recording styles live in their own section of `site.css`.** They were
+  written inside the landing block once and were deleted with it when that
+  block was rewritten, which left every recording unstyled and drawn at
+  whatever size the box happened to imply.
 - **A cell crops a recording rather than scaling it.** A third of the page is
   380 pixels and a terminal is 120 columns; scaled to fit, the text is four
   pixels tall. The bento cells keep the picture readable and clip it, which

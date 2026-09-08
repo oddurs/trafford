@@ -82,6 +82,7 @@ struct Meta {
     order: i64,
     description: Option<String>,
     tagline: Option<String>,
+    headline: Option<String>,
     install: Option<String>,
     screenshot: Option<String>,
     cast: Option<String>,
@@ -99,6 +100,7 @@ fn meta(note: &Note) -> Meta {
         order: get("order").and_then(|v| v.parse().ok()).unwrap_or(100),
         description: get("description"),
         tagline: get("tagline"),
+        headline: get("headline"),
         install: get("install"),
         screenshot: get("screenshot"),
         cast: get("cast"),
@@ -205,7 +207,7 @@ pub fn build(opts: &Options) -> Result<Built> {
         };
         let doc = if m.layout == "landing" {
             let hero = hero(&ctx, note, m, &vault, &mut problems);
-            shell::landing(&ctx, &page, &hero)
+            shell::landing(&ctx, &page, &hero, &install(m))
         } else {
             shell::doc(&ctx, &page)
         };
@@ -276,6 +278,10 @@ fn url_for(note: &Note, m: &Meta) -> String {
 }
 
 /// The one screen a reader gets before they decide.
+///
+/// A claim, a sentence under it, the command, and then the program at full
+/// width. The claim is the biggest thing on the page: a product name in that
+/// position tells a reader what something is called rather than what it does.
 fn hero(
     ctx: &Ctx<'_>,
     note: &Note,
@@ -284,19 +290,20 @@ fn hero(
     problems: &mut Vec<Problem>,
 ) -> String {
     let mut out = String::from("<section class=\"hero\">\n");
-    let _ = writeln!(out, "<h1>{}</h1>", html::escape(&note.title));
+    let _ = writeln!(
+        out,
+        "<h1>{}</h1>",
+        html::escape(m.headline.as_deref().unwrap_or(&note.title))
+    );
     if let Some(tagline) = &m.tagline {
         let _ = writeln!(out, "<p class=\"tagline\">{}</p>", html::escape(tagline));
     }
-    if let Some(cmd) = &m.install {
-        // The command is the call to action, so it is one click to take.
-        let _ = writeln!(
-            out,
-            "<div class=\"install\"><code>{cmd}</code><button type=\"button\" class=\"copy\" data-copy=\"{attr}\" hidden>Copy</button></div>",
-            cmd = html::escape(cmd),
-            attr = html::escape_attr(cmd),
-        );
-    }
+    let _ = writeln!(
+        out,
+        "<div class=\"actions\">{}<a class=\"secondary\" href=\"{}\">Read the docs →</a></div>",
+        install(m),
+        html::escape_attr(&ctx.href("docs/getting-started/")),
+    );
     if let Some(shot) = &m.screenshot {
         match vault.attachment(shot) {
             Some(rel) => {
@@ -338,6 +345,21 @@ fn hero(
     out
 }
 
+/// The command, with a button that copies it.
+///
+/// For a program you install with one line, the command *is* the call to
+/// action — a solid button here would be a link to a page showing this.
+fn install(m: &Meta) -> String {
+    match &m.install {
+        Some(cmd) => format!(
+            "<div class=\"install\"><code>{cmd}</code><button type=\"button\" class=\"copy\" data-copy=\"{attr}\" hidden>Copy</button></div>",
+            cmd = html::escape(cmd),
+            attr = html::escape_attr(cmd),
+        ),
+        None => String::new(),
+    }
+}
+
 /// An SVG screenshot goes into the page rather than beside it: it is a few
 /// kilobytes, it scales to any display, and inlining it means the first paint
 /// needs no second request. Anything else is an `<img>`.
@@ -372,22 +394,42 @@ fn stylesheet(font: &str) -> Result<String> {
     ))
 }
 
-/// A favicon in the theme's own accent, so the tab matches the page.
+/// The mark: the bar trafford draws beside the note you are reading, and three
+/// lines of a note beside it.
+///
+/// One geometry, used by the favicon and by the header, because a logo that is
+/// drawn twice is a logo that is drawn differently. `fill` lets the header take
+/// the accent from the stylesheet — the favicon cannot, since a tab icon has no
+/// cascade to read from.
+pub fn mark(fill: &str, background: Option<&str>) -> String {
+    let ground = match background {
+        Some(bg) => format!("<rect width=\"32\" height=\"32\" rx=\"6\" fill=\"{bg}\"/>"),
+        None => String::new(),
+    };
+    format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\" aria-hidden=\"true\">\
+{ground}\
+<rect x=\"8\" y=\"7\" width=\"4\" height=\"18\" fill=\"{fill}\"/>\
+<rect x=\"15\" y=\"7\" width=\"9\" height=\"3\" fill=\"{fill}\" opacity=\".8\"/>\
+<rect x=\"15\" y=\"14\" width=\"9\" height=\"3\" fill=\"{fill}\" opacity=\".55\"/>\
+<rect x=\"15\" y=\"21\" width=\"6\" height=\"3\" fill=\"{fill}\" opacity=\".35\"/>\
+</svg>"
+    )
+}
+
+/// The mark as a tab icon, in the default theme's accent. A favicon has no
+/// stylesheet to read a colour from, so this one is baked.
 fn favicon() -> Result<String> {
     let (_, theme) = crate::palette::translatable()?
         .into_iter()
         .find(|(_, t)| t.dark)
         .ok_or_else(|| anyhow!("no dark theme for the favicon"))?;
-    let accent = crate::palette::hex_of(theme.accent)?;
-    let bg = crate::palette::hex_of(theme.bg)?;
     Ok(format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\">\
-<rect width=\"32\" height=\"32\" rx=\"6\" fill=\"{bg}\"/>\
-<rect x=\"8\" y=\"7\" width=\"4\" height=\"18\" fill=\"{accent}\"/>\
-<rect x=\"15\" y=\"7\" width=\"9\" height=\"3\" fill=\"{accent}\" opacity=\".8\"/>\
-<rect x=\"15\" y=\"14\" width=\"9\" height=\"3\" fill=\"{accent}\" opacity=\".55\"/>\
-<rect x=\"15\" y=\"21\" width=\"6\" height=\"3\" fill=\"{accent}\" opacity=\".35\"/>\
-</svg>\n"
+        "{}\n",
+        mark(
+            &crate::palette::hex_of(theme.accent)?,
+            Some(&crate::palette::hex_of(theme.bg)?)
+        )
     ))
 }
 
