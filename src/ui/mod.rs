@@ -436,19 +436,22 @@ impl PreviewView {
         let mut in_code = false;
         let mut i = 0;
 
-        // Frontmatter, collapsed to what a reader uses. 123 of the 129 notes
-        // this was built against open with six lines of it — a fifth of the
-        // first screen spent on bookkeeping before a sentence appears.
-        if let Some((pairs, body)) = crate::vault::note::frontmatter_block(source) {
-            for drawn in properties(&pairs, renderer) {
-                lines.push(drawn);
-                // Every drawn row belongs to the block's first line. There is no
-                // sensible mapping from a chip back to the YAML line it came
-                // from, and the top of the block is where a click should land.
-                sources.push(0);
-                numbered.push(false);
-            }
+        // Frontmatter is chrome, not content, so the reading column starts at
+        // the first real line. It used to be collapsed to two rows here — a
+        // tag row and a full ISO timestamp — but collapsing the wrong thing
+        // smaller still leaves it first, and the most prominent line on the
+        // screen was a machine timestamp. 126 of this vault's 148 notes carry
+        // a block; the whole vocabulary is `created`, `tags` and one `source`.
+        // Neither a timestamp nor navigation is prose. They are drawn in the
+        // context pane and the status line instead.
+        if let Some((_, body)) = crate::vault::note::frontmatter_block(source) {
             i = body;
+            // A note whose body opens with a blank line would otherwise start
+            // one row lower than a note without frontmatter, which is exactly
+            // the difference this is meant to remove.
+            while source.get(i).is_some_and(|l| l.trim().is_empty()) {
+                i += 1;
+            }
         }
         while i < source.len() {
             let raw = &source[i];
@@ -676,56 +679,30 @@ fn sticky(
 ///
 /// At most two rows, and nothing is dropped — a key nobody anticipated still
 /// appears, it just appears out of the way.
-fn properties(
-    pairs: &crate::vault::note::Properties,
-    renderer: &markdown::Renderer<'_>,
-) -> Vec<markdown::Rendered> {
-    let theme = renderer.theme;
-    let mut out = Vec::new();
-
-    let tags: Vec<String> = pairs
+/// A note's frontmatter, drawn as rows for the context pane: the tags a reader
+/// clicks, then whatever else the author wrote.
+///
+/// Nothing is dropped. The vault this was built for writes `created` and
+/// `tags` and, on exactly one note, `source` — but a key nobody anticipated is
+/// still somebody's schema, and hiding it would make the pane a whitelist.
+fn property_rows(props: &crate::vault::note::Properties) -> (Vec<String>, Vec<(String, String)>) {
+    let is_tags = |k: &str| {
+        let k = k.to_ascii_lowercase();
+        k == "tags" || k == "tag"
+    };
+    let tags: Vec<String> = props
         .iter()
-        .filter(|(k, _)| {
-            let k = k.to_ascii_lowercase();
-            k == "tags" || k == "tag"
-        })
+        .filter(|(k, _)| is_tags(k))
         .flat_map(|(_, v)| v.iter())
-        .map(|t| t.trim().trim_start_matches('#'))
+        .map(|t| t.trim().trim_start_matches('#').to_string())
         .filter(|t| !t.is_empty())
-        .map(str::to_string)
         .collect();
-
-    if !tags.is_empty() {
-        let mut row = markdown::Rendered::default();
-        for (n, tag) in tags.iter().enumerate() {
-            if n > 0 {
-                row = row.suffixed(" · ", theme.faded());
-            }
-            row = row.with_link(
-                &format!("#{tag}"),
-                Style::default().fg(theme.tag),
-                tag.clone(),
-                markdown::Target::Tag,
-            );
-        }
-        out.push(row);
-    }
-
-    // Everything else in the order it was written, so a key that is not
-    // understood is still visible rather than silently swallowed.
-    let rest: Vec<String> = pairs
+    let rest: Vec<(String, String)> = props
         .iter()
-        .filter(|(k, _)| {
-            let k = k.to_ascii_lowercase();
-            k != "tags" && k != "tag"
-        })
-        .filter(|(_, v)| !v.is_empty())
-        .map(|(k, v)| format!("{k} {}", v.join(", ")))
+        .filter(|(k, v)| !is_tags(k) && !v.is_empty())
+        .map(|(k, v)| (k.clone(), v.join(", ")))
         .collect();
-    if !rest.is_empty() {
-        out.push(markdown::Rendered::default().suffixed(&rest.join("  ·  "), theme.faded()));
-    }
-    out
+    (tags, rest)
 }
 
 /// How wide text may be before it folds.
@@ -1189,6 +1166,12 @@ fn draw_context(f: &mut Frame, app: &App, area: Rect) -> Vec<Option<ContextTarge
         .map(|(target, _)| target)
         .collect();
 
+    let (tags, rest) = app
+        .vault
+        .get(&id)
+        .map(|n| property_rows(&n.properties))
+        .unwrap_or_default();
+
     // Work out what the lower sections want before deciding the outline's share.
     let out_shown = outgoing.len().min(6);
     let back_shown = backlinks.len().min(6);
@@ -1197,12 +1180,56 @@ fn draw_context(f: &mut Frame, app: &App, area: Rect) -> Vec<Option<ContextTarge
     } else {
         orphans.len().min(4)
     };
-    let below = 2 + out_shown.max(1)          // blank + heading + rows
+    let props_rows = if tags.is_empty() && rest.is_empty() {
+        0
+    } else {
+        2 + tags.len().div_ceil(2) + rest.len()
+    };
+    let below = props_rows
+        + 2 + out_shown.max(1)                // blank + heading + rows
         + 2 + back_shown.max(1) * 2           // backlinks carry a context line
         + if orphan_shown > 0 { 2 + orphan_shown } else { 0 };
 
     let entries = outline_of(&app.editor.buf);
     let budget = outline_budget(height, below);
+
+    // Properties first: they are what the note says it is, and they used to sit
+    // above the prose where they cost three rows of every reading.
+    if !tags.is_empty() || !rest.is_empty() {
+        lines.push(section(&theme, "properties"));
+        targets.push(None);
+        if !tags.is_empty() {
+            for chunk in tags.chunks(2) {
+                lines.push(Line::from(
+                    chunk
+                        .iter()
+                        .flat_map(|t| {
+                            [
+                                Span::styled("  ", Style::default()),
+                                Span::styled(format!("#{t}"), Style::default().fg(theme.tag)),
+                            ]
+                        })
+                        .collect::<Vec<_>>(),
+                ));
+                // One row can carry two tags, and a click lands on whichever
+                // the column falls in; the first is the honest target for the
+                // row as a whole.
+                targets.push(Some(ContextTarget::Tag(chunk[0].clone())));
+            }
+        }
+        for (k, v) in &rest {
+            lines.push(Line::from(vec![
+                Span::styled("  ", Style::default()),
+                Span::styled(
+                    fit(&format!("{k} {v}"), width.saturating_sub(2)),
+                    theme.faded(),
+                ),
+            ]));
+            targets.push(None);
+        }
+        lines.push(Line::from(""));
+        targets.push(None);
+    }
 
     lines.push(section(&theme, "outline"));
     targets.push(None);
@@ -1519,6 +1546,26 @@ fn wrap_text(text: &str, width: usize) -> Vec<String> {
 // Status line
 // ---------------------------------------------------------------------------
 
+/// The open note's tags, for the status line, when there is no context pane to
+/// put them in. `None` whenever the pane is showing them already, so they are
+/// never in two places at once.
+fn reading_tags(app: &App) -> Option<String> {
+    if !(app.preview && app.config.reading_focus) || app.overlay.is_some() {
+        return None;
+    }
+    let note = app.vault.get(app.current.as_deref()?)?;
+    let (tags, _) = property_rows(&note.properties);
+    if tags.is_empty() {
+        return None;
+    }
+    Some(
+        tags.iter()
+            .map(|t| format!("#{t}"))
+            .collect::<Vec<_>>()
+            .join("  "),
+    )
+}
+
 fn draw_status(f: &mut Frame, app: &App, area: Rect) {
     let theme = app.theme;
     let mode = app.editor.mode;
@@ -1562,6 +1609,15 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
         spans.push(Span::styled(
             status.to_string(),
             Style::default().fg(theme.fg).bg(theme.surface),
+        ));
+    } else if let Some(tags) = reading_tags(app) {
+        // Reading posture hides the side panes, and with them the properties
+        // section. The tags are navigation and have to stay reachable, so they
+        // come here rather than back to the top of the note — ahead of the
+        // hint, which in this posture points at a file tree that is not drawn.
+        spans.push(Span::styled(
+            tags,
+            Style::default().fg(theme.tag).bg(theme.surface),
         ));
     } else if let Some(hint) = hint {
         if app.focus == Focus::Editor && app.repo.is_some() {
@@ -2382,44 +2438,51 @@ mod tests {
         "body",
     ];
 
+    /// The note begins with the note. Frontmatter is chrome — a timestamp
+    /// nobody reads and navigation — and it used to cost three rows at the top
+    /// of every reading, with the timestamp the most prominent line on screen.
     #[test]
-    fn frontmatter_collapses_to_the_things_a_reader_uses() {
+    fn a_note_opens_with_its_own_first_line() {
         let (_t, view) = preview_of(&FRONTMATTER, 60);
-        let drawn: Vec<&str> = view.lines.iter().map(|r| r.text.as_str()).collect();
-        assert_eq!(
-            drawn,
-            [
-                "#status/active · #type/reference",
-                "created 2026-03-22",
-                "",
-                "▾ Title",
-                "body",
-            ],
-            "six lines of YAML became two"
-        );
+        assert_eq!(view.lines[0].text, "▾ Title", "the H1, fold marker and all");
+        assert_eq!(view.source(0), 7, "and it names the line it came from");
     }
 
+    /// The tell that this was always chrome: with the block gone, a note that
+    /// has one and a note that does not open identically.
     #[test]
-    fn a_property_tag_is_clickable_and_names_the_tag() {
-        let (_t, view) = preview_of(&FRONTMATTER, 60);
-        let link = view.link_at(0, 2).expect("a tag under the pointer");
-        assert_eq!(
-            link.target, "status/active",
-            "no leading hash in the target"
-        );
-        assert_eq!(link.kind, markdown::Target::Tag);
-        // The second chip answers too, and the separator between them does not.
-        assert_eq!(
-            view.link_at(0, 20).map(|l| l.target.as_str()),
-            Some("type/reference")
-        );
-        assert!(view.link_at(0, 16).is_none(), "the separator is not a tag");
+    fn frontmatter_makes_no_difference_to_where_a_note_starts() {
+        let (_t, with) = preview_of(&FRONTMATTER, 60);
+        let (_t2, without) = preview_of(&["# Title", "body"], 60);
+        let a: Vec<&str> = with.lines.iter().map(|r| r.text.as_str()).collect();
+        let b: Vec<&str> = without.lines.iter().map(|r| r.text.as_str()).collect();
+        assert_eq!(a, b);
     }
 
+    /// Nothing is dropped: it moves. `property_rows` is what the context pane
+    /// draws, and a key nobody anticipated is still somebody's schema.
     #[test]
-    fn a_key_nobody_anticipated_is_still_shown() {
-        let (_t, view) = preview_of(&["---", "banana: yellow", "---", "body"], 60);
-        assert_eq!(view.lines[0].text, "banana yellow");
+    fn every_property_survives_the_move_to_the_context_pane() {
+        let src: Vec<String> = ["---", "banana: yellow", "tags:", "  - a", "---", "body"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let (props, _) = crate::vault::note::frontmatter_block(&src).expect("a block");
+        let (tags, rest) = property_rows(&props);
+        assert_eq!(tags, vec!["a"]);
+        assert_eq!(rest, vec![("banana".to_string(), "yellow".to_string())]);
+    }
+
+    /// A tag keeps its hash out of the target, the way a click on one in prose
+    /// already did — the filter is set with the tag, not with "#tag".
+    #[test]
+    fn a_property_tag_names_itself_without_its_hash() {
+        let src: Vec<String> = ["---", "tags:", "  - status/active", "---", "b"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let (props, _) = crate::vault::note::frontmatter_block(&src).expect("a block");
+        assert_eq!(property_rows(&props).0, vec!["status/active"]);
     }
 
     #[test]
@@ -2434,14 +2497,6 @@ mod tests {
         let (_t, view) = preview_of(&["---", "tags: one", "# never closed"], 60);
         assert_eq!(view.lines[0].text, "---", "shown as written");
         assert_eq!(view.lines.len(), 3);
-    }
-
-    #[test]
-    fn a_click_on_a_property_lands_at_the_top_of_the_block() {
-        let (_t, view) = preview_of(&FRONTMATTER, 60);
-        assert_eq!(view.source(0), 0);
-        assert_eq!(view.source(1), 0);
-        assert_eq!(view.source(3), 7, "the heading still names its own line");
     }
 
     fn crumb(lines: &[&str], top: usize, visible: &[usize], width: usize) -> Option<String> {
@@ -2715,6 +2770,38 @@ mod tests {
         // is no room to draw them, and the caret would follow them off-screen.
         assert_eq!(wrap_width(40, 72), 40);
         assert_eq!(wrap_width(0, 72), 0);
+    }
+
+    /// Tags are navigation, and reading posture hides the pane that holds
+    /// them. They move to the status line rather than back above the prose,
+    /// and only there — never in two places at once.
+    #[test]
+    fn tags_follow_the_reader_into_reading_posture_and_nowhere_else() {
+        let (_d, mut app) = app_with_every_pane_open();
+        app.open_note("Welcome.md", true);
+
+        app.preview = false;
+        assert_eq!(reading_tags(&app), None, "the context pane has them");
+
+        app.preview = true;
+        app.config.reading_focus = true;
+        assert_eq!(reading_tags(&app).as_deref(), Some("#meta"));
+
+        // Preview without the reading posture keeps its chrome, so the pane is
+        // still there to hold them.
+        app.config.reading_focus = false;
+        assert_eq!(reading_tags(&app), None);
+    }
+
+    /// A note with no tags contributes nothing, rather than an empty run of
+    /// styling where the git branch would otherwise be.
+    #[test]
+    fn a_note_without_tags_leaves_the_status_line_alone() {
+        let (_d, mut app) = app_with_every_pane_open();
+        app.open_note("Other.md", true);
+        app.preview = true;
+        app.config.reading_focus = true;
+        assert_eq!(reading_tags(&app), None);
     }
 
     fn app_with_every_pane_open() -> (TempDir, App) {

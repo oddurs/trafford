@@ -684,6 +684,10 @@ pub enum ContextTarget {
     Backlink(String, usize),
     /// An unwritten note, offered for creation.
     Unwritten(String),
+    /// A tag, which filters the vault the way the sidebar's tags tab does.
+    /// Tags are clickable wherever they are drawn, and moving them out of the
+    /// note must not make the context pane the one place they are not.
+    Tag(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -940,6 +944,17 @@ impl App {
         {
             self.sidebar_cursor = pos;
         }
+    }
+
+    /// Show only the notes carrying a tag. One definition, because a tag is
+    /// clickable in the sidebar, in the note, and now in the context pane, and
+    /// three ideas of what a click does is three things to get out of step.
+    pub fn filter_by_tag(&mut self, tag: &str) {
+        self.tag_filter = Some(tag.to_string());
+        self.sidebar_tab = SidebarTab::Notes;
+        self.sidebar_cursor = 0;
+        self.expand_all();
+        self.set_status(format!("filtering by #{tag}"));
     }
 
     pub fn expand_all(&mut self) {
