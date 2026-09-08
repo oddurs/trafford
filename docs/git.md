@@ -28,6 +28,13 @@ Commits the vault after that many seconds of idle, if anything changed. `0`
 disables it. Useful if you would rather not think about it; unhelpful if you
 review your own history.
 
+## The history of one note
+
+*Git: history of this note* in the palette lists the commits that touched the
+open file — subject, author and when — rather than the whole vault's log. A
+note usually has a handful of them, which is short enough to read and long
+enough to answer what changed here and when.
+
 ## How it works
 
 By shelling out to `git`, and parsing porcelain output. No linked library, no

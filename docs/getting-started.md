@@ -57,13 +57,20 @@ Point trafford at it. There is nothing to import and nothing to convert.
 trafford ~/Documents/MyVault
 ```
 
-Obsidian's `.obsidian/` folder is left alone, `.trash/` stays out of the index
-because `.gitignore` is respected, and attachments are indexed as link targets
-so `![[photo.jpg]]` resolves rather than looking like a note nobody wrote.
+`.trash/` stays out of the index because `.gitignore` is respected, and
+attachments are indexed as link targets so `![[photo.jpg]]` resolves rather
+than looking like a note nobody wrote.
+
+`.obsidian/` is never written to — but it is *read*. Where you keep new notes,
+what deleting does, how wide prose gets, and your periodic-notes folders and
+formats are all taken from the settings you already have, so a vault opens
+configured. Anything in `config.toml` wins over it; see
+[Configuration](configuration.md).
 
 > [!tip] Both at once is fine
-> trafford re-reads a note that changed underneath it, and never writes a file
-> you have not edited. Keeping Obsidian open on the same vault works.
+> The vault is watched, so a note Obsidian writes shows up here without a
+> reindex. trafford never writes a file you have not edited, and never
+> replaces typing you have not saved.
 
 ## The first minute
 

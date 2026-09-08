@@ -194,31 +194,37 @@ so they cannot drift from the format.
 `<vault>/.trafford/config.toml`, so it travels with the notes:
 
 ```toml
-theme = "gotham"         # a built-in, a theme file, or a Ghostty theme
-new_note_dir = ""        # where ctrl-n puts notes
-new_note_template = ""   # a template to start new notes from, e.g. "_templates/note.md"
-sidebar_width = 32       # columns; a deep vault wants more
+theme = "gotham"          # a built-in, a theme file, or a Ghostty theme
+
+new_note_dir = ""         # where ctrl-n puts notes; "" is the vault root
+new_note_template = ""    # a note to start from, e.g. "_templates/note.md"
+trash = "local"           # deleted notes go to .trash/; "none" unlinks them
+
 daily_note_dir = "journal"
-daily_note_template = ""     # e.g. "_templates/daily-note.md"
-weekly_note_format = "%Y-W%V"
-weekly_note_dir = "journal"
-weekly_note_template = ""
 daily_note_format = "%Y-%m-%d"
-model = "claude-sonnet-5"
-context_notes = 6        # notes retrieved per question
-autocommit_secs = 0      # commit after N seconds idle; 0 disables
-wrap = true              # fold long lines instead of scrolling sideways
-wrap_column = 0          # where to fold; 0 is the pane width
-reading_focus = true     # ctrl-e also hides the panes and holds a measure
-trash = "local"          # deleted notes go to .trash/; "none" unlinks them
-reading_measure = 72     # columns prose is held to while reading; 0 is the pane
+daily_note_template = ""  # e.g. "_templates/daily-note.md"
+weekly_note_dir = "journal"
+weekly_note_format = "%Y-W%V"
+weekly_note_template = ""
+
+wrap = true               # fold long lines instead of scrolling sideways
+wrap_column = 0           # where to fold; 0 is the pane width
+reading_measure = 72      # columns prose is held to while reading; 0 is the pane
+reading_focus = true      # ctrl-e also hides the panes and the gutter
+
 sidebar = true
+sidebar_width = 32        # columns; a deep vault wants more
 context_pane = true
+
+model = "claude-sonnet-5"
+context_notes = 6         # notes retrieved per question
+autocommit_secs = 0       # commit after N seconds idle; 0 disables
 ```
 
-Anything left out is taken from the vault's own `.obsidian/app.json` when there
-is one — where new notes go, what deleting means, whether prose is held to a
-measure. Whatever you write here wins.
+Anything left out is taken from the vault's own `.obsidian/` when there is one
+— `app.json` for where new notes go, what deleting means and whether prose is
+held to a measure, and the periodic-notes plugin for the daily and weekly
+folders and formats. Whatever you write here wins.
 
 ## Docs
 
