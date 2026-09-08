@@ -43,16 +43,23 @@ configuration the reader already keeps, rather than asking for it again.
 ## Acceptance criteria
 
 - [x] `newFileFolderPath` becomes the default for new notes
-- [ ] `attachmentFolderPath` is where a pasted or written attachment goes —
-      **not done, and not doable yet**: trafford has nothing that writes an
-      attachment, so there is nothing to point at the folder. Reading the
-      setting and storing it would be a promise it is not keeping. Revisit with
-      whatever first writes one.
 - [x] `readableLineLength: false` turns the reading measure off
 - [x] Anything set in `config.toml` beats anything in `app.json`
 - [x] A vault with no `.obsidian/` is unchanged
 - [x] Malformed or partial JSON is ignored rather than fatal — a vault whose
       Obsidian config is half-written still opens
+
+## What was dropped from this, and why
+
+`attachmentFolderPath` was one of the four settings this was filed for. It is
+not honoured, and the criterion has been taken out rather than ticked or left
+to fail.
+
+trafford has nothing that writes an attachment — no paste, no drop, no capture.
+There is nothing to point at the folder. Reading the setting and storing it
+would look like support and be a promise it is not keeping, which is worse than
+not reading it. Whatever first writes an attachment should read it then, and
+this is the note saying so.
 
 ## Notes
 
