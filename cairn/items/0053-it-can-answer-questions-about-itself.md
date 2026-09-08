@@ -3,7 +3,7 @@ id: 53
 key: v0.7
 title: It can answer questions about itself
 type: milestone
-status: backlog
+status: done
 depends_on:
 - 47
 created: 2026-09-08
