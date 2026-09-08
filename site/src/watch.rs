@@ -158,7 +158,14 @@ mod tests {
             watch(
                 &[path],
                 &[],
-                Duration::from_millis(20),
+                // Long relative to the burst below, and deliberately so:
+                // `watch` fires after two *consecutive* quiet polls, so the
+                // whole burst has to land inside three ticks. At 20ms it did
+                // here and did not on a loaded CI runner, where the sleeps
+                // between the writes stretched past the interval and the
+                // third write arrived after the first call had already gone
+                // out. The assertion was on scheduling luck.
+                Duration::from_millis(150),
                 || s.load(std::sync::atomic::Ordering::SeqCst),
                 || {
                     c.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -166,14 +173,27 @@ mod tests {
             );
         });
 
+        // `watch` takes its baseline snapshot on entry, and a burst that beats
+        // the thread to it is a burst nothing ever saw — the other way this
+        // test can lie. Two intervals is long enough that the loop is running.
+        std::thread::sleep(Duration::from_millis(300));
+
+        // No pause between the writes: a save-all writes its files
+        // microseconds apart, and spacing them out was what made this racy
+        // rather than what made it a burst. Three writes this close cannot
+        // become two settled changes, because settling takes two consecutive
+        // quiet polls and there is no quiet between them.
         for body in ["two", "three", "four"] {
             std::fs::write(dir.path().join("a.md"), body).unwrap();
-            std::thread::sleep(Duration::from_millis(10));
         }
-        std::thread::sleep(Duration::from_millis(400));
+        std::thread::sleep(Duration::from_millis(1000));
         stop.store(true, std::sync::atomic::Ordering::SeqCst);
         handle.join().unwrap();
 
-        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(
+            calls.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "three writes in one burst should rebuild once, not once each"
+        );
     }
 }
