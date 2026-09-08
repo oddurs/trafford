@@ -2,7 +2,7 @@
 id: 50
 title: Daily and weekly notes where this vault keeps them
 type: feature
-status: doing
+status: done
 milestone: v0.6
 assignee: Oddur Sigurdsson
 created: 2026-09-07
@@ -34,11 +34,11 @@ otherwise — and add the weekly note, which trafford has no equivalent of.
 
 ## Acceptance criteria
 
-- [ ] Today's note lands where this vault keeps them, from its template
-- [ ] A weekly note command, the same way
-- [ ] Opening one that already exists opens it rather than overwriting it
-- [ ] A vault with no periodic-notes config falls back to `config.toml`
-- [ ] The `<< yesterday | tomorrow >>` links the template writes resolve
+- [x] Today's note lands where this vault keeps them, from its template
+- [x] A weekly note command, the same way
+- [x] Opening one that already exists opens it rather than overwriting it
+- [x] A vault with no periodic-notes config falls back to `config.toml`
+- [x] The `<< yesterday | tomorrow >>` links the template writes resolve
 
 ## Notes
 
