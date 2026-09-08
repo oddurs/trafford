@@ -107,24 +107,34 @@ impl Picker {
             .iter()
             .enumerate()
             .filter_map(|(i, item)| {
-                // The key matters as much as the label and is never shown.
-                // A command named `weekly-note` labelled "Open this week's
-                // note" was unreachable by typing "weekly", and nine others
-                // were the same — "help" did not find "Keyboard reference".
-                // Searching by the name of the thing is not an unreasonable
-                // thing to try.
-                let against = [item.label.as_str(), item.detail.as_str(), item.key.as_str()]
-                    .iter()
-                    .filter(|part| !part.is_empty())
-                    .copied()
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                fuzzy_match(&self.query, &against).map(|(s, idx)| {
-                    // Only keep highlight indices that fall inside the label.
-                    let label_len = item.label.chars().count();
-                    let idx = idx.into_iter().filter(|i| *i < label_len).collect();
-                    (s, i, idx)
-                })
+                let shown = if item.detail.is_empty() {
+                    item.label.clone()
+                } else {
+                    format!("{} {}", item.label, item.detail)
+                };
+                // The key is never displayed, but it is the name of the thing,
+                // and typing the name of the thing is the first thing a reader
+                // tries. `weekly-note`, labelled "Open this week's note", was
+                // unreachable by typing "weekly"; so were nine others — "help"
+                // did not find "Keyboard reference".
+                //
+                // Score the two separately and keep the better, rather than
+                // concatenating them: one fuzzy match running off the end of
+                // the label and into the key finds nonsense, and "close" would
+                // answer with `outdent-selection`.
+                let on_shown = fuzzy_match(&self.query, &shown);
+                let on_key = fuzzy_match(&self.query, item.key.as_str());
+                let best = match (on_shown, on_key) {
+                    (Some(a), Some(b)) if b.0 > a.0 => (b.0, Vec::new()),
+                    (Some(a), _) => a,
+                    (None, Some(b)) => (b.0, Vec::new()),
+                    (None, None) => return None,
+                };
+                let (score, idx) = best;
+                // Only keep highlight indices that fall inside the label.
+                let label_len = item.label.chars().count();
+                let idx = idx.into_iter().filter(|i| *i < label_len).collect();
+                Some((score, i, idx))
             })
             .collect();
         scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
