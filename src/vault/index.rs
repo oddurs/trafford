@@ -1021,6 +1021,21 @@ mod tests {
         );
     }
 
+    /// The sidecar is trafford's own, and a vault must never list it as
+    /// content. Dot-directories are already skipped; this pins that the rule
+    /// covers `.trafford/` specifically, since everything in v0.7 assumes it.
+    #[test]
+    fn the_sidecar_is_not_part_of_the_vault() {
+        let (_d, vault) = scratch(&[
+            ("a.md", "# A\n"),
+            (".trafford/queries.json", "{\"format\":1,\"data\":[]}"),
+            (".trafford/notes.md", "# Not a note\n"),
+        ]);
+        assert_eq!(vault.notes.len(), 1);
+        assert_eq!(vault.notes[0].id, "a.md");
+        assert!(vault.query("Not a note", 10).unwrap().hits.is_empty());
+    }
+
     /// A link to a heading in the same note is not a link to a missing note.
     #[test]
     fn a_heading_only_link_is_not_a_broken_link() {
