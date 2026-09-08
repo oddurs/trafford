@@ -1138,6 +1138,11 @@ fn outline_budget(pane_height: usize, below: usize) -> usize {
 
 /// Draws the context pane and returns, for each rendered row, what a click on
 /// it should do — `None` for labels and blank lines.
+/// A note's title if the vault knows it, its id otherwise.
+fn short_title<'a>(vault: &'a crate::vault::Vault, id: &'a str) -> &'a str {
+    vault.get(id).map(|n| n.title.as_str()).unwrap_or(id)
+}
+
 fn draw_context(f: &mut Frame, app: &App, area: Rect) -> Vec<Option<ContextTarget>> {
     let theme = app.theme;
     let block = pane_block(&theme, "context", false);
@@ -1186,7 +1191,17 @@ fn draw_context(f: &mut Frame, app: &App, area: Rect) -> Vec<Option<ContextTarge
     } else {
         2 + tags.len().div_ceil(2) + rest.len()
     };
+    // Everything drawn under the outline has to be counted here, or the
+    // outline takes the room and the last section is pushed off the bottom
+    // where nobody knows it exists.
+    let related_shown = app.related.len().min(4);
+    let related_rows = if related_shown == 0 {
+        0
+    } else {
+        2 + related_shown * 2 // each carries a reason line
+    };
     let below = props_rows
+        + related_rows
         + 2 + out_shown.max(1)                // blank + heading + rows
         + 2 + back_shown.max(1) * 2           // backlinks carry a context line
         + if orphan_shown > 0 { 2 + orphan_shown } else { 0 };
@@ -1358,6 +1373,37 @@ fn draw_context(f: &mut Frame, app: &App, area: Rect) -> Vec<Option<ContextTarge
                 ),
             ]));
             targets.push(Some(ContextTarget::Unwritten((*target).clone())));
+        }
+    }
+
+    // What this note is like, for the 66 notes here that link to nothing. Last,
+    // because a suggestion is weaker than a link somebody actually wrote.
+    if !app.related.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(section(&theme, "related"));
+        targets.push(None);
+        targets.push(None);
+        for s in app.related.iter().take(related_shown) {
+            lines.push(Line::from(vec![
+                Span::styled("  ~ ", theme.faded()),
+                Span::styled(
+                    fit(short_title(&app.vault, &s.id), width.saturating_sub(4)),
+                    Style::default().fg(theme.secondary),
+                ),
+            ]));
+            targets.push(Some(ContextTarget::Related(s.id.clone())));
+            // Why, in the vault's own words. A suggestion a reader cannot
+            // evaluate is one they have to take on faith.
+            if !s.because.is_empty() {
+                lines.push(Line::from(Span::styled(
+                    format!(
+                        "    {}",
+                        fit(&s.because.join(" · "), width.saturating_sub(4))
+                    ),
+                    theme.faded(),
+                )));
+                targets.push(Some(ContextTarget::Related(s.id.clone())));
+            }
         }
     }
 

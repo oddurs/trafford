@@ -87,7 +87,7 @@ Obsidian is closed source, so there is nothing to read. The vault is not: its
 
 ## v0.7 — It can answer questions about itself
 
-`#####·····` 45% · 5 of 11 done · due 2027-02-28
+`#######···` 64% · 7 of 11 done · due 2027-02-28
 
 Obsidian asks you to build the structure by hand, and then browse it. Measured
 
@@ -96,8 +96,6 @@ Obsidian asks you to build the structure by hand, and then browse it. Measured
 - [ ] `0027` Every unfinished task in the vault, in one place <sup>feature · p1 · vault</sup>
 - [ ] `0031` Inline images and dataview, and why not yet <sup>docs · p3 · docs</sup>
 - [ ] `0057` Somewhere for a query to land <sup>feature · p1 · chrome</sup>
-- [ ] `0058` Is lexical similarity enough, or does this need embeddings? <sup>spike · p1 · assistant</sup>
-- [ ] `0059` Related notes, and the sixty-six orphans <sup>feature · p2 · assistant</sup>
 - [ ] `0060` Ask the vault, and cite it <sup>feature · p1 · assistant</sup>
 
 ### done
@@ -105,6 +103,8 @@ Obsidian asks you to build the structure by hand, and then browse it. Measured
 - [x] `0054` A sidecar for state the vault does not own <sup>chore · p0 · config</sup>
 - [x] `0055` Frontmatter properties are first-class <sup>feature · p0 · vault</sup>
 - [x] `0056` A query layer over the whole vault <sup>feature · p0 · vault</sup>
+- [x] `0058` Is lexical similarity enough, or does this need embeddings? <sup>spike · p1 · assistant</sup>
+- [x] `0059` Related notes, and the sixty-six orphans <sup>feature · p2 · assistant</sup>
 - [x] `0061` What has drifted <sup>feature · p1 · git</sup>
 - [x] `0062` A note should open with the note <sup>feature · p1 · chrome</sup>
 
