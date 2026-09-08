@@ -2,8 +2,9 @@
 id: 62
 title: A note should open with the note
 type: feature
-status: planned
+status: done
 milestone: v0.7
+assignee: Oddur Sigurdsson
 depends_on:
 - 55
 created: 2026-09-08
@@ -89,3 +90,27 @@ have done on its own — 724 lines of ceremony above 1.3 MB of writing.
       removing rows must not shift the mapping that puts a click on the right
       line
 - [ ] The editor still draws the frontmatter exactly as written
+
+## What shipped
+
+The reading column starts at the first real line, and a note with frontmatter
+opens identically to one without — pinned by a test, because that identity is
+the tell that this was always chrome.
+
+Properties moved to the context pane, above the outline. Tags first as chips,
+then everything else dimmed; the one `source` key appears there like any other,
+and so would a key invented tomorrow.
+
+In reading posture the side panes are hidden, so tags go to the status line —
+**ahead of the editor hint**, which was the thing actually occupying that row.
+In that posture the hint reads "tab or click for the file tree" while the file
+tree is not drawn, so the tags displace something that was already wrong.
+
+Two consequences worth recording:
+
+- `ContextTarget::Tag` is new, and clicking a chip filters the vault through
+  `App::filter_by_tag`. That method is also new and now the only definition of
+  what filtering by a tag means — the sidebar's tags tab used to hold its own
+  copy, and a tag is clickable in three places now.
+- `Rendered::with_link` is gone. The frontmatter chip row was its only caller,
+  and the markdown renderer builds its links a different way.

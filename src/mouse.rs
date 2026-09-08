@@ -261,6 +261,10 @@ impl App {
                     target.clone(),
                     vec![item("Write this note…", A::CreateNote(target))],
                 ),
+                Some(ContextTarget::Tag(tag)) => (
+                    format!("#{tag}"),
+                    vec![item("Filter the vault by this", A::FilterByTag(tag))],
+                ),
                 None => return None,
             }
         } else if self.panes.editor_hit(c, r) {
@@ -560,11 +564,7 @@ impl App {
                     return;
                 };
                 self.sidebar_cursor = index;
-                self.tag_filter = Some(tag.clone());
-                self.sidebar_tab = SidebarTab::Notes;
-                self.sidebar_cursor = 0;
-                self.expand_all();
-                self.set_status(format!("filtering by #{tag}"));
+                self.filter_by_tag(tag);
             }
         }
     }
@@ -696,6 +696,7 @@ impl App {
             ContextTarget::Unwritten(target) => {
                 self.prompt_new_note_from_link(&target);
             }
+            ContextTarget::Tag(tag) => self.filter_by_tag(&tag),
         }
     }
 

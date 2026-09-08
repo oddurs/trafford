@@ -119,27 +119,6 @@ impl Rendered {
         }
     }
 
-    /// A copy with a clickable run appended, recording where it landed.
-    ///
-    /// Building a line out of pieces rather than scanning one: the properties
-    /// row has no markdown source to parse, only values that should behave like
-    /// the tags a reader is used to clicking.
-    pub fn with_link(&self, text: &str, style: Style, target: String, kind: Target) -> Rendered {
-        let start = self.text.chars().count();
-        let mut out = self.suffixed(text, style);
-        let len = text.chars().count();
-        if len > 0 {
-            out.links.push(Link {
-                start,
-                len,
-                target,
-                heading: None,
-                kind,
-            });
-        }
-        out
-    }
-
     /// A copy with `text` after it. Links are unaffected: they are all in front
     /// of anything appended.
     pub fn suffixed(&self, text: &str, style: Style) -> Rendered {
