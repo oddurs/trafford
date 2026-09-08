@@ -30,6 +30,7 @@ rows = 24
 hold = 1100
 loop_pause = 1600
 poster = 6
+setup = ["ctrl-p", "d", "e", "e", "enter"]
 steps = [
   { key = "ctrl-p", hold = 650 },
   { key = "l", hold = 110 },
@@ -102,7 +103,10 @@ name = "palette"
 title = "The command palette"
 cols = 120
 rows = 24
-keys = ["ctrl-k"]
+# The note behind the overlay is opened by name. Which note the app opens by
+# default is its business, and it changed once — silently rewriting three
+# recordings that are not about that.
+keys = ["ctrl-p", "d", "e", "e", "enter", "ctrl-k"]
 
 [[shot]]
 name = "git"
@@ -124,7 +128,7 @@ name = "tree"
 title = "The file tree, and the tags beside it"
 cols = 120
 rows = 24
-keys = ["tab", "t"]
+keys = ["ctrl-p", "d", "e", "e", "enter", "tab", "t"]
 
 # One screen, three palettes. The claim the README makes and nobody can check.
 
