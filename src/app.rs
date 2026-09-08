@@ -571,6 +571,9 @@ pub struct Chat {
     pub scroll: u16,
     /// Notes fed to the model for the current turn, shown as provenance.
     pub context_ids: Vec<String>,
+    /// Where each retrieved passage started, so a citation opens the section
+    /// it came from rather than the top of the note.
+    pub citations: Vec<(String, usize)>,
 }
 
 /// What draining the stream produced this tick.
@@ -1700,13 +1703,24 @@ impl App {
             Some(idx) => {
                 let id = self.vault.notes[idx].id.clone();
                 self.open_note(&id, true);
-                if let Some(h) = heading {
-                    // By slug or by text: a link may be written either way.
-                    match self.vault.get(&id).and_then(|n| n.heading_line(&h)) {
-                        Some(row) => self.jump_to(row),
-                        None => self.set_status(format!(
-                            "opened {id}, but it has no heading called \"{h}\""
-                        )),
+                match heading {
+                    Some(h) => {
+                        // By slug or by text: a link may be written either way.
+                        match self.vault.get(&id).and_then(|n| n.heading_line(&h)) {
+                            Some(row) => self.jump_to(row),
+                            None => self.set_status(format!(
+                                "opened {id}, but it has no heading called \"{h}\""
+                            )),
+                        }
+                    }
+                    // A citation with no heading still came from a passage, and
+                    // landing at the top of an 8,000-word note is not landing
+                    // on what was cited.
+                    None => {
+                        let line = self.citation_line(&id);
+                        if line > 0 {
+                            self.jump_to(line);
+                        }
                     }
                 }
             }
@@ -1913,6 +1927,37 @@ impl App {
     // ---- assistant ----------------------------------------------------
 
     /// Assemble grounding context and start a streaming turn.
+    /// The line a cited note should open at: the retrieved passage's own
+    /// heading if it was one of them, the top of the note otherwise.
+    pub fn citation_line(&self, id: &str) -> usize {
+        self.chat
+            .citations
+            .iter()
+            .find(|(cited, _)| cited == id)
+            .map(|(_, line)| *line)
+            .unwrap_or(0)
+    }
+
+    /// Citations in an answer that name a note the vault does not have.
+    ///
+    /// An assistant naming a note that does not exist is worse than one saying
+    /// it does not know, because the vault is the one thing in the room that
+    /// was supposed to be true. Checked against the index rather than trusted.
+    pub fn unresolved_citations(&self, answer: &str) -> Vec<String> {
+        let mut bad = Vec::new();
+        for link in crate::vault::note::parse_wikilinks(answer, 0) {
+            if link.target.is_empty() {
+                continue;
+            }
+            if self.vault.resolve_target(&link.target).is_none() {
+                bad.push(link.target.clone());
+            }
+        }
+        bad.sort();
+        bad.dedup();
+        bad
+    }
+
     pub fn ask(&mut self, question: String) {
         if question.trim().is_empty() {
             return;
@@ -1940,16 +1985,28 @@ impl App {
                 ids.push(note.id.clone());
             }
         }
-        for note in self.vault.relevant(&question, self.config.context_notes) {
-            if ids.contains(&note.id) {
-                continue;
-            }
+        // Sections rather than whole notes: p50 803 words and p90 2,961 means
+        // a whole note spends most of the context on prose nobody asked about
+        // and buries the passage that matters.
+        let passages = self
+            .vault
+            .relevant_sections(&question, self.config.context_notes * 2);
+        self.chat.citations = passages.iter().map(|p| (p.id.clone(), p.line)).collect();
+        for p in &passages {
             context.push(llm::ContextNote {
-                id: note.id.clone(),
-                title: note.title.clone(),
-                body: llm::excerpt(&note.text, 2500),
+                id: match &p.heading {
+                    Some(h) => format!("{}#{h}", p.id),
+                    None => p.id.clone(),
+                },
+                title: match &p.heading {
+                    Some(h) => format!("{} — {h}", p.title),
+                    None => p.title.clone(),
+                },
+                body: llm::excerpt(&p.text, 2000),
             });
-            ids.push(note.id.clone());
+            if !ids.contains(&p.id) {
+                ids.push(p.id.clone());
+            }
         }
 
         let vault_name = self
@@ -2016,9 +2073,26 @@ impl App {
 
     /// Drain any streamed tokens. Called once per event-loop tick.
     pub fn poll_assistant(&mut self) -> bool {
+        let was_streaming = self.chat.streaming;
         let drained = self.chat.drain();
         if let Some(err) = drained.error {
             self.set_status(format!("assistant: {err}"));
+        }
+        // When an answer finishes, check what it cited actually exists. An
+        // assistant naming a note the vault does not have is worse than one
+        // saying it does not know, and the reader has no way to tell the two
+        // apart by looking.
+        if was_streaming && !self.chat.streaming {
+            let answer = self
+                .chat
+                .messages
+                .last()
+                .map(|m| m.text.clone())
+                .unwrap_or_default();
+            let bad = self.unresolved_citations(&answer);
+            if !bad.is_empty() {
+                self.set_status(format!("cited notes that are not here: {}", bad.join(", ")));
+            }
         }
         drained.changed
     }
@@ -2106,6 +2180,63 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn asking_vault() -> (crate::testing::TempDir, App) {
+        let dir = crate::testing::TempDir::with_files(&[
+            (
+                "kleene.md",
+                "# Kleene\n\n## The recursion theorem\n\nEvery total computable function has a fixed point.\n\n## Unrelated\n\nSocks and shoes.\n",
+            ),
+            ("other.md", "# Other\n\nNothing about recursion here.\n"),
+        ]);
+        let vault = Vault::open(dir.path()).unwrap();
+        let app = App::new(vault, Config::default());
+        (dir, app)
+    }
+
+    /// Retrieval is over sections, not whole notes. A note with a matching
+    /// section and an unrelated one should contribute the matching part.
+    #[test]
+    fn retrieval_returns_the_section_that_matched_not_the_whole_note() {
+        let (_d, app) = asking_vault();
+        let found = app.vault.relevant_sections("recursion theorem", 5);
+        let top = &found[0];
+        assert_eq!(top.id, "kleene.md");
+        assert_eq!(top.heading.as_deref(), Some("The recursion theorem"));
+        assert!(top.text.contains("fixed point"));
+        assert!(
+            !top.text.contains("Socks"),
+            "the unrelated section stayed out"
+        );
+    }
+
+    /// A citation opens the section it came from, not the top of the note.
+    #[test]
+    fn a_citation_opens_the_line_the_passage_started_on() {
+        let (_d, mut app) = asking_vault();
+        let found = app.vault.relevant_sections("recursion theorem", 5);
+        app.chat.citations = found.iter().map(|p| (p.id.clone(), p.line)).collect();
+        assert!(
+            app.citation_line("kleene.md") > 0,
+            "not the top of the file"
+        );
+    }
+
+    /// An answer naming a note that does not exist is caught before the reader
+    /// has to discover it by clicking.
+    #[test]
+    fn a_citation_the_vault_cannot_resolve_is_reported() {
+        let (_d, app) = asking_vault();
+        assert!(app
+            .unresolved_citations("see [[kleene]] for this")
+            .is_empty());
+        assert_eq!(
+            app.unresolved_citations("as shown in [[Nonexistent Note]]"),
+            vec!["Nonexistent Note".to_string()]
+        );
+        // A heading-only link names this note, not a missing one.
+        assert!(app.unresolved_citations("see [[#Above]]").is_empty());
+    }
 
     fn linked_vault() -> (crate::testing::TempDir, Vault) {
         let dir = crate::testing::TempDir::with_files(&[

@@ -87,14 +87,13 @@ Obsidian is closed source, so there is nothing to read. The vault is not: its
 
 ## v0.7 — It can answer questions about itself
 
-`#########·` 82% · 9 of 11 done · due 2027-02-28
+`##########` 91% · 10 of 11 done · due 2027-02-28
 
 Obsidian asks you to build the structure by hand, and then browse it. Measured
 
 ### planned
 
 - [ ] `0031` Inline images and dataview, and why not yet <sup>docs · p3 · docs</sup>
-- [ ] `0060` Ask the vault, and cite it <sup>feature · p1 · assistant</sup>
 
 ### done
 
@@ -105,6 +104,7 @@ Obsidian asks you to build the structure by hand, and then browse it. Measured
 - [x] `0057` Somewhere for a query to land <sup>feature · p1 · chrome</sup>
 - [x] `0058` Is lexical similarity enough, or does this need embeddings? <sup>spike · p1 · assistant</sup>
 - [x] `0059` Related notes, and the sixty-six orphans <sup>feature · p2 · assistant</sup>
+- [x] `0060` Ask the vault, and cite it <sup>feature · p1 · assistant</sup>
 - [x] `0061` What has drifted <sup>feature · p1 · git</sup>
 - [x] `0062` A note should open with the note <sup>feature · p1 · chrome</sup>
 
