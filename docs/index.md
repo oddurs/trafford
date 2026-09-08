@@ -3,7 +3,7 @@ title: trafford
 layout: landing
 tagline: An Obsidian-shaped vault in your terminal — wikilinks, backlinks, tags, a modal editor, git in the status bar, and an assistant that reads your notes before it answers.
 install: cargo install --git https://github.com/oddurs/trafford
-screenshot: screenshot.svg
+screenshot: hero.svg
 cast: hero.cast.json
 description: trafford is a terminal knowledge base — plain markdown, [[wikilinks]], backlinks and tags, with a modal editor and git built in.
 ---
@@ -17,29 +17,65 @@ folder. None of it needs a browser engine, and all of it belongs next to git.
 trafford opens the same folder Obsidian does, respects the same `.gitignore`,
 reads the same frontmatter, and leaves the files exactly as it found them.
 
-## What you get
+Everything below is the program, recorded. Not a mockup, not a diagram — the
+same binary, driven against a vault, with the frames kept.
 
-> [!note] Links that resolve the way you expect
-> `[[Note]]`, `[[folder/Note]]`, `[[Note#Heading]]`, `[[Note|shown text]]` —
-> exact path first, then filename, the same order Obsidian uses. Rename a note
-> and every link that pointed at it is rewritten.
+## Backlinks you did not ask for
 
-> [!note] Backlinks you did not ask for
-> Always in the right-hand pane, with the line each one came from. Links to
-> notes nobody has written yet are listed as *unwritten* — the vault's growing
-> edge.
+The right-hand pane always knows what points here, and the line each one came
+from. `ctrl-t` turns that into a jump list, so following a backlink lands you
+on the sentence that mentioned this note rather than at the top of a file.
 
-> [!note] A modal editor, not a text box
-> `hjkl w b 0 ^ $ gg G`, `x dd dw D cc cw C`, `yy p P`, `v V`, `>> <<`, undo,
-> counts. Enter continues a list; `space` ticks a task.
+Links to notes nobody has written yet are collected as **unwritten** — which
+is usually the most interesting list in the vault.
+
+![[backlinks.cast.json|Following a backlink to the line that mentions this note]]
+
+## Reading is its own posture
+
+`ctrl-e` is not the editor with the syntax hidden. The side panes go, the line
+numbers go, prose is held to a measure, and the note's structure folds.
+
+A vault has a heading every few lines of body. Nobody reads a note like that
+from the top — they arrive looking for one section. `zM` turns a note into the
+table of contents it always was, with the size of each section beside it.
+
+![[folding.cast.json|A long note folded to its headings, and opened again]]
+
+## Search that shows you the line
+
+`ctrl-f` searches every note and shows the line each hit came from, so you can
+tell the answer from the mention before you open anything.
+
+![[search.cast.json|Searching the vault, with the line each hit came from]]
+
+## And the rest of it
+
+> [!note] The command palette
+> `ctrl-k` finds any command by name, and `ctrl-p` finds any note. The keys
+> beside each entry are the ones that would have done it.
+>
+> ![[palette.svg|The command palette, listing every command by name]]
 
 > [!note] Git in the status bar
 > Branch, dirty count, ahead and behind. `ctrl-g` stages, diffs, commits,
 > pushes and pulls — `--rebase --autostash`, which is what a vault wants.
+>
+> ![[git.svg|The git panel, over a working tree with a change in it]]
 
-> [!note] An assistant that cites your notes
-> The open note is always in context and related ones are retrieved by keyword
-> overlap, so answers come back citing `[[notes]]` you can jump to.
+> [!note] A tree, and the tags beside it
+> Your folders are how you know what a note *is*, so the sidebar shows them.
+> `t` swaps the tree for the tag list; picking a tag filters the tree.
+>
+> ![[tree.svg|The file tree, and the tags beside it]]
+
+## Whatever your terminal is wearing
+
+A theme is a set of roles rather than a list of colours. trafford ships four,
+reads your own, and **reads Ghostty theme files directly** — so whatever your
+terminal already wears, trafford can wear too. No transcribing.
+
+![[theme-gotham.svg|Gotham]] ![[theme-night.svg|Night]] ![[theme-paper.svg|Paper]]
 
 ## Start here
 

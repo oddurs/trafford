@@ -487,7 +487,7 @@ th.center {
 .landing {
   flex: 1;
   width: 100%;
-  max-width: 78rem;
+  max-width: 84rem;
   margin: 0 auto;
   padding: 0 clamp(1rem, 4vw, 2.5rem) 4rem;
 }
@@ -589,10 +589,15 @@ th.center {
   overflow-x: auto;
 }
 
-/* The cast replaces the still in place, so the box must not resize when it
-   arrives — same padding, same border, same rounding. */
-.shot {
+/* A player is drawn over its poster, and the poster is what reserves the box.
+   Both need a positioned ancestor of exactly the poster's size. */
+.shot,
+.cast {
   position: relative;
+}
+
+.cast {
+  display: block;
 }
 
 .cast-screen {
@@ -653,34 +658,107 @@ th.center {
   display: block;
   width: 100%;
   height: auto;
-  min-width: 38rem;
+  min-width: 34rem;
 }
 
-/* The body of the landing note becomes a specimen sheet: prose spans the
-   width, and the callouts the note is written with become cells. No build-side
-   transformation — the markdown is ordinary markdown and the grid is CSS. */
+figcaption {
+  margin-top: 0.6rem;
+  font-size: 0.75rem;
+  color: var(--faint);
+}
+
+/* The landing body is a run of showcases: one H2 and everything under it, each
+   saying one thing the one before it did not, and flipping side to side. The
+   grouping is a `<section>` the renderer opens at every H2, so the note stays
+   ordinary markdown and the alternation is a selector. */
+
 .landing .prose {
   max-width: none;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-top: 0;
 }
 
-.landing .prose > *:not(.callout) {
-  grid-column: 1 / -1;
+.showcase {
+  display: grid;
+  grid-template-columns: minmax(0, 25rem) minmax(0, 1fr);
+  column-gap: clamp(1.5rem, 5vw, 4rem);
+  align-content: center;
+  padding: clamp(3rem, 7vw, 5rem) 0;
+  border-bottom: var(--rule);
+}
+
+.showcase > h2,
+.showcase > p,
+.showcase > ul {
+  grid-column: 1;
   max-width: var(--measure);
 }
 
-.landing .prose > h2 {
+.showcase > h2 {
   border-top: none;
   padding-top: 0;
-  margin: 3rem 0 1rem;
-  font-size: 1.25rem;
+  margin: 0 0 1rem;
+  font-size: clamp(1.3rem, 2.6vw, 1.6rem);
+  letter-spacing: -0.03em;
 }
 
-/* One rule between cells rather than one around each: the right and bottom
-   edges are drawn, and the outer ones come from the section. */
-.landing .prose > .callout {
+.showcase > p {
+  color: var(--muted);
+  margin: 0 0 1rem;
+}
+
+/* The figure spans whatever rows the prose beside it happens to occupy. The
+   end line is past any real row; the implicit rows it creates are empty and
+   have no height, which is what makes this safe. */
+.showcase > figure {
+  grid-column: 2;
+  grid-row: 1 / 50;
+  align-self: center;
+  margin: 0;
+}
+
+/* Flip. Two showcases running the same way read as a list; alternating reads
+   as a page. The template flips with the content — otherwise the picture lands
+   in the column sized for the prose and shrinks to a thumbnail. */
+.showcase:nth-of-type(even) {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 25rem);
+}
+
+.showcase:nth-of-type(even) > h2,
+.showcase:nth-of-type(even) > p,
+.showcase:nth-of-type(even) > ul {
+  grid-column: 2;
+}
+
+.showcase:nth-of-type(even) > figure {
+  grid-column: 1;
+}
+
+/* A section with nothing to show is prose, at the width prose wants. */
+.showcase:not(:has(> figure)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.showcase:not(:has(> figure)) > h2,
+.showcase:not(:has(> figure)) > p,
+.showcase:not(:has(> figure)) > ul {
+  grid-column: 1;
+}
+
+/* ── The bento row ───────────────────────────────────────────────────────── */
+
+/* A section written as three callouts is three cells, each with its own
+   picture. Same markdown as anywhere else in the vault. */
+.showcase:has(> .callout) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 0;
+}
+
+.showcase:has(> .callout) > h2 {
+  grid-column: 1 / -1;
+  margin-bottom: 1.5rem;
+}
+
+.showcase > .callout {
+  grid-column: auto;
   margin: 0;
   padding: 1.4rem 1.5rem;
   background: none;
@@ -690,23 +768,16 @@ th.center {
   border-radius: 0;
 }
 
-.landing .prose > .callout:nth-of-type(2n + 1) {
+.showcase > .callout:first-of-type {
   padding-left: 0;
 }
 
-.landing .prose > .callout:nth-of-type(2n) {
+.showcase > .callout:last-of-type {
   border-right: none;
+  padding-right: 0;
 }
 
-.landing .prose > .callout:last-of-type {
-  border-bottom: var(--rule);
-}
-
-.landing .prose > .callout:nth-last-of-type(2):nth-of-type(2n + 1) {
-  border-bottom: var(--rule);
-}
-
-.landing .prose > .callout .callout-title {
+.showcase > .callout .callout-title {
   color: var(--fg);
   font-size: 0.95rem;
   letter-spacing: -0.01em;
@@ -714,10 +785,61 @@ th.center {
   margin-bottom: 0.5rem;
 }
 
-.landing .prose > .callout p:not(.callout-title) {
+.showcase > .callout p:not(.callout-title) {
   color: var(--muted);
   font-size: 0.88rem;
+  margin: 0 0 1rem;
+}
+
+/* A cell is a third of the page and a terminal is 120 columns; scaled to fit,
+   the text is four pixels tall and says nothing. So the picture keeps a
+   readable size and the cell crops it — a legible piece of a real interface
+   rather than an illegible whole one. */
+.showcase > .callout figure {
+  margin: 1.2rem 0 0;
+  /* A fixed height as well as a fixed width: three panels with three aspect
+     ratios leave a ragged row, and the crop is the point anyway. */
+  height: 21rem;
+  overflow: hidden;
+  border: var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 0.5rem 0 0 0.5rem;
+}
+
+.showcase > .callout figure img {
+  width: 46rem;
+  max-width: none;
+  min-width: 0;
+  border: none;
+  border-radius: 0;
+}
+
+/* ── The theme strip ─────────────────────────────────────────────────────── */
+
+/* Three recordings of one screen, in three palettes. A paragraph that holds
+   nothing but images is a strip; anywhere else an image is an image. */
+.prose p:has(> img + img) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border: var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin: 2rem 0 0;
+  grid-column: 1 / -1;
+  max-width: none;
+}
+
+.prose p:has(> img + img) img {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: auto;
   margin: 0;
+  border: none;
+  border-radius: 0;
 }
 
 /* ── 404 ─────────────────────────────────────────────────────────────────── */

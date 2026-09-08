@@ -10,11 +10,11 @@ description: The reading view — folding, properties, callouts, tables, and wha
 same view with a flag: the editor draws the file, and the reading view draws
 what the file *means*.
 
-![[reading.svg|The reading view: properties, fold markers, and a table drawn as a table]]
+![[folding.cast.json|A long note folded to its headings, and opened again]]
 
 The side panes are gone, the line numbers with them, and the prose is held to
-a readable measure. Frontmatter has become two rows of properties, the section
-has a fold marker, and the table is a table.
+a readable measure. Frontmatter has become two rows of properties, and every
+section carries a fold marker and the number of lines it is hiding.
 
 ## What is concealed
 

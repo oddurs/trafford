@@ -174,7 +174,11 @@ pub fn build(opts: &Options) -> Result<Built> {
             pages: &pages,
             depth,
         };
-        let rendered = html::render(note, &ctx, &mut problems);
+        let rendered = if m.layout == "landing" {
+            html::render_sectioned(note, &ctx, &mut problems)
+        } else {
+            html::render(note, &ctx, &mut problems)
+        };
         let nav: Vec<NavItem> = nav_source
             .iter()
             .map(|(n, nm)| NavItem {

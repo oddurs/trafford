@@ -75,7 +75,7 @@ Preview stops being the editor with the syntax hidden. A note's structure folds,
 
 ## v1.0 — Safe to depend on
 
-`########··` 75% · 15 of 20 done · due 2027-03-01
+`########··` 76% · 16 of 21 done · due 2027-03-01
 
 Documented, packaged, and hardened. Someone who is not the author can install
 
@@ -104,6 +104,7 @@ Documented, packaged, and hardened. Someone who is not the author can install
 - [x] `0065` Make the crate a workspace so site tooling never ships in the binary <sup>chore · p0 · packaging</sup>
 - [x] `0066` Build the site from a directory of notes, deterministically <sup>feature · p0 · site</sup>
 - [x] `0067` The development server binds port zero <sup>feature · p0 · site</sup>
+- [x] `0068` A landing page of showcases, not a column <sup>feature · p1 · site</sup>
 
 ## later — Someday
 

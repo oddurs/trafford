@@ -23,6 +23,7 @@ import argparse
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -76,6 +77,34 @@ KEYS = {
 }
 
 
+def prepare(spec, base, tmp, index):
+    """A fresh vault for one recording.
+
+    Per recording rather than one shared copy: a shot can ask for a theme or
+    for a dirty working tree, and neither should leak into the next one. The
+    copy is also what keeps the recordings out of *this* repository — in place,
+    trafford walks up, finds it, and puts its dirty-file count in the status
+    bar of every shot.
+    """
+    vault = pathlib.Path(tmp) / f"{index:02d}-{spec['name']}"
+    shutil.copytree(base, vault)
+
+    if "theme" in spec:
+        config = vault / ".trafford" / "config.toml"
+        config.write_text(
+            re.sub(r'theme = "[^"]*"', f'theme = "{spec["theme"]}"', config.read_text())
+        )
+
+    make_repo(vault)
+
+    # A clean tree makes a poor argument for a git panel.
+    for name, addition in spec.get("dirty", {}).items():
+        path = vault / name
+        path.write_text(path.read_text() + addition)
+
+    return vault
+
+
 def make_repo(vault):
     """Make the fixture a git repository, so the status bar has something true
     to say.
@@ -89,6 +118,8 @@ def make_repo(vault):
     both dates. The global config is taken out of the picture entirely — a
     developer's signing key or a template directory would otherwise reach in.
     """
+    # A fixed date, which fixes the commit hash. See the git shot in
+    # `shots.toml` for why no recording shows a commit's *age*.
     fixed = {
         **os.environ,
         "GIT_CONFIG_GLOBAL": "/dev/null",
@@ -345,33 +376,38 @@ def main():
 
     stale = []
     with tempfile.TemporaryDirectory(prefix="trafford-shots-") as tmp:
-        # Outside the repository, deliberately. Run in place and trafford walks
-        # up, finds *this* project's git repo, and puts its dirty-file count in
-        # the status bar — so the shot changes every time anyone edits
-        # anything. That is how this was found.
-        vault = pathlib.Path(tmp) / "vault"
-        shutil.copytree(base / manifest["vault"], vault)
-        # And no user config either. `Theme::resolve` looks in
+        # No user config either: `Theme::resolve` looks in
         # `~/.config/trafford/themes/` *before* the built-ins, so a developer
         # with their own gotham.toml would take a different screenshot from CI
-        # and neither would be wrong. An empty home removes the question.
+        # and neither would be wrong.
         home = pathlib.Path(tmp) / "home"
         home.mkdir()
         os.environ["HOME"] = str(home)
         os.environ["XDG_CONFIG_HOME"] = str(home / ".config")
-        make_repo(vault)
-        shots = [
-            (out_dir / f"{shot['name']}.svg", to_svg(capture(shot, vault), shot["title"]))
-            for shot in manifest["shot"]
-        ]
-        shots += [
-            (
-                out_dir / f"{cast['name']}.cast.json",
-                json.dumps(to_cast(record(cast, vault), cast), separators=(",", ":"))
-                + "\n",
+        fixture = base / manifest["vault"]
+
+        shots = []
+        for i, shot in enumerate(manifest["shot"]):
+            vault = prepare(shot, fixture, tmp, i)
+            shots.append(
+                (out_dir / f"{shot['name']}.svg", to_svg(capture(shot, vault), shot["title"]))
             )
-            for cast in manifest.get("cast", [])
-        ]
+        for i, cast in enumerate(manifest.get("cast", []), start=100):
+            vault = prepare(cast, fixture, tmp, i)
+            frames = record(cast, vault)
+            shots.append(
+                (
+                    out_dir / f"{cast['name']}.cast.json",
+                    json.dumps(to_cast(frames, cast), separators=(",", ":")) + "\n",
+                )
+            )
+            # The poster comes out of the same recording, so it cannot drift
+            # from the cast it stands in for. Default to the frame the cast
+            # ends on, which is the one worth being still.
+            poster = frames[cast.get("poster", len(frames) - 1)][1]
+            shots.append(
+                (out_dir / f"{cast['name']}.svg", to_svg(poster, cast["title"]))
+            )
 
     for dest, body in shots:
         current = dest.read_text() if dest.exists() else None

@@ -215,6 +215,39 @@ fn a_page_without_javascript_has_no_dead_controls() {
     }
 }
 
+/// Nothing heavy is fetched before it is needed.
+///
+/// Six recordings is 132 KiB. If the browser were told to fetch them — a
+/// `src` rather than a `data-` attribute — the landing page would be a
+/// megabyte before a word of it was read. The casts are named in an attribute
+/// the browser ignores and asked for by script on approach, and every poster
+/// says `loading="lazy"`.
+#[test]
+fn nothing_heavy_is_fetched_before_it_is_needed() {
+    let site = built_and_served();
+    for page in &site.pages {
+        let (_, _, body) = serve::get(&format!("{}/{page}", site.url)).unwrap();
+        let html = String::from_utf8_lossy(&body).to_string();
+
+        for attr in ["src=\"", "href=\""] {
+            for part in html.split(attr).skip(1) {
+                let value = part.split('"').next().unwrap_or("");
+                assert!(
+                    !value.ends_with(".cast.json"),
+                    "/{page} tells the browser to fetch {value} on load"
+                );
+            }
+        }
+        for img in html.split("<img").skip(1) {
+            let tag = img.split('>').next().unwrap_or("");
+            assert!(
+                tag.contains("loading=\"lazy\""),
+                "/{page} has an image that loads eagerly: <img{tag}>"
+            );
+        }
+    }
+}
+
 /// Anchors are what a `[[Note#Heading]]` link lands on, and the build already
 /// refuses a link to a heading that is not there. This is the other half: the
 /// heading it *is* there, with the id the link was rewritten to.

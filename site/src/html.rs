@@ -155,9 +155,24 @@ fn unique_anchor(seen: &mut BTreeMap<String, usize>, text: &str) -> String {
 
 /// Render a note's body. Frontmatter is not part of it — the shell draws that.
 pub fn render(note: &Note, ctx: &Ctx<'_>, problems: &mut Vec<Problem>) -> Rendered {
+    render_with(note, ctx, problems, false)
+}
+
+/// Render, grouping each H2 and what follows it into a `<section>`.
+pub fn render_sectioned(note: &Note, ctx: &Ctx<'_>, problems: &mut Vec<Problem>) -> Rendered {
+    render_with(note, ctx, problems, true)
+}
+
+fn render_with(
+    note: &Note,
+    ctx: &Ctx<'_>,
+    problems: &mut Vec<Problem>,
+    sections: bool,
+) -> Rendered {
     let lines: Vec<String> = note.text.lines().map(str::to_string).collect();
     let start = frontmatter_block(&lines).map(|(_, body)| body).unwrap_or(0);
     let mut w = Writer::new(note, ctx, problems);
+    w.sections = sections;
     w.blocks(&lines, start, 0);
     w.finish(&lines)
 }
@@ -180,6 +195,10 @@ struct Writer<'a, 'b> {
     problems: &'a mut Vec<Problem>,
     seen_anchors: BTreeMap<String, usize>,
     summary: String,
+    /// Group each H2 and what follows it into a `<section>`. The landing page
+    /// wants it; a documentation page does not.
+    sections: bool,
+    section_open: bool,
 }
 
 /// One open list, so nesting closes in the right order.
@@ -198,10 +217,15 @@ impl<'a, 'b> Writer<'a, 'b> {
             problems,
             seen_anchors: BTreeMap::new(),
             summary: String::new(),
+            sections: false,
+            section_open: false,
         }
     }
 
-    fn finish(self, lines: &[String]) -> Rendered {
+    fn finish(mut self, lines: &[String]) -> Rendered {
+        if self.section_open {
+            self.out.push_str("</section>\n");
+        }
         Rendered {
             html: self.out,
             toc: toc(lines),
@@ -285,6 +309,18 @@ impl<'a, 'b> Writer<'a, 'b> {
                 continue;
             }
 
+            // An embed alone on a line is a block, not a word in a
+            // paragraph. That is what lets a section be "prose and a figure"
+            // rather than "prose containing a picture".
+            if let Some(embed) = lone_embed(trimmed) {
+                flush_para!();
+                flush_lists!();
+                let html = self.inline(embed, i);
+                let _ = writeln!(self.out, "<figure class=\"shot\">{html}</figure>");
+                i += 1;
+                continue;
+            }
+
             if let Some((level, text)) = heading(raw) {
                 flush_para!();
                 flush_lists!();
@@ -350,6 +386,16 @@ impl<'a, 'b> Writer<'a, 'b> {
     }
 
     fn heading(&mut self, level: usize, text: &str, at: usize) {
+        // The landing page is a run of showcases, and a showcase is an H2 and
+        // everything under it. Grouping them here means the note stays
+        // ordinary markdown and the alternation is `:nth-of-type(even)`.
+        if self.sections && level == 2 {
+            if self.section_open {
+                self.out.push_str("</section>\n");
+            }
+            self.out.push_str("<section class=\"showcase\">\n");
+            self.section_open = true;
+        }
         let anchor = unique_anchor(&mut self.seen_anchors, text);
         let body = self.inline(text, at);
         // The link is on the heading itself: a reader who wants to send someone
@@ -447,6 +493,9 @@ impl<'a, 'b> Writer<'a, 'b> {
             problems: self.problems,
             seen_anchors: std::mem::take(&mut self.seen_anchors),
             summary: std::mem::take(&mut self.summary),
+            // A quote or a callout is not where a showcase begins.
+            sections: false,
+            section_open: false,
         };
         sub.blocks(lines, 0, depth + 1);
         self.out = sub.out;
@@ -594,6 +643,14 @@ impl<'a, 'b> Writer<'a, 'b> {
         // Attachments first: `![[photo.jpg]]` points at a real file, and a
         // vault that treats images as missing notes lists its own pictures as
         // things nobody has written.
+        // `![[x.cast.json]]` is a recording. The poster is `x.svg`, emitted by
+        // the same run, and it is what a reader sees with no JavaScript, with
+        // reduced motion, or before the frames arrive.
+        if embed {
+            if let Some(cast) = target.strip_suffix(".cast.json") {
+                return self.cast(target, cast, label, at);
+            }
+        }
         if let Some(rel) = self.ctx.vault.attachment(target) {
             let src = self.ctx.href(&format!("{ASSET_DIR}/{rel}"));
             return if embed {
@@ -630,6 +687,26 @@ impl<'a, 'b> Writer<'a, 'b> {
             }
         }
         format!("<a href=\"{}\">{}</a>", escape_attr(&href), escape(label))
+    }
+
+    /// A recording, drawn over the poster the same run produced.
+    fn cast(&mut self, target: &str, stem: &str, label: &str, at: usize) -> String {
+        let (Some(json), Some(poster)) = (
+            self.ctx.vault.attachment(target),
+            self.ctx.vault.attachment(&format!("{stem}.svg")),
+        ) else {
+            self.problem(
+                at,
+                format!("![[{target}]] needs both {target} and {stem}.svg in the vault"),
+            );
+            return String::new();
+        };
+        format!(
+            "<span class=\"cast\" data-cast=\"{}\"><img src=\"{}\" alt=\"{}\" loading=\"lazy\"></span>",
+            escape_attr(&self.ctx.href(&format!("{ASSET_DIR}/{json}"))),
+            escape_attr(&self.ctx.href(&format!("{ASSET_DIR}/{poster}"))),
+            escape_attr(label)
+        )
     }
 
     fn url_link(&mut self, url: &str, label: &str, embed: bool, at: usize) -> String {
@@ -716,6 +793,16 @@ fn align_attr(align: Option<&table::Align>) -> &'static str {
         Some(table::Align::Center) => " class=\"center\"",
         _ => "",
     }
+}
+
+/// The embed on a line that holds nothing else.
+fn lone_embed(line: &str) -> Option<&str> {
+    let t = line.trim();
+    let looks_like = t.starts_with("![[") && t.ends_with("]]")
+        || t.starts_with("![") && t.ends_with(')') && t.contains("](");
+    // One embed, not two: `![[a]] ![[b]]` is a row of images and belongs in a
+    // paragraph, where a reader can put a caption between them.
+    (looks_like && t.matches("![").count() == 1).then_some(t)
 }
 
 fn heading(line: &str) -> Option<(usize, &str)> {

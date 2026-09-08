@@ -129,13 +129,32 @@ a user's is. Five things about it are load-bearing.
   binary via `tools/shots.py`; the palette comes from `ui::theme`. CI
   regenerates and diffs. A generated file edited by hand is reverted by the
   next sync, and CI says so first.
+- **The landing page is a run of showcases, and every one is the program.**
+  Each H2 opens a `<section>` (`html::render_sectioned`), so the note stays
+  ordinary markdown and the alternation left-to-right is `:nth-of-type(even)`
+  — which has to flip the *template* as well as the content, or the picture
+  lands in the column sized for the prose. A recording has to be of the thing
+  its heading claims: the first backlinks cast ran `ctrl-t` on whichever note
+  the app opens by default, which has none, and was a cast of an empty pane.
+- **A cell crops a recording rather than scaling it.** A third of the page is
+  380 pixels and a terminal is 120 columns; scaled to fit, the text is four
+  pixels tall. The bento cells keep the picture readable and clip it, which
+  reads as a piece of a real interface rather than an illegible whole.
+- **No recording shows a relative time.** The git panel draws how old a commit
+  is, which is a function of today's date rather than of anything this project
+  does — a shot of it goes stale when the calendar turns. The commit date is
+  pinned (which pins the hash, which the panel also draws) and the git shot
+  opens a *diff* rather than the commit list.
 - **The hero is a recording, and the still is the content.** `tools/shots.py`
   keeps the frames as well as the last one; `site.js` paints them over the
   still, which stays in the flow with `visibility: hidden` so nothing moves
   when the frames land. With no JavaScript, with reduced motion, or before the
   fetch returns, the still is what a reader sees — which is why it is still
   generated. Every control on the page ships `hidden` and is revealed by
-  script, and a test asserts that of every button on every page.
+  script, and a test asserts that of every button on every page. Casts are
+  named in a `data-` attribute the browser ignores and fetched on approach —
+  six of them eagerly would be a megabyte before a word is read — and a test
+  asserts that too.
 - **The reload client exists only in `serve`.** `build` never writes it, and a
   test asserts that of every page. A deployed page carrying a livereload script
   is the standard way this leaks.
