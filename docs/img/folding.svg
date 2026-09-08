@@ -8,10 +8,10 @@
 <rect x="169.5" y="16.5" width="927.0" height="21.8" fill="#0c1418"/>
 <rect x="16.5" y="38.2" width="9.0" height="21.8" fill="#0c1418"/>
 <rect x="25.5" y="38.2" width="198.0" height="21.8" fill="#0c1a20"/>
-<rect x="223.5" y="38.2" width="99.0" height="21.8" fill="#0c1a20"/>
-<rect x="322.5" y="38.2" width="27.0" height="21.8" fill="#0c1a20"/>
-<rect x="349.5" y="38.2" width="63.0" height="21.8" fill="#0c1a20"/>
-<rect x="412.5" y="38.2" width="675.0" height="21.8" fill="#0c1418"/>
+<rect x="223.5" y="38.2" width="90.0" height="21.8" fill="#0c1a20"/>
+<rect x="313.5" y="38.2" width="27.0" height="21.8" fill="#0c1a20"/>
+<rect x="340.5" y="38.2" width="54.0" height="21.8" fill="#0c1a20"/>
+<rect x="394.5" y="38.2" width="693.0" height="21.8" fill="#0c1418"/>
 <rect x="1087.5" y="38.2" width="9.0" height="21.8" fill="#0c1418"/>
 <rect x="16.5" y="60.0" width="9.0" height="21.8" fill="#0c1418"/>
 <rect x="25.5" y="60.0" width="198.0" height="21.8" fill="#0c1a20"/>
@@ -107,7 +107,7 @@
 <rect x="88.5" y="516.8" width="855.0" height="21.8" fill="#0c1418"/>
 <rect x="943.5" y="516.8" width="153.0" height="21.8" fill="#0c1418"/>
 <text y="28.5"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" fill="#33859d" xml:space="preserve">╭</tspan><tspan x="25.5" textLength="27.0" lengthAdjust="spacingAndGlyphs" fill="#edb54b" xml:space="preserve"> ● </tspan><tspan x="52.5" textLength="108.0" lengthAdjust="spacingAndGlyphs" fill="#edb54b" xml:space="preserve" font-weight="700">Deep work.md</tspan><tspan x="169.5" textLength="927.0" lengthAdjust="spacingAndGlyphs" fill="#33859d" xml:space="preserve">──────────────────────────────────────────────────────────────────────────────────────────────────────╮</tspan></text>
-<text y="50.2"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" fill="#33859d" xml:space="preserve">│</tspan><tspan x="223.5" textLength="99.0" lengthAdjust="spacingAndGlyphs" fill="#a3a6c0" xml:space="preserve">#[reference</tspan><tspan x="322.5" textLength="27.0" lengthAdjust="spacingAndGlyphs" fill="#245361" xml:space="preserve"> · </tspan><tspan x="349.5" textLength="63.0" lengthAdjust="spacingAndGlyphs" fill="#a3a6c0" xml:space="preserve">#focus]</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" fill="#33859d" xml:space="preserve">│</tspan></text>
+<text y="50.2"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" fill="#33859d" xml:space="preserve">│</tspan><tspan x="223.5" textLength="90.0" lengthAdjust="spacingAndGlyphs" fill="#a3a6c0" xml:space="preserve">#reference</tspan><tspan x="313.5" textLength="27.0" lengthAdjust="spacingAndGlyphs" fill="#245361" xml:space="preserve"> · </tspan><tspan x="340.5" textLength="54.0" lengthAdjust="spacingAndGlyphs" fill="#a3a6c0" xml:space="preserve">#focus</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" fill="#33859d" xml:space="preserve">│</tspan></text>
 <text y="72.0"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" fill="#33859d" xml:space="preserve">│</tspan><tspan x="223.5" textLength="135.0" lengthAdjust="spacingAndGlyphs" fill="#245361" xml:space="preserve">title Deep work</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" fill="#33859d" xml:space="preserve">│</tspan></text>
 <text y="93.8"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" fill="#33859d" xml:space="preserve">│</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" fill="#33859d" xml:space="preserve">│</tspan></text>
 <text y="115.5"><tspan x="16.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" fill="#33859d" xml:space="preserve">│</tspan><tspan x="223.5" textLength="18.0" lengthAdjust="spacingAndGlyphs" fill="#edb54b" xml:space="preserve">▾ </tspan><tspan x="241.5" textLength="81.0" lengthAdjust="spacingAndGlyphs" fill="#edb54b" xml:space="preserve" font-weight="700">Deep work</tspan><tspan x="1087.5" textLength="9.0" lengthAdjust="spacingAndGlyphs" fill="#33859d" xml:space="preserve">│</tspan></text>

@@ -90,8 +90,11 @@ struct Meta {
 
 fn meta(note: &Note) -> Meta {
     let lines: Vec<String> = note.text.lines().map(str::to_string).collect();
+    // A property holds a list, because `tags:` does. None of the keys read
+    // here is ever more than one value, but joining rather than taking the
+    // first means a key that grows one does not silently lose the rest.
     let pairs: BTreeMap<String, String> = frontmatter_block(&lines)
-        .map(|(p, _)| p.into_iter().collect())
+        .map(|(p, _)| p.into_iter().map(|(k, v)| (k, v.join(", "))).collect())
         .unwrap_or_default();
     let get = |k: &str| pairs.get(k).map(|v| v.trim().trim_matches('"').to_string());
     Meta {

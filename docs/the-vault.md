@@ -97,6 +97,32 @@ Links pointing at notes you have not written yet are collected separately as
 `ctrl-f` searches the whole vault. Matching is case-insensitive; results show
 the line the hit was on and open at it.
 
+Bare words are a substring search, which is what most questions are. But a
+vault is already a typed database — the tags, the frontmatter, the checkboxes
+and the links are all structure somebody wrote — and the same box will
+interrogate it:
+
+| Term | What it asks |
+| --- | --- |
+| `type:reference` | a frontmatter key holding that value |
+| `tag:topic/logic` | a tag, from frontmatter or written inline |
+| `task:open` | notes with an unfinished checkbox; `task:done` for the rest |
+| `orphan` | nothing links here |
+| `broken` | something here links nowhere |
+| `links-to:"A Note"` | links there, resolved the way following one resolves |
+| `path:01-projects` | where the note lives |
+| `modified:>2026-08-01` | the file's mtime, not a git date |
+| `sort:modified limit:20` | how to order it, and how much of it |
+
+Terms combine: `type:reference status:active sort:modified` is the three
+questions at once. `status:active` needs no `property:` prefix — a bare
+`key:value` is one, which is why `type:reference` reads the way it does.
+
+> [!note] The syntax is in the box, not in the note
+> Obsidian's answer to this is dataview, which means writing a query into a
+> note to run it. A question you ask once does not deserve a note of its own,
+> so this one lives where you were already typing.
+
 ## Tags
 
 `t` in the sidebar swaps the file tree for the tag list. Picking a tag filters

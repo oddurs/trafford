@@ -34,6 +34,22 @@ is wrong, the program is wrong.
 | `f1` | this help |
 | `ctrl-q` | quit |
 
+## Search  ctrl-f
+
+| Key | What it does |
+| --- | --- |
+| type:reference | notes tagged type/reference — any tag namespace works |
+| status:active | and a real frontmatter key works the same way |
+| tag:topic/logic | the whole tag, when you want to be explicit |
+| task:open | unfinished checkboxes; task:done for the rest |
+| orphan | notes nothing links to |
+| broken | notes linking to something that is not there |
+| links-to:"A Note" | notes linking there, resolved the way a link resolves |
+| path:01-projects | where the note lives |
+| modified:>2026-08-01 | changed since a date |
+| sort:modified limit:20 | how to order it, and how much |
+| anything else | plain text, the way search always worked |
+
 ## Editor (vim-flavoured)
 
 | Key | What it does |

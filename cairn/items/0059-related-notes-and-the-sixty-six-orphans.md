@@ -16,9 +16,9 @@ area: assistant
 
 ## Problem
 
-66 of 148 notes contain no `[[link]]` at all. 28 are linked to by nothing. Of
-178 distinct link targets, a substantial share name notes that were never
-written — links typed as intentions and left as dead ends.
+66 of 148 notes contain no `[[link]]` at all. 9 are linked to by nothing, and
+13 distinct link targets name notes that were never written — links typed as
+intentions and left as dead ends.
 
 This is not a vault that failed. It is what building a graph by hand looks like
 after a year: the notes get written, the connecting does not, and the part of

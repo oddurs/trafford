@@ -186,6 +186,11 @@ pub fn properties(note: &Note) -> Vec<(String, String)> {
     frontmatter_block(&lines)
         .map(|(pairs, _)| pairs)
         .unwrap_or_default()
+        .into_iter()
+        // `", "` is what the terminal's property row joins a list with, and
+        // this is meant to be that row minus the terminal.
+        .map(|(k, v)| (k, v.join(", ")))
+        .collect()
 }
 
 struct Writer<'a, 'b> {

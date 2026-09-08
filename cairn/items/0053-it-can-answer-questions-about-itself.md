@@ -22,8 +22,8 @@ typed property values across 148 notes. This vault is not a pile of prose; it
 is a database somebody has been maintaining by hand for months.
 
 **Not kept:** the graph. 66 of the 148 notes contain no `[[link]]` at all, 28
-are linked to by nothing, and of 178 distinct link targets a substantial share
-name notes that were never written.
+are linked to by nothing, and 13 distinct link targets name notes that were
+never written.
 
 **And nothing can see any of it.** The one thing Obsidian offers for asking a
 vault a question is dataview, and this vault uses it in exactly one note out of
