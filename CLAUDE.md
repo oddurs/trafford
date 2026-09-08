@@ -410,17 +410,16 @@ It reports anything wider than the viewport, any text under 11px or 4.5:1, and
 how much of each section is air. Run it after touching `site.css` — the pass
 that added it found a page that scrolled sideways at 420px, a footer heading at
 3.06:1, and a card whose last line sat on its own border, none of which a
-5000-pixel-tall screenshot showed. Whether it belongs in CI is #0169.
+5000-pixel-tall screenshot showed.
 
 A note on what it does *not* check: anything inside a recording. Those are
 pictures of a terminal, drawn in the terminal's colours on the terminal's own
 ground, and checking them reported forty false failures and hid the one real
 one.
 
-||||||| d8dc0ed
-
-Whether it belongs in CI is #0169: a hundred megabytes of browser against a
-job that finishes in two minutes.
+Whether it belongs in CI is #0169: a hundred megabytes of browser against a job
+that finishes in two minutes, which is a real bill and not obviously earned
+yet.
 
 ## Testing a TUI
 
