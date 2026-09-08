@@ -123,6 +123,16 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
 - **A template's H1 is not a title.** Templater files carry
   `<% tp.file.title %>` there. Fall back to the filename, which is what
   Obsidian displays.
+- **The vault has already been configured, in Obsidian's words.** `Config::load`
+  reads `.obsidian/app.json` and fills in what `config.toml` did not mention —
+  where new notes go, what deleting means, whether prose is held to a measure.
+  The reader's own file always wins, which is why `Config::read` returns the set
+  of keys the TOML actually named: `#[serde(default)]` cannot tell
+  `new_note_dir = ""` from a key nobody wrote, and that difference *is* the
+  precedence rule. Only settings trafford has an answer for are read — reading
+  one and ignoring it would suggest a promise it is not keeping. Never write to
+  `.obsidian/`: it belongs to Obsidian, and two programs writing one settings
+  file is how settings get lost.
 - **Templates expand, but only the expressions this vault uses.**
   `vault::template` covers `tp.date.now` with an optional day offset,
   `tp.file.title` and `tp.file.cursor` — the whole inventory of the five

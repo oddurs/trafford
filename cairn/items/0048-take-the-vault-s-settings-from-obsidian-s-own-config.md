@@ -2,7 +2,7 @@
 id: 48
 title: Take the vault's settings from Obsidian's own config
 type: feature
-status: doing
+status: done
 milestone: v0.6
 assignee: Oddur Sigurdsson
 created: 2026-09-07
