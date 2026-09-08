@@ -36,11 +36,38 @@ Dataview was the ambitious one: the Dashboard note has four query blocks that do
 nothing here, and the vault index already holds paths, tags and frontmatter, so
 a useful subset is reachable. Four blocks in one note.
 
+## And what `.obsidian/` added
+
+Reading the vault's own Obsidian configuration on 2026-09-07 found four more
+features that are *enabled* and have nothing behind them. Enabled is not used,
+and the vault is where the difference shows.
+
+| Feature | Enabled | In the vault |
+| --- | --- | ---: |
+| Bookmarks | yes | 0 saved |
+| Tasks plugin queries | yes | 2 notes |
+| Graph view | yes | — |
+| Canvas, Sync, Publish | **no** | — |
+
+Bookmarks is the clearest: a core plugin, switched on, with an empty
+`bookmarks.json`. There is nothing to build for.
+
+Tasks queries are the interesting one, because they point the wrong way. Two
+notes contain a ```` ```tasks ```` block, and the vault has **917 task lines**.
+The tasks matter enormously and the queries over them do not — which is #0027,
+not this.
+
+Graph view stays refused on judgement rather than on counting: it demos well,
+it navigates badly, and a terminal is the worst place to try it.
+
+Canvas, Sync and Publish are switched off in the vault. That is an answer too.
+
 ## What this decides
 
-Neither is worth building yet. Both stay listed so the reasoning is findable,
-and both should be revisited if the vault changes shape — a vault that starts
-carrying screenshots is a different argument.
+None of these is worth building yet. They stay listed so the reasoning is
+findable, and each should be revisited if the vault changes shape — a vault that
+starts carrying screenshots is a different argument, and so is one that starts
+bookmarking things.
 
 ## Notes
 

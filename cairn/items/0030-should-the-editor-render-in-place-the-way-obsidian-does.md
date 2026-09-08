@@ -51,9 +51,33 @@ because reading and writing turn out to be genuinely separate activities.
 That is a question about how it feels in use over a week, not one that can be
 reasoned out from here.
 
+## What the vault said before the week was up
+
+The spike says the answer needs living with v0.5, because it is a question about
+how something feels. Reading `.obsidian/app.json` on 2026-09-07 found it already
+written down:
+
+```
+"livePreview": true,
+"defaultViewMode": "preview"
+```
+
+This vault opens every note in reading view, and edits in live preview. Both,
+with reading first.
+
+That is not the answer to "should preview keep existing" — it is the answer to
+the question behind it. Preview should keep existing *and be the default*, which
+is nearly where trafford already is. What is missing is the other half: an
+editor that renders while you type.
+
+So the option to build is the second one below, and the first is not in danger.
+It remains a large piece of work, and the reflow it causes is still the thing to
+be careful about. But it no longer needs a week of use to justify starting.
+
 ## Answer
 
-<!-- Filled in when the spike closes. -->
+<!-- Filled in when the spike closes. The evidence above narrows it; living
+     with v0.5 is still what settles how the reflow feels. -->
 
 ## Notes
 
