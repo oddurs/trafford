@@ -236,6 +236,11 @@ pub fn build(opts: &Options) -> Result<Built> {
     written.push((assets.js.clone(), SCRIPT.as_bytes().to_vec()));
     written.push((assets.font.clone(), FONT.to_vec()));
     written.push((assets.icon.clone(), favicon()?.into_bytes()));
+    written.push((
+        "design/index.html".into(),
+        specimen_page(&vault, &pages, &nav_source, &assets, opts)?.into_bytes(),
+    ));
+    page_paths.push("design/".into());
     written.push(("404.html".into(), not_found(&assets)?.into_bytes()));
     written.push(("pages.json".into(), manifest(&page_paths).into_bytes()));
     if let Some(origin) = &opts.site_url {
@@ -264,6 +269,49 @@ pub fn build(opts: &Options) -> Result<Built> {
         pages: page_paths,
         bytes,
     })
+}
+
+/// The design system, as a page.
+///
+/// Generated rather than written, from the same constants that generate the
+/// stylesheet — a specimen that can disagree with what the site uses is worse
+/// than none.
+fn specimen_page(
+    vault: &Vault,
+    pages: &BTreeMap<String, PageLink>,
+    nav_source: &[(&Note, &Meta)],
+    assets: &Assets,
+    opts: &Options,
+) -> Result<String> {
+    let ctx = Ctx {
+        vault,
+        pages,
+        depth: 1,
+    };
+    let body = crate::design::specimen(&crate::palette::swatches()?);
+    let nav: Vec<NavItem> = nav_source
+        .iter()
+        .map(|(n, nm)| NavItem {
+            title: n.title.clone(),
+            url: pages[&n.id].url.clone(),
+            section: nm.section.clone(),
+            current: false,
+        })
+        .collect();
+    let page = shell::Page {
+        title: "The design system".into(),
+        description:
+            "Every measurement trafford's site makes, generated from one source and drawn at the size it is."
+                .into(),
+        url: "design/".into(),
+        body,
+        toc: &[],
+        nav: &nav,
+        assets,
+        site_url: opts.site_url.as_deref(),
+        reload: opts.reload,
+    };
+    Ok(shell::doc(&ctx, &page))
 }
 
 /// Where a note lands. The landing page is the root; everything else is a
@@ -431,8 +479,9 @@ fn stylesheet(font: &str) -> Result<String> {
         .strip_prefix("assets/")
         .expect("the font is written under assets/");
     Ok(format!(
-        "{}\n{}",
+        "{}\n{}\n{}",
         crate::palette::stylesheet()?,
+        crate::design::stylesheet(),
         STYLE.replace(FONT_URL, relative)
     ))
 }
@@ -762,9 +811,16 @@ mod tests {
         ]);
         let out = TempDir::new();
         let built = build(&Options::new(src.path(), out.path().join("site"))).unwrap();
+        // The landing page, the note, and the specimen — which is a page of
+        // the site rather than a note in the vault, because its content is the
+        // design tokens and there is nothing for anyone to write.
         assert_eq!(
             built.pages,
-            vec!["".to_string(), "docs/getting-started/".to_string()]
+            vec![
+                "".to_string(),
+                "design/".to_string(),
+                "docs/getting-started/".to_string()
+            ]
         );
         assert!(out.path().join("site/index.html").exists());
         assert!(out

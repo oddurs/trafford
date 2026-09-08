@@ -7,9 +7,15 @@
 //! editor. `cairn/items/0164` is why that decided the shape of all of it.
 
 pub mod build;
+pub mod design;
 pub mod html;
 pub mod keys;
 pub mod palette;
 pub mod serve;
 pub mod shell;
 pub mod watch;
+
+/// A heading anchor, from the same slug rule the app and the vault use.
+pub fn vault_slug(text: &str) -> String {
+    trafford::vault::note::slug(text)
+}

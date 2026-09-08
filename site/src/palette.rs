@@ -272,6 +272,70 @@ fn lift(fg: (u8, u8, u8), bg: (u8, u8, u8), wanted: f64) -> (u8, u8, u8) {
     best
 }
 
+/// The palette, drawn, with the contrast every role actually achieves.
+///
+/// A hex value tells a reader nothing and a ratio tells them everything, which
+/// is the same argument `CLAUDE.md` makes about the terminal: look at colour,
+/// do not reason about it. The swatches take the current theme through
+/// `var(--…)`, so switching the theme in the header re-measures nothing and
+/// re-draws everything.
+pub fn swatches() -> Result<String> {
+    let roles: [(&str, &str, bool); 12] = [
+        ("bg", "the page", false),
+        ("surface", "a card, a code block", false),
+        ("fg", "body text", true),
+        ("muted", "secondary text", true),
+        ("faint", "labels and captions", true),
+        ("heading", "headings", true),
+        ("link", "a link", true),
+        ("accent", "a bar, a marker, the mark", false),
+        ("accent-text", "the same colour, used for words", true),
+        ("code", "inline code", true),
+        ("tag", "a #tag", true),
+        ("border", "every rule on the page", false),
+    ];
+    let (name, theme) = translatable()?
+        .into_iter()
+        .find(|(_, t)| t.dark)
+        .ok_or_else(|| anyhow!("no dark theme to describe"))?;
+    let bg = rgb(theme.bg)?;
+
+    let mut out = format!(
+        "<h2 id=\"colour\"><a class=\"anchor\" href=\"#colour\">Colour</a></h2>\n         <p>Generated from the application's own theme files — the ratios below are          measured against <code>--bg</code> and are what the {name} theme achieves.          A role used for words is lifted until it clears 4.5:1; a role used for a          shape needs 3:1, which is why <code>--accent</code> and          <code>--accent-text</code> are two roles rather than a compromise.</p>\n         <div class=\"swatches\">\n"
+    );
+    for (role, use_for, is_text) in roles {
+        let colour = match role {
+            "bg" => bg,
+            "surface" => rgb(theme.surface)?,
+            "fg" => lift(rgb(theme.fg)?, bg, AA),
+            "muted" => lift(rgb(theme.muted)?, bg, AA),
+            "faint" => lift(rgb(theme.faint)?, bg, AA),
+            "heading" => lift(rgb(theme.heading)?, bg, AA),
+            "link" => lift(rgb(theme.link)?, bg, AA),
+            "accent" => lift(rgb(theme.accent)?, bg, AA_LARGE),
+            "accent-text" => lift(rgb(theme.accent)?, bg, AA),
+            "code" => lift(rgb(theme.code)?, rgb(theme.surface)?, AA),
+            "tag" => lift(rgb(theme.tag)?, bg, AA),
+            _ => rgb(theme.border)?,
+        };
+        let ratio = contrast(colour, bg);
+        let against = if is_text {
+            format!("{ratio:.1}:1")
+        } else {
+            String::from("—")
+        };
+        let _ = writeln!(
+            out,
+            "<div class=\"swatch\">\
+             <span class=\"chip\" style=\"background: var(--{role})\"></span>\
+             <code>--{role}</code><span class=\"swatch-use\">{use_for}</span>\
+             <span class=\"swatch-ratio\">{against}</span></div>"
+        );
+    }
+    out.push_str("</div>\n");
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
