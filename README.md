@@ -205,6 +205,7 @@ autocommit_secs = 0      # commit after N seconds idle; 0 disables
 wrap = true              # fold long lines instead of scrolling sideways
 wrap_column = 0          # where to fold; 0 is the pane width
 reading_focus = true     # ctrl-e also hides the panes and holds a measure
+trash = "local"          # deleted notes go to .trash/; "none" unlinks them
 sidebar = true
 context_pane = true
 ```

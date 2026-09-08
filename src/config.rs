@@ -26,6 +26,9 @@ pub struct Config {
     /// Where to wrap. 0 means the pane width; a number holds prose to a
     /// readable measure on a wide terminal. Ignored when `wrap` is false.
     pub wrap_column: u16,
+    /// Where a deleted note goes: `local` moves it to `.trash/` inside the
+    /// vault, `none` unlinks it. Obsidian writes the same word in `app.json`.
+    pub trash: String,
     /// While previewing, hide the side panes and the line-number gutter and
     /// hold prose to a measure. Set false to keep the editor's chrome.
     pub reading_focus: bool,
@@ -52,6 +55,9 @@ impl Default for Config {
             // and prose is what this is for.
             wrap: true,
             wrap_column: 0,
+            // Deleting is not undoing. The vault this was built for is set
+            // to Obsidian's "local" and already has a `.trash/` in it.
+            trash: "local".into(),
             reading_focus: true,
             sidebar: true,
             sidebar_width: 32,
