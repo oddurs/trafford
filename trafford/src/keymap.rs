@@ -68,11 +68,19 @@ pub fn palette_items() -> Vec<PickItem> {
 
 impl App {
     fn note_items(&self) -> Vec<PickItem> {
+        // A note holding typing that has not reached the disk is marked, or
+        // parking it would be invisible — the reader would have no way to know
+        // where their unsaved work is.
+        let unsaved = self.unsaved_notes();
         self.vault
             .notes
             .iter()
             .map(|n| PickItem {
-                label: n.title.clone(),
+                label: if unsaved.contains(&n.id) {
+                    format!("● {}", n.title)
+                } else {
+                    n.title.clone()
+                },
                 detail: n.id.clone(),
                 key: n.id.clone(),
             })
@@ -622,14 +630,41 @@ impl App {
     }
 
     pub fn request_quit(&mut self) {
-        if self.editor.buf.dirty {
-            self.overlay = Some(Overlay::Confirm(Confirm {
-                kind: ConfirmKind::QuitDirty,
-                message: "This note has unsaved changes. Quit anyway?".into(),
-            }));
-        } else {
+        // Every note with typing in it, not only the one on screen: buffers are
+        // held while you are elsewhere, so quitting can lose work in a note you
+        // have not looked at for ten minutes.
+        let unsaved = self.unsaved_notes();
+        if unsaved.is_empty() {
             self.should_quit = true;
+            return;
         }
+        let message = match unsaved.len() {
+            1 => format!(
+                "{} has unsaved changes. Quit anyway?",
+                crate::mouse::short_name(&unsaved[0])
+            ),
+            n => {
+                let names: Vec<String> = unsaved
+                    .iter()
+                    .take(3)
+                    .map(|id| crate::mouse::short_name(id))
+                    .collect();
+                let rest = if n > 3 {
+                    format!(", and {} more", n - 3)
+                } else {
+                    String::new()
+                };
+                format!(
+                    "{} notes have unsaved changes ({}{rest}). Quit anyway?",
+                    n,
+                    names.join(", ")
+                )
+            }
+        };
+        self.overlay = Some(Overlay::Confirm(Confirm {
+            kind: ConfirmKind::QuitDirty,
+            message,
+        }));
     }
 
     // ---- routing -------------------------------------------------------

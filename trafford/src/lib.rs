@@ -22,6 +22,7 @@ pub mod mouse;
 pub mod tree;
 pub mod ui;
 pub mod vault;
+pub mod watch;
 
 /// Test helpers, shared with the workspace's other member.
 ///

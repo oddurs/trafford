@@ -1,11 +1,11 @@
 ---
-id: 54
+id: 154
 title: Search the docs from an index the build produces
 type: feature
 status: backlog
 milestone: later
 depends_on:
-- 66
+- 166
 created: 2026-09-07
 updated: 2026-09-07
 priority: p2
@@ -31,7 +31,7 @@ snippet per section — and ship a small script that queries it.
 
 - The index is a build product, so it cannot fall out of date
 - Section-level results, not page-level: a hit lands on the heading, which the
-  anchors from #0066 already provide
+  anchors from #0166 already provide
 - Loaded on first keystroke, not on page load; a reader who never searches pays
   nothing
 - Degrades to a link to a full index page with JavaScript off
@@ -68,5 +68,5 @@ immediately, and a reader who has not just met the program's main gesture on a
 web page. Either way it is one idea rather than two.
 
 Scoring should come from `Vault::search` rather than being reimplemented in
-JavaScript — which points at the same wasm seam as #0058 and is a reason to do
+JavaScript — which points at the same wasm seam as #0158 and is a reason to do
 that one first.

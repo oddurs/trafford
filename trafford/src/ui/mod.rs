@@ -267,16 +267,46 @@ fn draw_sidebar(f: &mut Frame, app: &App, area: Rect) {
                     }
                     crate::tree::Entry::Note { id, title } => {
                         let is_open = app.current.as_deref() == Some(id.as_str());
+                        // Instructions for an agent are not the reader's own
+                        // writing, and a sidebar that shows only titles cannot
+                        // say so on its own — this vault's `CLAUDE.md` is
+                        // titled "Notesnake - Obsidian Vault". They take the
+                        // marker column that is otherwise blank, and recede.
+                        let for_agents = crate::vault::note::is_agent_instructions(id);
                         spans.push(Span::styled(
-                            if is_open { "▌ " } else { "  " },
-                            Style::default().fg(theme.accent),
+                            match (is_open, for_agents) {
+                                (true, _) => "▌ ",
+                                (false, true) => "· ",
+                                (false, false) => "  ",
+                            },
+                            // The marker takes the title's colour, so the two
+                            // read as one signal rather than two faint ones.
+                            Style::default().fg(match (is_open, for_agents) {
+                                (true, _) => theme.accent,
+                                (false, true) => theme.muted,
+                                (false, false) => theme.faint,
+                            }),
                         ));
+                        // Named by their filename, not their heading. The
+                        // same rule a template already gets: an H1 that does
+                        // not name the file is not a title. This vault's
+                        // `CLAUDE.md` and an `AGENTS.md` beside it both open
+                        // "# Notesnake - Obsidian Vault", so by heading they
+                        // are indistinguishable from each other and from a
+                        // note.
+                        let shown = if for_agents {
+                            id.rsplit('/').next().unwrap_or(id)
+                        } else {
+                            title.as_str()
+                        };
                         spans.push(Span::styled(
-                            fit(title, width.saturating_sub(used + 2)),
+                            fit(shown, width.saturating_sub(used + 2)),
                             if selected {
                                 theme.selected()
                             } else if is_open {
                                 Style::default().fg(theme.accent)
+                            } else if for_agents {
+                                Style::default().fg(theme.muted)
                             } else {
                                 Style::default().fg(theme.fg)
                             },
@@ -2998,6 +3028,62 @@ mod tests {
         assert!(
             after <= before && before < end,
             "{before} should be inside the section at {after}..{end}"
+        );
+    }
+
+    #[test]
+    fn agent_instructions_are_told_apart_from_notes_in_the_tree() {
+        // Both of these open "# Notesnake - Obsidian Vault" in the vault this
+        // was built for, so by heading they are indistinguishable from each
+        // other and from a note.
+        let dir = TempDir::with_files(&[
+            (
+                "CLAUDE.md",
+                "# Notesnake - Obsidian Vault\n\nhow to work here\n",
+            ),
+            ("AGENTS.md", "# Notesnake - Obsidian Vault\n\nsame again\n"),
+            ("Dashboard.md", "# Dashboard\n\na real note\n"),
+        ]);
+        let vault = Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, Config::default());
+        app.sidebar_visible = true;
+        app.open_note("Dashboard.md", false);
+        let drawn = screen(&mut app, 60, 12);
+
+        // The sidebar's own column only: the context pane uses `·` as a
+        // separator and the pane header reads "3 notes · 21 words", so a loose
+        // search finds those too.
+        let sidebar: Vec<String> = drawn
+            .iter()
+            .map(|l| l.chars().take(19).collect::<String>())
+            .collect();
+        let joined = sidebar.join("\n");
+        assert!(joined.contains("CLAUDE.md"), "named by its file: {joined}");
+        assert!(joined.contains("AGENTS.md"), "and so is the other one");
+        assert!(
+            !joined.contains("Notesnake - Obsidian Vault"),
+            "not by a heading that names neither of them"
+        );
+        assert!(
+            joined.contains("Dashboard"),
+            "an ordinary note keeps its title"
+        );
+        // The marker column says so too, and only for them.
+        let marked = sidebar.iter().filter(|l| l.starts_with("│· ")).count();
+        assert_eq!(marked, 2, "one marker each, and none on the note: {joined}");
+    }
+
+    #[test]
+    fn an_open_agent_file_still_shows_as_the_open_one() {
+        let dir = TempDir::with_files(&[("CLAUDE.md", "# Instructions\n\nbody\n")]);
+        let vault = Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, Config::default());
+        app.sidebar_visible = true;
+        app.open_note("CLAUDE.md", false);
+        let joined = screen(&mut app, 60, 10).join("\n");
+        assert!(
+            joined.contains("▌ CLAUDE.md"),
+            "open wins over instructions"
         );
     }
 

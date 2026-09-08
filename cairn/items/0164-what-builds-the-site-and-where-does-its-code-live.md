@@ -1,5 +1,5 @@
 ---
-id: 64
+id: 164
 title: What builds the site, and where does its code live?
 type: spike
 status: done
@@ -69,7 +69,7 @@ parsers", and those are different sizes.
 - Count what the docs actually need: if the manual is fifteen pages of prose,
   a generator is cheap and A wins. If the docs are the vault, C is already
   written and A is a translation layer.
-- Time `mdbook serve` against the dev server in #0067. If both are instant,
+- Time `mdbook serve` against the dev server in #0167. If both are instant,
   the argument for A is only the theme, and the theme is the part being
   replaced.
 
@@ -118,15 +118,15 @@ worth doing on its own. The site is what made it necessary.
 
 ### Where the code lives
 
-`site/`, a workspace member (#0065), never a dependency of the binary. It is
+`site/`, a workspace member (#0165), never a dependency of the binary. It is
 not a general site generator and should not grow into one: it renders this
 project's docs and nothing else, which is what keeps it small enough to own.
 
 ### One reversal from the plan as written
 
 The dev server and the file watcher are hand-rolled on `std::net` and mtime
-polling rather than taking `notify` (#0046 said otherwise). A docs tree is
+polling rather than taking `notify` (#0146 said otherwise). A docs tree is
 dozens of files; polling it at 200ms is free and has no platform-specific
 behaviour to be surprised by. The site crate ends up with **no dependency the
 workspace did not already have**, which makes the "site tooling never ships in
-the binary" guarantee in #0065 trivially checkable rather than argued.
+the binary" guarantee in #0165 trivially checkable rather than argued.

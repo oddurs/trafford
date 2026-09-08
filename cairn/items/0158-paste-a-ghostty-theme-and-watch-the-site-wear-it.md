@@ -1,11 +1,11 @@
 ---
-id: 58
+id: 158
 title: Paste a Ghostty theme and watch the site wear it
 type: feature
 status: backlog
 milestone: v1.0
 depends_on:
-- 55
+- 155
 created: 2026-09-07
 updated: 2026-09-07
 priority: p2

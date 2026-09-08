@@ -1,10 +1,13 @@
 //! Noticing that a file changed, by asking.
 //!
-//! `notify` is the obvious answer and was the plan. Polling won on two counts:
-//! a docs tree is dozens of files, so a walk every 200 ms is free; and the
-//! site crate then adds *no* dependency the workspace did not already have,
-//! which turns "site tooling never ships in the binary" from an argument into
-//! something `cargo tree` shows.
+//! `notify` is the obvious answer and was the plan. Polling won on two counts
+//! at the time: a docs tree is dozens of files, so a walk every 200 ms is
+//! free; and the site crate then added no dependency the workspace did not
+//! already have.
+//!
+//! Half of that has since expired — the app took `notify` for watching the
+//! vault, so it is in the tree either way. What stands is the first half, and
+//! the paragraph below, which was always the better reason.
 //!
 //! It also sidesteps the part of filesystem events that actually costs time —
 //! an editor writing a file produces several of them, some write a temporary

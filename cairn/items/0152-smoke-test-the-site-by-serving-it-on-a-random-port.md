@@ -1,11 +1,11 @@
 ---
-id: 52
+id: 152
 title: Smoke-test the site by serving it on a random port
 type: chore
 status: done
 milestone: v1.0
 depends_on:
-- 67
+- 167
 created: 2026-09-07
 updated: 2026-09-07
 priority: p1
@@ -42,7 +42,7 @@ assert_eq!(res.status, 200);
 
 Because every server binds port 0, these run in parallel, in any number, on a
 machine already running two development servers. That is the payoff from
-#0067 and the reason a fixed test port would be a mistake even here.
+#0167 and the reason a fixed test port would be a mistake even here.
 
 ## Acceptance criteria
 

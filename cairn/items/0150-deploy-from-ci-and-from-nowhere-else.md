@@ -1,11 +1,11 @@
 ---
-id: 50
+id: 150
 title: Deploy from CI, and from nowhere else
 type: chore
 status: done
 milestone: v1.0
 depends_on:
-- 49
+- 149
 created: 2026-09-07
 updated: 2026-09-07
 priority: p0

@@ -6,7 +6,7 @@ status: backlog
 milestone: later
 created: 2026-09-07
 updated: 2026-09-07
-priority: p2
+priority: p1
 effort: m
 area: vault
 ---
@@ -33,6 +33,17 @@ the largest single body of structured data in the vault and nothing looks at it.
 - [ ] Toggling a task writes through to its file and re-indexes
 - [ ] Completed tasks are reachable but not in the way
 - [ ] Filterable by tag, so `#status/active` narrows it
+
+## What the vault's Obsidian config adds
+
+Filed from counting task lines alone. Reading `.obsidian/` on 2026-09-07 found
+`obsidian-tasks-plugin` installed and enabled — so this is not a use the reader
+might have, it is one they already have, in another program.
+
+It also found the shape of it. Two notes contain a ```` ```tasks ```` query
+block against **917 task lines**. Almost nobody writes the queries; everybody
+writes the tasks. So the thing to build is the collection and the view, not a
+query language over it.
 
 ## Notes
 

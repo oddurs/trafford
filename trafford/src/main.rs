@@ -1,4 +1,4 @@
-use trafford::{app, config, editor, git, ui, vault};
+use trafford::{app, config, editor, git, ui, vault, watch};
 
 use anyhow::{Context, Result};
 use app::App;
@@ -82,7 +82,15 @@ fn main() -> Result<()> {
 
     let vault = Vault::open(&root)?;
     let cfg = Config::load(&vault.root);
-    let app = App::new(vault, cfg);
+    let watching = watch::Watcher::start(&vault.root);
+    let mut app = App::new(vault, cfg);
+    match watching {
+        Ok(w) => app.watcher = Some(w),
+        // A vault that is not watched still works; it just needs `reindex`.
+        // Worth saying once rather than leaving the reader to wonder why
+        // nothing updates.
+        Err(err) => app.set_status(format!("not watching the vault: {err}")),
+    }
     run(app)
 }
 
@@ -275,6 +283,7 @@ fn event_loop(terminal: &mut Term, app: &mut App) -> Result<()> {
         }
 
         app.poll_assistant();
+        app.absorb_disk_changes();
         app.tick();
 
         if app.should_quit {

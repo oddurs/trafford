@@ -87,6 +87,23 @@ check block feat/x 'grep -r "git push --force" .'  "the words, inside a search s
 check block feat/x 'git checkout ./src/ui/mod.rs' "a path that starts with ./"
 
 echo
+echo "no conflict markers anywhere in the tree"
+# CLAUDE.md carried seven of these on main for three commits. Nothing caught
+# it: the file is not compiled, linted or tested, so fmt/clippy/test — the whole
+# gate — is blind to it. A grep is not clever, and it is the only thing that
+# would have noticed.
+markers=$(cd "$here/../.." && git grep -n -E '^(<<<<<<< |>>>>>>> |\|\|\|\|\|\|\| |={7}$)' \
+  -- ':!*.test.sh' 2>/dev/null || true)
+if [ -n "$markers" ]; then
+  fail=$((fail + 1))
+  printf '  FAIL  a merge left conflict markers behind:\n'
+  printf '%s\n' "$markers" | head -8 | sed 's/^/        /'
+else
+  pass=$((pass + 1))
+  printf '  ok    no merge left conflict markers behind\n'
+fi
+
+echo
 echo "the wiring, which is where it actually broke"
 # Every case above drives the script directly, so not one of them would have
 # caught the original failure: the script was correct and never ran. What broke

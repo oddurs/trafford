@@ -1,11 +1,11 @@
 ---
-id: 65
+id: 165
 title: Make the crate a workspace so site tooling never ships in the binary
 type: chore
 status: done
 milestone: v1.0
 depends_on:
-- 64
+- 164
 created: 2026-09-07
 updated: 2026-09-07
 priority: p0

@@ -1,11 +1,11 @@
 ---
-id: 67
+id: 167
 title: The development server binds port zero
 type: feature
 status: done
 milestone: v1.0
 depends_on:
-- 65
+- 165
 created: 2026-09-07
 updated: 2026-09-07
 priority: p0
@@ -75,12 +75,12 @@ what the port is.
 Serve from `std::net` rather than adding a web framework. This project shells
 out to `git` instead of taking `git2`, and uses `ureq` instead of `reqwest`;
 a static file server for `GET` and `HEAD` over loopback is a couple of hundred
-lines, and it lives in `site/`, which #0065 keeps out of the shipped binary.
+lines, and it lives in `site/`, which #0165 keeps out of the shipped binary.
 Correct MIME types, `Range` support for the video an asciinema cast might
 become, and byte-exact `Content-Length` — a truncated response looks like a
 generator bug and costs an hour to find.
 
-This is the item that makes #0052 possible: a smoke test can boot a real
+This is the item that makes #0152 possible: a smoke test can boot a real
 server per test, in parallel, precisely because no test names a port.
 
 ## What changed on the way
