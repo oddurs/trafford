@@ -92,12 +92,23 @@ body > * {
   /* The links sit beside the wordmark, not across the page from it. That one
      difference is most of what separates a product page from a docs page. */
   gap: var(--space-6);
-  padding: var(--space-4) var(--space-gutter);
+  padding-block: var(--space-3);
   border-bottom: 1px solid var(--border);
+  /* Translucent, so a section band sliding under the bar is visible as motion
+     rather than disappearing at a hard edge. `--bg` is the fallback where
+     `color-mix` or the blur is not available, and it is not a worse bar — only
+     a more opaque one. */
   background: var(--bg);
   position: sticky;
   top: 0;
   z-index: 5;
+}
+
+@supports (backdrop-filter: blur(1px)) and (background: color-mix(in srgb, red, blue)) {
+  .top {
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter: blur(10px);
+  }
 }
 
 .brand {
@@ -121,26 +132,44 @@ body > * {
 .wordmark {
   font-weight: 700;
   font-size: var(--text-md);
-  letter-spacing: -0.03em;
+  letter-spacing: var(--tracking-tight);
 }
 
+/* The scale calls `--text-sm` "navigation" and the bar was drawing it two
+   steps down, at the size meant for chips. */
 .top-nav {
   display: flex;
-  gap: var(--space-5);
-  font-size: var(--text-xs);
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
 }
 
 .theme-toggle {
   margin-left: auto;
 }
 
+/* A link is a target, so it has a target's padding and a shape to land on.
+   Bare words with 24px between them are a smaller thing to hit than they look,
+   and nothing tells you which one you are on. */
 .top-nav a {
   color: var(--muted);
   text-decoration: none;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  transition: color var(--motion-fast) var(--ease),
+    background-color var(--motion-fast) var(--ease);
 }
 
 .top-nav a:hover {
   color: var(--fg);
+  background: var(--surface);
+}
+
+/* Where you are, said once. The page it points at is the one you are reading,
+   so it is the only link in the bar that is not an invitation. */
+.top-nav a[aria-current="page"] {
+  color: var(--heading);
+  background: var(--surface);
 }
 
 .theme-toggle {
@@ -166,10 +195,8 @@ body > * {
   display: grid;
   grid-template-columns: var(--sidebar) minmax(0, 1fr) var(--rail);
   gap: var(--space-6);
-  max-width: var(--page);
   width: 100%;
-  margin: 0 auto;
-  padding: var(--space-7) var(--space-gutter) var(--space-8);
+  padding-block: var(--space-7) var(--space-8);
 }
 
 /* A page with no headings to list still reserved fourteen rems for the list.
@@ -188,11 +215,28 @@ body > * {
 .sidebar,
 .rail {
   position: sticky;
+  /* Clear of the bar, which is now a known height rather than whatever the
+     padding happened to make it. */
   top: 4.5rem;
   align-self: start;
   max-height: calc(100vh - 6rem);
   overflow-y: auto;
   font-size: var(--text-sm);
+}
+
+/* Three columns of text with nothing between them read as one ragged column,
+   so the navigation gets an edge — the same hairline the program draws between
+   its own panes.
+   
+   One line, not two. The table of contents is an aside whose length is
+   whatever the page happens to have, and a rule beside it stops wherever the
+   list does, which reads as a line that failed to finish rather than as the
+   edge of a column. The navigation is the same on every page and can be given
+   the height to be an edge. */
+.sidebar {
+  border-right: var(--rule);
+  padding-right: var(--space-5);
+  min-height: calc(100vh - 6rem);
 }
 
 .nav,
@@ -228,7 +272,7 @@ body > * {
 .toc-title {
   font-family: var(--mono);
   font-size: var(--text-3xs);
-  letter-spacing: 0.09em;
+  letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--faint);
   margin: var(--space-5) 0 var(--space-2);
@@ -257,7 +301,7 @@ body > * {
 .prose h4 {
   color: var(--heading);
   line-height: var(--leading-snug);
-  letter-spacing: -0.015em;
+  letter-spacing: var(--tracking-snug);
   margin: var(--space-6) 0 var(--space-3);
 }
 
@@ -433,7 +477,7 @@ pre code {
 .callout-title {
   font-family: var(--mono);
   font-size: var(--text-2xs);
-  letter-spacing: 0.07em;
+  letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--accent-text);
   margin: 0 0 var(--space-2);
@@ -502,7 +546,7 @@ td {
 th {
   font-family: var(--mono);
   font-size: var(--text-2xs);
-  letter-spacing: 0.06em;
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
   color: var(--faint);
 }
@@ -609,7 +653,7 @@ th.center {
   top: 0.75rem;
   font: inherit;
   font-size: var(--text-2xs);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--tracking-wide);
   color: var(--muted);
   background: var(--bg);
   border: var(--rule);
@@ -683,12 +727,31 @@ figcaption {
    product sold to the same kind of person — but wearing this project's
    clothes: one hairline, one accent, and monospace throughout. */
 
-.landing {
+/* `main`, not `<html>` — which also carries this class, so the rule that was
+   meant to centre one column was boxing the whole document. The header and the
+   footer are its siblings, so both were inset by the same amount: the sticky
+   bar's rule stopped short of the viewport on either side, content scrolled
+   through the gap, and `--page` could never be reached because the gutter was
+   applied twice. */
+main.landing {
   flex: 1;
   width: 100%;
-  max-width: var(--page);
-  margin: 0 auto;
-  padding: 0 var(--space-gutter) 0;
+}
+
+/* Every band on the page runs the full width and holds its content in the same
+   column.
+   
+   `max(gutter, (100% - page) / 2)` is that column without an extra element per
+   band: the gutter on a narrow screen, and whatever centres `--page` on a wide
+   one. It is one declaration rather than the `max-width` / `margin: auto` /
+   `padding` trio repeated at every band, which is how the trio came to be
+   written on `<html>` in the first place. */
+.top,
+.hero,
+.showcase,
+.bottom,
+.layout {
+  padding-inline: max(var(--space-gutter), (100% - var(--page)) / 2);
 }
 
 /* ── Hero ────────────────────────────────────────────────────────────────── */
@@ -696,14 +759,17 @@ figcaption {
 /* Stacked, not split. The claim is the biggest thing on the page and the
    program runs the full width beneath it — a picture beside a paragraph is a
    feature list, a picture under a claim is an argument. */
+/* `padding-block`, not the shorthand: the band inset above is `padding-inline`
+   and a shorthand written afterwards resets it, which put the claim hard
+   against the left edge of the window. */
 .hero {
-  padding: var(--space-section) 0 0;
+  padding-block: var(--space-section) 0;
 }
 
 .hero h1 {
   font-size: var(--text-4xl);
   line-height: var(--leading-tight);
-  letter-spacing: -0.045em;
+  letter-spacing: var(--tracking-display);
   margin: 0;
   color: var(--heading);
   max-width: 18ch;
@@ -771,7 +837,7 @@ figcaption {
   margin: var(--space-5) 0 0;
   font-size: var(--text-2xs);
   color: var(--faint);
-  letter-spacing: 0.01em;
+  letter-spacing: var(--tracking-wide);
 }
 
 .hero .secondary {
@@ -802,31 +868,59 @@ figcaption {
   counter-reset: section;
 }
 
+/* A band, not a block: it runs the full width and the inset above holds its
+   content in the page column, so a section can change ground without the
+   change stopping at a margin. */
 .showcase {
   counter-increment: section;
   position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0 var(--space-5);
-  padding: var(--space-section) 0;
+  padding-block: var(--space-section);
+}
+
+/* Alternating ground, one step of the elevation the palette already has:
+   `--bg` is the page, `--surface` is a band on it, `--overlay` is a card on a
+   band. Three roles that already exist rather than a fourth invented for the
+   landing page — and every theme answers for all three, so this costs nothing
+   in Paper that it does not cost in Gotham.
+   
+   It is deliberately a small step. In gotham the two differ by two points of
+   luminance, which reads as a change of air rather than as a stripe. */
+.showcase:nth-of-type(even) {
+  background: var(--surface);
+}
+
+/* A seam where two bands meet, for the case the tint is too quiet to read as
+   a division on its own — which in the dark themes it very nearly is. */
+.showcase + .showcase {
   border-top: var(--rule);
 }
 
-.showcase:first-of-type {
-  border-top: none;
+/* A card on a tinted band steps up rather than disappearing into it. */
+.showcase:nth-of-type(even) > .callout {
+  background: var(--overlay);
 }
 
+/* The editor numbers its lines down the left; the page numbers its sections in
+   the same place. It sits in the band's own inset — the margin the content
+   column is centred by — rather than outside a box, which is what it used to
+   do back when `<html>` was providing a margin by accident. */
 .showcase::before {
   content: counter(section, decimal-leading-zero);
   position: absolute;
-  left: -3.25rem;
-  top: clamp(3.5rem, 8vw, 6rem);
+  left: calc((100% - var(--page)) / 2 - var(--space-6));
+  top: var(--space-section);
   font-size: var(--text-3xs);
-  letter-spacing: 0.08em;
+  letter-spacing: var(--tracking-label);
   color: var(--faint);
 }
 
-@media (max-width: 78rem) {
+/* Only where that inset is wide enough to hold it. `--page` is 78rem, so at
+   88rem there are two clear rems either side and the number reads as a spine;
+   below it there is nothing to sit in and it would crowd the text. */
+@media (max-width: 88rem) {
   .showcase::before {
     display: none;
   }
@@ -841,7 +935,7 @@ figcaption {
   margin: 0;
   font-size: var(--text-3xl);
   line-height: var(--leading-tight);
-  letter-spacing: -0.035em;
+  letter-spacing: var(--tracking-tight);
 }
 
 .showcase > p,
@@ -879,7 +973,7 @@ figcaption {
 .showcase > .callout .callout-title {
   color: var(--heading);
   font-size: var(--text-md);
-  letter-spacing: -0.02em;
+  letter-spacing: var(--tracking-snug);
   text-transform: none;
   margin: 0 0 var(--space-3);
 }
@@ -945,7 +1039,7 @@ figcaption {
   text-align: center;
   color: var(--muted);
   font-size: var(--text-xs);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--tracking-wide);
 }
 
 /* ── Arrival ─────────────────────────────────────────────────────────────── */
@@ -975,6 +1069,18 @@ figcaption {
   justify-items: center;
   text-align: center;
   border-top: var(--rule);
+  /* Back to the page's own ground, whichever band the alternation would have
+     given it. The footer is a tinted band, and a tinted closing ran straight
+     into it — the last thing the page says and the sitemap under it read as
+     one block. */
+  background: var(--bg);
+  padding-block: var(--space-9);
+}
+
+/* The closing has no number: it is the page finishing rather than another
+   section of it. */
+.showcase.closing::before {
+  content: none;
 }
 
 .showcase.closing > h2 {
@@ -1000,8 +1106,10 @@ figcaption {
   font-family: var(--mono);
 }
 
+/* The scale's display step, not a number picked for this one page — which is
+   what `4rem` was, and it sat a fifth outside the step above it. */
 .notfound h1 {
-  font-size: 4rem;
+  font-size: var(--text-4xl);
   margin: 0;
   color: var(--accent);
 }
@@ -1171,16 +1279,15 @@ table.tokens th:last-child {
 
 .bottom {
   border-top: var(--rule);
-  padding: var(--space-8) var(--space-gutter);
+  padding-block: var(--space-8);
   margin-top: auto;
+  background: var(--surface);
 }
 
 .foot-grid {
   display: grid;
   grid-template-columns: 2fr repeat(3, minmax(0, 1fr));
   gap: var(--space-7) var(--space-5);
-  max-width: var(--page);
-  margin: 0 auto;
 }
 
 .foot-brand .brand {
@@ -1201,7 +1308,7 @@ table.tokens th:last-child {
 .foot-title {
   color: var(--muted);
   font-size: var(--text-3xs);
-  letter-spacing: 0.09em;
+  letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   margin: 0 0 var(--space-3);
 }

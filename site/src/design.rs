@@ -192,6 +192,41 @@ pub const MOTION: &[Token] = &[
 ];
 
 /// Line height and the widths a page is built from.
+/// Tracking, which is a function of size rather than of taste.
+///
+/// The stylesheet had nine values between -0.045em and 0.09em, each chosen on
+/// its own line and none of them a system: `.callout-title` at 0.07em and `th`
+/// at 0.06em were the same idea written twice. Large type needs to be pulled
+/// in and small type needs to be opened up, so these five steps run in that
+/// order and a rule picks by size, not by feel.
+pub const TRACKING: &[Token] = &[
+    Token {
+        name: "tracking-display",
+        value: "-0.045em",
+        use_for: "the claim, which is the only 4xl on a page",
+    },
+    Token {
+        name: "tracking-tight",
+        value: "-0.03em",
+        use_for: "a section heading, and the wordmark",
+    },
+    Token {
+        name: "tracking-snug",
+        value: "-0.015em",
+        use_for: "a card title, an h4",
+    },
+    Token {
+        name: "tracking-wide",
+        value: "0.05em",
+        use_for: "a control, a caption, a table head",
+    },
+    Token {
+        name: "tracking-label",
+        value: "0.09em",
+        use_for: "an eyebrow — the smallest type on the page",
+    },
+];
+
 pub const LAYOUT: &[Token] = &[
     Token {
         name: "leading-tight",
@@ -215,8 +250,8 @@ pub const LAYOUT: &[Token] = &[
     },
     Token {
         name: "page",
-        value: "84rem",
-        use_for: "the widest the page gets",
+        value: "78rem",
+        use_for: "the widest the content column gets",
     },
     Token {
         name: "sidebar",
@@ -242,6 +277,11 @@ pub fn groups() -> Vec<(&'static str, &'static str, &'static [Token])> {
             "Space",
             "A four-pixel grid, doubling once it stops being useful.",
             SPACE,
+        ),
+        (
+            "Tracking",
+            "Five steps, picked by size: large type pulls in, small type opens up.",
+            TRACKING,
         ),
         ("Radius", "Three corners: a chip, a panel, a card.", RADIUS),
         (
@@ -380,15 +420,32 @@ mod tests {
     /// cannot see — which is what sixty of them looked like before this.
     #[test]
     fn no_raw_values_for_what_the_system_owns() {
-        let owned = [
-            ("font-size", &["var(--text-", "inherit", "em", "%"][..]),
+        // A property, the token prefixes that answer for it, the bare words it
+        // may still be written with, and whether an `em` is one of them.
+        //
+        // `em` is not a step of any scale — it means "relative to the text I am
+        // inside", which is what a `<kbd>` or an inline `<code>` needs and what
+        // a rem scale cannot express: the chip has to grow with the sentence
+        // around it, not with the root. Tracking gets no such exemption, since
+        // an em is the only unit it is ever written in and nine ad-hoc ems are
+        // exactly what the scale replaced.
+        let owned: [(&str, &[&str], &[&str], bool); 6] = [
+            ("font-size", &["var(--text-"], &["inherit"], true),
             (
                 "border-radius",
-                &["var(--radius-", "0", "50%", "999px", "%"][..],
+                &["var(--radius-"],
+                &["0", "50%", "999px"],
+                false,
             ),
-            ("gap", &["var(--space-", "0", "1px"][..]),
-            ("padding", &["var(--space-", "0"][..]),
-            ("margin", &["var(--space-", "0", "auto"][..]),
+            ("gap", &["var(--space-"], &["0", "1px"], false),
+            ("padding", &["var(--space-"], &["0"], true),
+            ("margin", &["var(--space-"], &["0", "auto"], false),
+            (
+                "letter-spacing",
+                &["var(--tracking-"],
+                &["normal", "0"],
+                false,
+            ),
         ];
         let mut wrong = Vec::new();
         for (number, line) in CSS.lines().enumerate() {
@@ -401,16 +458,30 @@ mod tests {
             };
             let property = property.trim();
             let value = value.trim().trim_end_matches(';');
-            for (owner, allowed) in owned {
+            for (owner, tokens, words, relative) in owned {
                 // `padding-left` is owned by `padding`; `font-family` is not
                 // owned by `font-size`.
                 if property != owner && !property.starts_with(&format!("{owner}-")) {
                     continue;
                 }
-                if allowed.iter().any(|ok| value.contains(ok)) {
-                    continue;
+                // A value doing arithmetic — `max(…)`, `calc(…)` — is checked
+                // for naming a token at all rather than taken apart, because
+                // the constants inside one are the arithmetic and not
+                // measurements the scale could own.
+                let ok = if value.contains('(') {
+                    tokens.iter().any(|t| value.contains(t))
+                } else {
+                    // Every part, so `margin: 0 auto` passes and
+                    // `margin: 0 12px` does not.
+                    value.split_whitespace().all(|part| {
+                        words.contains(&part)
+                            || tokens.iter().any(|t| part.starts_with(t))
+                            || (relative && part.ends_with("em") && !part.ends_with("rem"))
+                    })
+                };
+                if !ok {
+                    wrong.push(format!("  site.css:{}: {property}: {value}", number + 1));
                 }
-                wrong.push(format!("  site.css:{}: {property}: {value}", number + 1));
             }
         }
         assert!(
