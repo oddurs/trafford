@@ -2,8 +2,9 @@
 id: 58
 title: Is lexical similarity enough, or does this need embeddings?
 type: spike
-status: planned
+status: done
 milestone: v0.7
+assignee: Oddur Sigurdsson
 depends_on:
 - 56
 created: 2026-09-08
@@ -71,3 +72,51 @@ and one note respectively — and both were things instinct said to build.
 
 <!-- Filled in when the spike closes. A spike that closes with no answer
      recorded was a waste of the time it took. -->
+
+## Answer
+
+**Lexical is enough. Embeddings are not bought.**
+
+Built option (a): BM25 over the prose, plus two signals a vault has that a
+corpus of documents does not — notes sharing a tag, and notes cited together by
+a third. Frontmatter and fenced code are excluded from the prose, or every note
+recording a `created` date would look alike and any two Rust snippets would
+share `fn`, `let` and `impl`.
+
+Run over the 66 notes with no outgoing link, taking the first 20:
+
+| | |
+| --- | ---: |
+| orphans with no candidate at all | **0** of 20 |
+| top suggestion in the same project | **18** of 20 |
+| a same-project note in the top three | **20** of 20 |
+| 20 notes scored | **30 ms** |
+
+Same-project is a deliberately conservative proxy for "a reader would accept
+it": a good cross-folder suggestion counts against the score. Both notes that
+missed by that measure — `04-valerie/03-regression-detection` and
+`07-regulated-industries`, each suggesting `ai-ml/ai-ml-learning-roadmap` — are
+suggestions a reader would probably take, since the project is an AI product
+and the target is AI research. So 18/20 is a floor, not a ceiling.
+
+The judge here is me, not the reader, which is the honest limit of this
+measurement.
+
+### The first run was wrong in a way worth recording
+
+A flat weight per shared tag put `#status/active` and `#type/reference` in the
+reason for nearly every pair. They are on 62 and 92 of 148 notes: they say
+"this is a vault", not "these two belong together". Tags are now scored by the
+same IDF as words, and a tag worn by most of the vault is not named as a reason
+at all. Rarity matters as much for a hand-applied tag as for a word.
+
+### What this does not settle
+
+Retrieval for 0060 is a different question with a different failure mode. This
+measured *suggestion*, where the reader picks from a list of five and a wrong
+entry costs a glance. An answer assembled from retrieved passages cannot be
+skimmed the same way, and if grounding turns out to need paraphrase matching,
+this reopens with that evidence rather than with an intuition.
+
+The harness stays in `src/vault/similar.rs` as an `#[ignore]`d test, so the
+question can be asked again when the vault changes shape.

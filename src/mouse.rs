@@ -261,6 +261,14 @@ impl App {
                     target.clone(),
                     vec![item("Write this note…", A::CreateNote(target))],
                 ),
+                Some(ContextTarget::Related(id)) => (
+                    short_name(&id),
+                    vec![
+                        item("Open", A::OpenNote(id.clone())),
+                        item("Link to it from here", A::AcceptRelated(id.clone())),
+                        item("Not related", A::DeclineRelated(id)),
+                    ],
+                ),
                 Some(ContextTarget::Tag(tag)) => (
                     format!("#{tag}"),
                     vec![item("Filter the vault by this", A::FilterByTag(tag))],
@@ -696,6 +704,9 @@ impl App {
             ContextTarget::Unwritten(target) => {
                 self.prompt_new_note_from_link(&target);
             }
+            // A click opens it; linking and dismissing are on the menu, where
+            // an action that writes to the note belongs.
+            ContextTarget::Related(id) => self.open_note(&id, true),
             ContextTarget::Tag(tag) => self.filter_by_tag(&tag),
         }
     }

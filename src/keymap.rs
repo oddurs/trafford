@@ -463,6 +463,8 @@ impl App {
     pub fn run_menu_action(&mut self, action: crate::app::MenuAction) {
         use crate::app::MenuAction as A;
         match action {
+            A::AcceptRelated(id) => self.accept_related(&id),
+            A::DeclineRelated(id) => self.decline_related(&id),
             A::Command(name) => self.run_command(name),
             A::OpenNote(id) => self.open_note(&id, true),
             A::OpenNoteAt(id, line) => {

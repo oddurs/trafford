@@ -14,6 +14,16 @@ use std::time::{Duration, Instant};
 /// enough that the list stays readable in an empty search box.
 const RECENT_QUERIES: usize = 8;
 
+/// How many related notes the context pane offers. Five is what the spike
+/// judged; more turns a suggestion into a list to work through.
+const RELATED_SHOWN: usize = 5;
+
+/// One suggestion, in the form the sidecar remembers it. Directional: turning
+/// down A→B does not decide anything about B→A.
+fn declined_key(from: &str, to: &str) -> String {
+    format!("{from}\t{to}")
+}
+
 // ---------------------------------------------------------------------------
 // Fuzzy matching
 // ---------------------------------------------------------------------------
@@ -213,6 +223,10 @@ pub struct Confirm {
 /// the rest need the thing that was clicked, which a command name cannot carry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MenuAction {
+    /// Write a `[[link]]` to a suggested note into the open one.
+    AcceptRelated(String),
+    /// Turn a suggestion down, so it is not offered again.
+    DeclineRelated(String),
     Command(&'static str),
     OpenNote(String),
     OpenNoteAt(String, usize),
@@ -713,6 +727,8 @@ pub enum ContextTarget {
     Backlink(String, usize),
     /// An unwritten note, offered for creation.
     Unwritten(String),
+    /// A note this one might belong with, which nobody has linked yet.
+    Related(String),
     /// A tag, which filters the vault the way the sidebar's tags tab does.
     /// Tags are clickable wherever they are drawn, and moving them out of the
     /// note must not make the context pane the one place they are not.
@@ -836,6 +852,18 @@ pub struct App {
     /// Queries worth offering back, most recent first. Derived and disposable:
     /// losing them costs a reader some retyping and nothing else.
     pub recent_queries: Vec<String>,
+    /// The vault's prose, tokenised. 15ms to build over 148 notes and 1.6ms
+    /// per lookup, both measured — so it is built once and dropped when the
+    /// vault changes, never per draw, where 15ms is a whole frame.
+    corpus: Option<crate::vault::similar::Corpus>,
+    /// What the open note is like, computed when it opens rather than drawn
+    /// from scratch each frame.
+    pub related: Vec<crate::vault::similar::Similar>,
+    /// Suggestions this reader turned down, as `from\tto`. Kept in the sidecar,
+    /// never in the note: declining is trafford's opinion about the vault, not
+    /// something the author wrote, and it must not survive into a file
+    /// Obsidian reads.
+    pub declined: std::collections::HashSet<String>,
     /// Where the current theme came from, for the status line and the picker.
     pub theme_source: String,
     /// The theme in use before the picker started previewing, so esc restores.
@@ -851,9 +879,9 @@ impl App {
             .unwrap_or_default();
         let (theme, theme_source) = Theme::resolve(&config.theme, &vault.root);
         let root = vault.root.clone();
-        let recent_queries = crate::sidecar::Sidecar::beside(&root)
-            .load("queries")
-            .unwrap_or_default();
+        let side = crate::sidecar::Sidecar::beside(&root);
+        let recent_queries = side.load("queries").unwrap_or_default();
+        let declined = side.load("declined").unwrap_or_default();
         let mut app = App {
             vault,
             repo,
@@ -894,6 +922,9 @@ impl App {
             tag_filter: None,
             sidecar: crate::sidecar::Sidecar::beside(&root),
             recent_queries,
+            corpus: None,
+            related: Vec::new(),
+            declined,
             theme_source,
             theme_before_preview: None,
             config,
@@ -986,6 +1017,77 @@ impl App {
         }
     }
 
+    /// Work out what the open note is like.
+    ///
+    /// Called when a note opens and when the vault changes, never per draw —
+    /// the corpus costs 15ms to build and a frame is 16.
+    pub fn refresh_related(&mut self) {
+        self.related.clear();
+        let Some(id) = self.current.clone() else {
+            return;
+        };
+        if self.corpus.is_none() {
+            self.corpus = Some(crate::vault::similar::Corpus::of(&self.vault));
+        }
+        let Some(corpus) = &self.corpus else { return };
+        self.related = crate::vault::similar::to(&self.vault, corpus, &id, RELATED_SHOWN + 4)
+            .into_iter()
+            .filter(|s| !self.declined.contains(&declined_key(&id, &s.id)))
+            .take(RELATED_SHOWN)
+            .collect();
+    }
+
+    /// The vault changed underneath, so what was tokenised no longer describes
+    /// it. Dropped rather than patched: it is derived, and rebuilding is 15ms.
+    pub fn forget_corpus(&mut self) {
+        self.corpus = None;
+    }
+
+    /// Turn a suggestion down. Remembered in the sidecar so it does not come
+    /// back, and nowhere near the note.
+    pub fn decline_related(&mut self, other: &str) {
+        let Some(id) = self.current.clone() else {
+            return;
+        };
+        self.declined.insert(declined_key(&id, other));
+        let _ = self.sidecar.store("declined", &self.declined);
+        self.related.retain(|s| s.id != other);
+        self.set_status(format!("not suggesting {other} again"));
+    }
+
+    /// Accept a suggestion: write a real `[[wikilink]]` into the note.
+    ///
+    /// Writing to the file is the point. Keeping the relationship in the
+    /// sidecar would produce a vault that is only well-connected inside
+    /// trafford — a suggestion has to become something Obsidian, `git diff` and
+    /// the next reader can all see, or it is not a link, it is a private
+    /// opinion.
+    ///
+    /// It lands in the buffer, so it is undoable like anything typed and goes
+    /// out through `save` and its conflict guard.
+    pub fn accept_related(&mut self, other: &str) {
+        let Some(id) = self.current.clone() else {
+            return;
+        };
+        let name = other.strip_suffix(".md").unwrap_or(other).to_string();
+        let buf = &mut self.editor.buf;
+        // One checkpoint for the whole insertion, so a single undo takes it
+        // back rather than leaving a stray blank line behind.
+        buf.checkpoint();
+        // Its own line at the end, where it is visible and easy to move. Any
+        // cleverer placement would be guessing at a structure the note may not
+        // have.
+        if buf.lines.last().is_some_and(|l| !l.trim().is_empty()) {
+            buf.lines.push(String::new());
+        }
+        buf.lines.push(format!("[[{name}]]"));
+        buf.dirty = true;
+        self.related.retain(|s| s.id != other);
+        self.declined.insert(declined_key(&id, other));
+        let _ = self.sidecar.store("declined", &self.declined);
+        self.set_status(format!("linked to {name} — ctrl-s to save"));
+    }
+
     /// Remember a query the reader got an answer out of.
     ///
     /// Only on the way out, and only when it found something: a query is
@@ -1072,6 +1174,7 @@ impl App {
                 // Keep the sidebar pointing at whatever is open, opening the
                 // directories needed to show it.
                 self.reveal_in_tree(id);
+                self.refresh_related();
             }
             Err(err) => self.set_status(format!("cannot open {id}: {err}")),
         }
@@ -1196,6 +1299,8 @@ impl App {
         match std::fs::write(&path, self.editor.buf.text()) {
             Ok(()) => {
                 let _ = self.vault.rescan();
+                self.forget_corpus();
+                self.forget_corpus();
                 self.open_note(&rel, true);
                 self.set_status(format!("kept both — yours is now {rel}"));
                 self.refresh_git();
@@ -1437,6 +1542,7 @@ impl App {
         // appeared, vanished or moved, because a patch cannot express that.
         if structural {
             let _ = self.vault.rescan();
+            self.forget_corpus();
         } else {
             for path in &paths {
                 if let Some(id) = self.vault.id_for_path(path) {
@@ -1757,6 +1863,8 @@ impl App {
         match outcome {
             Ok(where_it_went) => {
                 let _ = self.vault.rescan();
+                self.forget_corpus();
+                self.forget_corpus();
                 if self.current.as_deref() == Some(id) {
                     self.current = None;
                     self.editor.load(Buffer::from_str(""));
@@ -1998,6 +2106,81 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn linked_vault() -> (crate::testing::TempDir, Vault) {
+        let dir = crate::testing::TempDir::with_files(&[
+            ("a.md", "# A\nkleene recursion theorem fixed point\n"),
+            ("b.md", "# B\nkleene recursion theorem and its proof\n"),
+        ]);
+        let vault = Vault::open(dir.path()).unwrap();
+        (dir, vault)
+    }
+
+    /// Accepting writes a real wikilink into the note. Keeping the
+    /// relationship in the sidecar would produce a vault that is only
+    /// well-connected inside trafford.
+    #[test]
+    fn accepting_a_suggestion_writes_a_link_obsidian_can_see() {
+        let (_d, vault) = linked_vault();
+        let mut app = App::new(vault, Config::default());
+        app.open_note("a.md", true);
+        assert_eq!(app.related.first().map(|s| s.id.as_str()), Some("b.md"));
+
+        app.accept_related("b.md");
+        let text = app.editor.buf.lines.join("\n");
+        assert!(text.contains("[[b]]"), "{text:?}");
+        assert!(app.editor.buf.dirty, "unsaved, so the guard still applies");
+        assert!(app.related.is_empty(), "and it is no longer suggested");
+    }
+
+    /// One undo takes the whole insertion back, blank line and all.
+    #[test]
+    fn accepting_is_undoable_in_one_step() {
+        let (_d, vault) = linked_vault();
+        let mut app = App::new(vault, Config::default());
+        app.open_note("a.md", true);
+        let before = app.editor.buf.lines.clone();
+        app.accept_related("b.md");
+        assert!(app.editor.buf.undo());
+        assert_eq!(app.editor.buf.lines, before);
+    }
+
+    /// Declining is trafford's opinion about the vault, not something the
+    /// author wrote, so it must not reach the markdown.
+    #[test]
+    fn declining_leaves_the_note_untouched_and_does_not_come_back() {
+        let (dir, vault) = linked_vault();
+        let before = std::fs::read_to_string(dir.path().join("a.md")).unwrap();
+        {
+            let mut app = App::new(vault, Config::default());
+            app.open_note("a.md", true);
+            app.decline_related("b.md");
+            assert!(app.related.is_empty());
+            assert!(!app.editor.buf.dirty, "nothing was written");
+        }
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("a.md")).unwrap(),
+            before
+        );
+        // And it survives the session, from the sidecar.
+        let vault = Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, Config::default());
+        app.open_note("a.md", true);
+        assert!(app.related.is_empty(), "still declined next time");
+    }
+
+    /// Turning down A→B says nothing about B→A: they are different questions
+    /// asked while reading different notes.
+    #[test]
+    fn declining_one_direction_leaves_the_other_alone() {
+        let (dir, vault) = linked_vault();
+        let mut app = App::new(vault, Config::default());
+        app.open_note("a.md", true);
+        app.decline_related("b.md");
+        app.open_note("b.md", true);
+        assert_eq!(app.related.first().map(|s| s.id.as_str()), Some("a.md"));
+        drop(dir);
+    }
 
     /// A query the reader got an answer out of comes back next session. The
     /// sidecar is the only thing that makes that true, and losing it costs
