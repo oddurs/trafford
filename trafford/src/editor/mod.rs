@@ -180,7 +180,7 @@ impl Editor {
     /// operators that use them work on the line, because a `d$` that stopped at
     /// a fold would delete something the markdown does not agree is a unit.
     fn move_visual(&mut self, delta: isize) {
-        if self.layout.len() == 0 {
+        if self.layout.row_count() == 0 {
             // Before the first draw there is no layout to move through, so
             // fall back to buffer lines — which is what a screen row is until
             // something folds anyway. The count still has to be honoured: an
@@ -200,7 +200,7 @@ impl Editor {
             .layout
             .visual_of(&self.buf.lines, self.buf.row, self.buf.col);
         let goal = self.goal_column.unwrap_or(column);
-        let last = self.layout.len().saturating_sub(1) as isize;
+        let last = self.layout.row_count().saturating_sub(1) as isize;
         let target = (visual as isize + delta).clamp(0, last) as usize;
         let (row, col) = self.layout.source_of(&self.buf.lines, target, goal);
         self.buf.row = row;
@@ -346,7 +346,7 @@ impl Editor {
             KeyCode::Char('G') => {
                 let row = match self.count.take() {
                     Some(n) => n.saturating_sub(1),
-                    None => self.buf.len().saturating_sub(1),
+                    None => self.buf.line_count().saturating_sub(1),
                 };
                 self.buf.goto_line(row);
             }
@@ -518,7 +518,7 @@ impl Editor {
             KeyCode::Char('k') | KeyCode::Up => self.move_visual(-1),
             KeyCode::Char('w') => self.buf.next_word(),
             KeyCode::Char('b') => self.buf.prev_word(),
-            KeyCode::Char('G') => self.buf.goto_line(self.buf.len()),
+            KeyCode::Char('G') => self.buf.goto_line(self.buf.line_count()),
             KeyCode::Char('$') => self.buf.line_end(false),
             KeyCode::Char('0') => self.buf.line_start(),
             KeyCode::Char('y') => {
@@ -637,7 +637,7 @@ mod tests {
     }
 
     fn editor(text: &str) -> Editor {
-        Editor::new(Buffer::from_str(text))
+        Editor::new(Buffer::from_text(text))
     }
 
     /// An editor whose lines fold at `width`, as though the UI had drawn it.
@@ -699,7 +699,11 @@ mod tests {
             "the quick brown fox jumps over the lazy dog again\nafter",
             12,
         );
-        assert_eq!(ed.layout.len(), 6, "five rows of prose and the short line");
+        assert_eq!(
+            ed.layout.row_count(),
+            6,
+            "five rows of prose and the short line"
+        );
         press(&mut ed, "j");
         assert_eq!(ed.buf.row, 0, "still inside the paragraph");
         assert!(ed.buf.col > 0, "but further into it");
@@ -771,7 +775,7 @@ mod tests {
         // Each of these is two columns wide, so the fold falls between
         // characters at an odd display column.
         let mut ed = wrapped("日本語のノートです日本語のノートです", 10);
-        assert!(ed.layout.len() > 1, "it has to actually fold");
+        assert!(ed.layout.row_count() > 1, "it has to actually fold");
         let (_, before) = ed.layout.visual_of(&ed.buf.lines, ed.buf.row, ed.buf.col);
         press(&mut ed, "l");
         press(&mut ed, "l");
