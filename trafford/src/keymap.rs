@@ -1197,13 +1197,11 @@ impl App {
             }
             KeyCode::Backspace => {
                 pane.query.pop();
-                pane.hits = self.vault.search(&pane.query, 200);
-                pane.cursor = 0;
+                run_search(&self.vault, &mut pane);
             }
             KeyCode::Char(c) if !ctrl => {
                 pane.query.push(c);
-                pane.hits = self.vault.search(&pane.query, 200);
-                pane.cursor = 0;
+                run_search(&self.vault, &mut pane);
             }
             _ => {}
         }
@@ -1428,6 +1426,30 @@ pub const HELP: &[(&str, &str)] = &[
     ("ctrl-e", "toggle rendered preview"),
     ("za zR zM", "in preview: fold a section, open all, fold all"),
     ("ctrl-b", "toggle sidebar"),
+    ("", "SEARCH  ctrl-f"),
+    (
+        "type:reference",
+        "notes tagged type/reference — any tag namespace works",
+    ),
+    (
+        "status:active",
+        "and a real frontmatter key works the same way",
+    ),
+    (
+        "tag:topic/logic",
+        "the whole tag, when you want to be explicit",
+    ),
+    ("task:open", "unfinished checkboxes; task:done for the rest"),
+    ("orphan", "notes nothing links to"),
+    ("broken", "notes linking to something that is not there"),
+    (
+        "links-to:\"A Note\"",
+        "notes linking there, resolved the way a link resolves",
+    ),
+    ("path:01-projects", "where the note lives"),
+    ("modified:>2026-08-01", "changed since a date"),
+    ("sort:modified limit:20", "how to order it, and how much"),
+    ("anything else", "plain text, the way search always worked"),
     ("ctrl-g", "git panel"),
     ("ctrl-j", "toggle the assistant"),
     ("ctrl-y", "insert the assistant's last answer"),
@@ -1508,6 +1530,26 @@ pub const HELP: &[(&str, &str)] = &[
     ("X", "discard a file's changes"),
     ("enter", "open the note"),
 ];
+
+/// Run the search box's contents as a query, keeping whatever went wrong.
+///
+/// Text with no `field:` in it parses to plain terms, so the simplest query
+/// stays the one people already type.
+fn run_search(vault: &crate::vault::Vault, pane: &mut crate::app::SearchPane) {
+    match vault.query(&pane.query, 200) {
+        Ok(found) => {
+            pane.hits = found.hits;
+            pane.total = found.total;
+            pane.problem = None;
+        }
+        Err(e) => {
+            pane.hits.clear();
+            pane.total = 0;
+            pane.problem = Some(e.to_string());
+        }
+    }
+    pane.cursor = 0;
+}
 
 #[cfg(test)]
 mod tests {

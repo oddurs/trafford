@@ -2,10 +2,13 @@
 id: 27
 title: Every unfinished task in the vault, in one place
 type: feature
-status: backlog
-milestone: later
+status: planned
+milestone: v0.7
+depends_on:
+- 56
+- 57
 created: 2026-09-07
-updated: 2026-09-07
+updated: 2026-09-08
 priority: p1
 effort: m
 area: vault
@@ -52,3 +55,46 @@ exists; this needs the collection and the view.
 
 Consider whether this is a sidebar tab (alongside Notes and Tags) or an overlay
 like the git panel. The sidebar already has the tab machinery.
+
+## Recounted on 2026-09-08, and it changes the design
+
+The 917 figure was a count of task lines. Counting checkbox state instead:
+
+| | |
+| --- | --- |
+| checkboxes in the vault | 1,078 |
+| **ticked** | **11** |
+| open | 1,067 |
+| notes containing any | 59 |
+
+**One percent.** And the open ones are not spread evenly — 470 of the 1,067
+live in six notes:
+
+| note | open |
+| --- | ---: |
+| `01-projects/08-chameleon-trip/09-timeline.md` | 102 |
+| `03-resources/ai-ml/ai-ml-learning-roadmap.md` | 89 |
+| `01-projects/06-ai-ml-mastery/01-roadmap.md` | 84 |
+| `01-projects/06-ai-ml-mastery/04-library.md` | 71 |
+| `01-projects/08-chameleon-trip/10-brooklyn-prep.md` | 65 |
+| `01-projects/08-chameleon-trip/08-packing.md` | 59 |
+
+These are not a to-do list. They are **checklists inside project notes** — a
+trip timeline, two learning roadmaps, a reading library, a packing list. They
+were written to be a plan, and the boxes were mostly never meant to be ticked
+one at a time.
+
+So the original framing — collect every unfinished task in one place — would
+produce a flat list of 1,067 rows, 44% of it from six documents, and the
+reader would close it immediately. **The grouping is not a presentation
+detail; it is the feature.** The view leads with the notes that hold tasks and
+how many, and a checklist is opened rather than flattened into the list.
+
+That also makes this the first consumer of the query layer rather than a
+bespoke pane: it is `task:open` (0056), grouped by note, rendered in the
+results pane (0057). If it cannot be expressed that way, the query layer is
+missing something and this item is the thing that will find it.
+
+The 1% completion rate is worth not designing around. It is not a problem to
+solve with nudges; it is evidence that these boxes are structure, not
+commitments.
