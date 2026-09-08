@@ -44,8 +44,15 @@ pub enum Filter {
     LinksTo(String),
     /// The note's path contains this, case-insensitively.
     Path(String),
-    /// Modified before or after a date.
-    Modified { after: bool, date: String },
+    /// Modified on, before or after a date.
+    Modified { when: When, date: String },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum When {
+    On,
+    Before,
+    After,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -122,18 +129,39 @@ impl fmt::Display for QueryError {
     }
 }
 
+/// A token, and whether it opened with a quote.
+///
+/// The flag matters: `"https://example.com"` is text somebody is looking for,
+/// while `links-to:"Some Note"` is a field whose value happens to be quoted.
+/// Without recording where the quote sat the two are indistinguishable by the
+/// time they reach the parser.
+struct Token {
+    text: String,
+    literal: bool,
+}
+
 /// Split a query into words, keeping `"quoted values"` whole.
-fn tokenize(input: &str) -> Result<Vec<String>, QueryError> {
-    let mut out = Vec::new();
+fn tokenize(input: &str) -> Result<Vec<Token>, QueryError> {
+    let mut out: Vec<Token> = Vec::new();
     let mut cur = String::new();
     let mut quoted = false;
+    let mut opened_with_quote = false;
     for c in input.chars() {
         match c {
-            '"' => quoted = !quoted,
+            '"' => {
+                if cur.is_empty() && !quoted {
+                    opened_with_quote = true;
+                }
+                quoted = !quoted;
+            }
             c if c.is_whitespace() && !quoted => {
                 if !cur.is_empty() {
-                    out.push(std::mem::take(&mut cur));
+                    out.push(Token {
+                        text: std::mem::take(&mut cur),
+                        literal: opened_with_quote,
+                    });
                 }
+                opened_with_quote = false;
             }
             c => cur.push(c),
         }
@@ -142,10 +170,18 @@ fn tokenize(input: &str) -> Result<Vec<String>, QueryError> {
         return Err(QueryError::UnclosedQuote);
     }
     if !cur.is_empty() {
-        out.push(cur);
+        out.push(Token {
+            text: cur,
+            literal: opened_with_quote,
+        });
     }
     Ok(out)
 }
+
+/// The field names that are not frontmatter keys.
+const RESERVED: &[&str] = &[
+    "tag", "tags", "task", "links-to", "linksto", "path", "modified", "sort", "limit",
+];
 
 /// What names this vault answers to: every frontmatter key it uses, and every
 /// namespace its tags are grouped under.
@@ -168,6 +204,10 @@ impl Vocabulary {
         self.properties.iter().any(|k| k.eq_ignore_ascii_case(key))
     }
 
+    fn knows(&self, key: &str) -> bool {
+        self.knows_property(key) || self.knows_namespace(key)
+    }
+
     fn knows_namespace(&self, key: &str) -> bool {
         self.namespaces.iter().any(|k| k.eq_ignore_ascii_case(key))
     }
@@ -185,16 +225,39 @@ impl Vocabulary {
 pub fn parse(input: &str, vocab: &Vocabulary) -> Result<Query, QueryError> {
     let mut q = Query::default();
     for token in tokenize(input)? {
+        // A quoted token is text, whatever punctuation is inside it.
+        if token.literal {
+            q.terms.push(token.text.to_lowercase());
+            continue;
+        }
         // A bare word, or a `word:` with nothing after it, is text to look for.
-        let Some((field, value)) = token.split_once(':') else {
-            q.terms.push(token.to_lowercase());
+        let Some((field, value)) = token.text.split_once(':') else {
+            q.terms.push(token.text.to_lowercase());
             continue;
         };
         if value.is_empty() {
-            q.terms.push(token.to_lowercase());
+            q.terms.push(token.text.to_lowercase());
             continue;
         }
         let lower = field.to_ascii_lowercase();
+        // A colon is punctuation far more often than it is syntax. This vault
+        // holds 2,744 colon-bearing tokens in prose — every URL, every `12:30`,
+        // every `TODO:` — and reading them as fields made all of them
+        // unsearchable, mid-keystroke, the moment the colon landed.
+        //
+        // So only a name the vault actually answers to is a field. A name that
+        // is *nearly* one is still reported, which is what keeps
+        // `stauts:active` from silently becoming a text search for nothing.
+        if !RESERVED.contains(&lower.as_str()) && !vocab.knows(&lower) {
+            if let Some(_near) = nearest(&lower, &vocab.all()) {
+                return Err(QueryError::UnknownField {
+                    field: field.to_string(),
+                    known: vocab.all(),
+                });
+            }
+            q.terms.push(token.text.to_lowercase());
+            continue;
+        }
         match lower.as_str() {
             "tag" | "tags" => q
                 .filters
@@ -213,11 +276,14 @@ pub fn parse(input: &str, vocab: &Vocabulary) -> Result<Query, QueryError> {
             "links-to" | "linksto" => q.filters.push(Filter::LinksTo(value.to_string())),
             "path" => q.filters.push(Filter::Path(value.to_lowercase())),
             "modified" => {
-                let (after, date) = match value.strip_prefix('>') {
-                    Some(d) => (true, d),
+                // A bare date means that day. Reading it as "after" answers a
+                // question nobody asked and excludes the one day they named,
+                // which returns plausible results rather than an error.
+                let (when, date) = match value.strip_prefix('>') {
+                    Some(d) => (When::After, d),
                     None => match value.strip_prefix('<') {
-                        Some(d) => (false, d),
-                        None => (true, value),
+                        Some(d) => (When::Before, d),
+                        None => (When::On, value),
                     },
                 };
                 if !looks_like_a_date(date) {
@@ -227,7 +293,10 @@ pub fn parse(input: &str, vocab: &Vocabulary) -> Result<Query, QueryError> {
                         expected: "a date like >2026-08-01",
                     });
                 }
-                q.sort_of_modified(after, date);
+                q.filters.push(Filter::Modified {
+                    when,
+                    date: date.to_string(),
+                });
             }
             "sort" => {
                 q.sort = Some(match value.to_ascii_lowercase().as_str() {
@@ -245,11 +314,21 @@ pub fn parse(input: &str, vocab: &Vocabulary) -> Result<Query, QueryError> {
                 })
             }
             "limit" => {
-                q.limit = Some(value.parse().map_err(|_| QueryError::BadValue {
+                let n: usize = value.parse().map_err(|_| QueryError::BadValue {
                     field: lower.clone(),
                     value: value.to_string(),
                     expected: "a number",
-                })?)
+                })?;
+                // `limit:0` returns nothing, which is indistinguishable from a
+                // query that matched nothing.
+                if n == 0 {
+                    return Err(QueryError::BadValue {
+                        field: lower,
+                        value: value.to_string(),
+                        expected: "a number above zero",
+                    });
+                }
+                q.limit = Some(n)
             }
             // A real frontmatter key.
             _ if vocab.knows_property(&lower) => q.filters.push(Filter::Property {
@@ -288,15 +367,6 @@ pub fn parse(input: &str, vocab: &Vocabulary) -> Result<Query, QueryError> {
         _ => true,
     });
     Ok(q)
-}
-
-impl Query {
-    fn sort_of_modified(&mut self, after: bool, date: &str) {
-        self.filters.push(Filter::Modified {
-            after,
-            date: date.to_string(),
-        });
-    }
 }
 
 /// `YYYY-MM-DD`, which is the only form worth accepting: it sorts as a string,
@@ -421,12 +491,21 @@ mod tests {
         assert!(err.to_string().contains("did you mean \"status\""), "{err}");
     }
 
+    /// The cost of letting colons through, stated plainly: a field name that
+    /// resembles nothing the vault knows becomes a text search rather than an
+    /// error.
+    ///
+    /// This is the deliberate half of the trade. `assignee:me` looks like a
+    /// mistake to a person and like prose to the parser, and there is no way
+    /// to tell it from `TODO:fix` without knowing what the reader meant. The
+    /// alternative — erroring on every unknown `word:word` — made 2,744 real
+    /// tokens in this vault unsearchable, which is the worse failure by three
+    /// orders of magnitude.
     #[test]
-    fn a_field_no_vault_note_uses_is_still_a_mistake_worth_naming() {
-        let err = parse("assignee:me", &known()).unwrap_err();
-        assert!(err.to_string().contains("assignee"));
-        // Nothing within edit distance 2, so no misleading suggestion.
-        assert!(!err.to_string().contains("did you mean"), "{err}");
+    fn a_field_resembling_nothing_becomes_a_text_search() {
+        let q = parse("assignee:me", &known()).unwrap();
+        assert_eq!(q.terms, vec!["assignee:me"]);
+        assert!(q.filters.is_empty());
     }
 
     #[test]
@@ -471,12 +550,68 @@ mod tests {
         assert_eq!(
             q.filters,
             vec![Filter::Modified {
-                after: true,
+                when: When::After,
                 date: "2026-08-01".into()
             }]
         );
         assert!(parse("modified:yesterday", &known()).is_err());
         assert!(parse("modified:>08-01", &known()).is_err());
+    }
+
+    /// A bare date means that day. Reading it as "after" answers a question
+    /// nobody asked, and excludes the single day they named.
+    #[test]
+    fn a_bare_date_means_that_day() {
+        let q = parse("modified:2026-08-01", &known()).unwrap();
+        assert_eq!(
+            q.filters,
+            vec![Filter::Modified {
+                when: When::On,
+                date: "2026-08-01".into()
+            }]
+        );
+    }
+
+    /// A colon is punctuation far more often than it is syntax. The vault this
+    /// was built for holds 2,744 colon-bearing tokens in prose, and reading
+    /// them all as fields made every URL unsearchable — mid-keystroke, the
+    /// moment the colon landed.
+    #[test]
+    fn text_containing_a_colon_is_still_text() {
+        for input in ["https://example.com", "TODO:fix", "12:30", "note:3"] {
+            let q = parse(input, &known())
+                .unwrap_or_else(|e| panic!("{input:?} should search, not fail: {e}"));
+            assert_eq!(q.terms, vec![input.to_lowercase()], "{input:?}");
+            assert!(q.filters.is_empty(), "{input:?}");
+        }
+    }
+
+    /// But a near-miss is still a mistake worth naming, or the fix above would
+    /// turn every typo into a silent search for nothing.
+    #[test]
+    fn a_near_miss_is_still_reported_after_the_colon_fix() {
+        assert!(parse("stauts:active", &known()).is_err());
+        assert!(parse("tagz:x", &known()).is_err());
+    }
+
+    /// A quoted token is text whatever punctuation is inside it, and the quote
+    /// has to be remembered for that to be knowable.
+    #[test]
+    fn a_quoted_token_is_text_even_when_it_looks_like_a_field() {
+        let q = parse("\"status:active\"", &known()).unwrap();
+        assert_eq!(q.terms, vec!["status:active"]);
+        assert!(q.filters.is_empty());
+        // The value-side quote still parses as a field.
+        let q = parse("links-to:\"Some Note\"", &known()).unwrap();
+        assert_eq!(q.filters, vec![Filter::LinksTo("Some Note".into())]);
+    }
+
+    /// `limit:0` returns nothing, which is indistinguishable from a query that
+    /// matched nothing.
+    #[test]
+    fn a_limit_of_zero_is_a_mistake_not_an_answer() {
+        assert!(parse("limit:0", &known()).is_err());
+        assert!(parse("limit:1", &known()).is_ok());
     }
 
     #[test]

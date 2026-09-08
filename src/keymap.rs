@@ -1537,12 +1537,14 @@ pub const HELP: &[(&str, &str)] = &[
 /// stays the one people already type.
 fn run_search(vault: &crate::vault::Vault, pane: &mut crate::app::SearchPane) {
     match vault.query(&pane.query, 200) {
-        Ok(hits) => {
-            pane.hits = hits;
+        Ok(found) => {
+            pane.hits = found.hits;
+            pane.total = found.total;
             pane.problem = None;
         }
         Err(e) => {
             pane.hits.clear();
+            pane.total = 0;
             pane.problem = Some(e.to_string());
         }
     }

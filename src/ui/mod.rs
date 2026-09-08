@@ -1787,7 +1787,10 @@ fn draw_search(f: &mut Frame, theme: &Theme, pane: &crate::app::SearchPane, area
         if pane.problem.is_some() || pane.query.is_empty() {
             "search".to_string()
         } else {
-            format!("search · {} hits", pane.hits.len())
+            match pane.total > pane.hits.len() {
+                true => format!("search · {} of {} hits", pane.hits.len(), pane.total),
+                false => format!("search · {} hits", pane.hits.len()),
+            }
         },
     );
     let inner = block.inner(rect);
@@ -3289,6 +3292,7 @@ mod tests {
                     hits: vec![],
                     cursor: 0,
                     problem: None,
+                    total: 0,
                 }),
                 Overlay::Prompt(Prompt {
                     kind: PromptKind::NewNote,
