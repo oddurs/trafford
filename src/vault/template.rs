@@ -103,7 +103,7 @@ fn split_args(args: &str) -> Option<(String, i64)> {
 /// Longest token first, or `YYYY` is read as two `YY`s and `MMMM` as two
 /// `MM`s. Anything unrecognised is copied through, which is what makes a
 /// separator like `-` or `, ` survive.
-fn moment_to_strftime(format: &str) -> String {
+pub fn moment_to_strftime(format: &str) -> String {
     const TOKENS: &[(&str, &str)] = &[
         ("YYYY", "%Y"),
         ("MMMM", "%B"),

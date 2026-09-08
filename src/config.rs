@@ -16,6 +16,12 @@ pub struct Config {
     pub daily_note_format: String,
     /// Directory (relative to vault root) daily notes live in.
     pub daily_note_dir: String,
+    /// Template a new daily note starts from, relative to the vault.
+    pub daily_note_template: String,
+    /// The same three, for the week.
+    pub weekly_note_format: String,
+    pub weekly_note_dir: String,
+    pub weekly_note_template: String,
     /// Anthropic model used by the assistant pane.
     pub model: String,
     /// How many retrieved notes to feed the assistant as context.
@@ -54,6 +60,10 @@ impl Default for Config {
             new_note_dir: String::new(),
             daily_note_format: "%Y-%m-%d".into(),
             daily_note_dir: "journal".into(),
+            daily_note_template: String::new(),
+            weekly_note_format: "%Y-W%V".into(),
+            weekly_note_dir: "journal".into(),
+            weekly_note_template: String::new(),
             model: "claude-sonnet-5".into(),
             context_notes: 6,
             autocommit_secs: 0,
