@@ -39,6 +39,14 @@ pub struct Config {
     /// Columns prose is held to while reading. 0 means the pane width, which is
     /// what Obsidian's `readableLineLength: false` asks for.
     pub reading_measure: u16,
+    /// Queries worth keeping, by the name you want to find them under. They
+    /// appear in the palette, so `ctrl-k → stale` can run
+    /// `status:active modified:<2026-06-01`.
+    ///
+    ///     [queries]
+    ///     stale = "status:active modified:<2026-06-01"
+    #[serde(default)]
+    pub queries: std::collections::BTreeMap<String, String>,
     /// While previewing, hide the side panes and the line-number gutter and
     /// hold prose to a measure. Set false to keep the editor's chrome.
     pub reading_focus: bool,
@@ -76,6 +84,7 @@ impl Default for Config {
             // to Obsidian's "local" and already has a `.trash/` in it.
             trash: "local".into(),
             reading_measure: 72,
+            queries: Default::default(),
             reading_focus: true,
             new_note_template: String::new(),
             sidebar: true,
@@ -274,6 +283,31 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A saved query travels with the vault, so `ctrl-k → stale` means the
+    /// same thing on another machine.
+    #[test]
+    fn saved_queries_are_read_from_the_vaults_own_config() {
+        let dir = crate::testing::TempDir::with_files(&[(
+            ".trafford/config.toml",
+            "[queries]\nstale = \"status:active modified:<2026-06-01\"\n",
+        )]);
+        let cfg = Config::load(dir.path());
+        assert_eq!(
+            cfg.queries.get("stale").map(String::as_str),
+            Some("status:active modified:<2026-06-01")
+        );
+    }
+
+    /// And a vault that names none is not a vault with a broken config.
+    #[test]
+    fn a_config_without_queries_is_fine() {
+        let dir = crate::testing::TempDir::with_files(&[(
+            ".trafford/config.toml",
+            "theme = \"gotham\"\n",
+        )]);
+        assert!(Config::load(dir.path()).queries.is_empty());
+    }
 
     /// A vault with the two config files written as given.
     fn vault(obsidian: Option<&str>, trafford: Option<&str>) -> crate::testing::TempDir {

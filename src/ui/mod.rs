@@ -2048,44 +2048,88 @@ fn draw_search(f: &mut Frame, theme: &Theme, pane: &crate::app::SearchPane, area
     }
 
     let height = inner.height as usize - 1;
-    let offset = scroll_offset(pane.cursor, pane.hits.len(), height);
-    for (i, hit) in pane.hits.iter().enumerate().skip(offset).take(height) {
-        let selected = i == pane.cursor;
-        let head = format!("{}:{}", hit.title, hit.line + 1);
-        let mut spans = vec![
-            Span::styled(
-                if selected { "▌ " } else { "  " },
-                Style::default().fg(theme.accent),
-            ),
-            Span::styled(
-                fit(&head, width / 3),
-                if selected {
-                    Style::default()
-                        .fg(theme.heading)
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(theme.link)
-                },
-            ),
-            Span::styled("  ", theme.faded()),
-        ];
-        let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
-        spans.push(Span::styled(
-            fit(&hit.context, width.saturating_sub(used)),
-            theme.dimmed(),
-        ));
-        let mut line = Line::from(spans);
-        if selected {
-            line = line.style(Style::default().bg(theme.selection));
-        }
-        lines.push(line);
+
+    // Rows, not hits: a note's heading takes a row of its own, so scrolling
+    // has to be counted in what is drawn or the pane overflows its own rect.
+    #[derive(Clone, Copy)]
+    enum Row {
+        /// A note's name, once, above its lines. Repeating the title on every
+        /// row of a 102-item checklist buries the line that actually differs.
+        Note(usize),
+        Hit(usize),
     }
-    if pane.query.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "  type to search every note",
-            theme.faded(),
-        )));
-    } else if pane.hits.is_empty() {
+    let mut rows: Vec<Row> = Vec::new();
+    let mut last: Option<&str> = None;
+    for (i, hit) in pane.hits.iter().enumerate() {
+        if last != Some(hit.id.as_str()) {
+            last = Some(hit.id.as_str());
+            rows.push(Row::Note(i));
+        }
+        rows.push(Row::Hit(i));
+    }
+    let cursor_row = rows
+        .iter()
+        .position(|r| matches!(r, Row::Hit(i) if *i == pane.cursor))
+        .unwrap_or(0);
+    let offset = scroll_offset(cursor_row, rows.len(), height);
+
+    for row in rows.iter().skip(offset).take(height) {
+        match *row {
+            Row::Note(first) => {
+                let hit = &pane.hits[first];
+                let n = pane.hits.iter().filter(|h| h.id == hit.id).count();
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        fit(&hit.title, width.saturating_sub(8)),
+                        Style::default()
+                            .fg(theme.heading)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        if n > 1 {
+                            format!("  {n}")
+                        } else {
+                            String::new()
+                        },
+                        theme.faded(),
+                    ),
+                ]));
+            }
+            Row::Hit(i) => {
+                let hit = &pane.hits[i];
+                let selected = i == pane.cursor;
+                let mut spans = vec![
+                    Span::styled(
+                        if selected { "▌" } else { " " },
+                        Style::default().fg(theme.accent),
+                    ),
+                    Span::styled(
+                        format!("{:>5} ", hit.line + 1),
+                        if selected {
+                            Style::default().fg(theme.accent)
+                        } else {
+                            theme.faded()
+                        },
+                    ),
+                ];
+                let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+                spans.push(Span::styled(
+                    fit(&hit.context, width.saturating_sub(used)),
+                    if selected {
+                        Style::default().fg(theme.fg)
+                    } else {
+                        theme.dimmed()
+                    },
+                ));
+                let mut line = Line::from(spans);
+                if selected {
+                    line = line.style(Style::default().bg(theme.selection));
+                }
+                lines.push(line);
+            }
+        }
+    }
+    if pane.hits.is_empty() {
         lines.push(Line::from(Span::styled("  nothing found", theme.faded())));
     }
     f.render_widget(Paragraph::new(lines), inner);
