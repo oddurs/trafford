@@ -445,6 +445,47 @@ would not give:
   one block, so every transition stops — including ones written afterwards by
   someone who never read this.
 
+Four rules the layout is made of, which took a bug to find.
+
+- **A band is full width; its content sits in the page column.** One
+  declaration does it — `padding-inline: max(gutter, (100% - page) / 2)` — and
+  the header, the hero, every section and the footer share it. What it replaced
+  was `max-width` / `margin: auto` / `padding` written out at each band, and
+  that trio is how the container rule came to be on `<html>`: `.landing` is set
+  on the root element *and* on `main`, so the rule meant to centre one column
+  was boxing the whole document. The sticky bar's rule stopped short of the
+  viewport on both sides, content scrolled through the gap, and `--page` could
+  never be reached because the gutter was applied twice.
+- **`padding-block`, never the `padding` shorthand, on a band.** The shorthand
+  resets the inline inset the band rule just set, which puts the content hard
+  against the window.
+- **Sections alternate ground, using the elevation the palette already has**:
+  `--bg` is the page, `--surface` is a band on it, `--overlay` is a card on a
+  band. Three roles that exist in every theme rather than a fourth invented for
+  the landing page. The closing section returns to `--bg` because the footer is
+  a `--surface` band, and two tinted blocks in a row read as one.
+- **The section number lives in the band's own inset**, which is the margin the
+  content column is centred by, and it is hidden below the width where that
+  margin is too narrow to hold it. It used to be positioned outside a box, and
+  worked only because `<html>` was providing a margin by accident.
+
+Two things about the type scale.
+
+- **Tracking is a token, picked by size.** The stylesheet had nine values
+  between -0.045em and 0.09em, each defensible on its own line and not a
+  system — `.callout-title` at 0.07em and `th` at 0.06em were the same idea
+  written twice. Five steps replace them: large type pulls in, small type opens
+  up.
+- **`no_raw_values_for_what_the_system_owns` used to be fooled by a zero.** It
+  allowed a value *containing* `0`, so `-0.045em` and `20px` both passed, and
+  the rule that keeps the scale real was not keeping it. It now checks each
+  part of a value, exactly, and a value doing arithmetic is checked for naming
+  a token at all. Tightening it found `.notfound h1` at a hand-picked `4rem`.
+  `em` is still allowed for `font-size` and `padding`, because it means
+  "relative to the text I am inside" — what a `<kbd>` needs and what a rem
+  scale cannot say. Tracking gets no such exemption: an em is the only unit it
+  is written in.
+
 What is deliberately not a token: the width of a recording, the height of a
 cropped card. Those measure a particular picture rather than deciding anything,
 and folding them in would make the scale meaningless.

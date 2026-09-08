@@ -161,19 +161,34 @@ fn document(ctx: &Ctx<'_>, page: &Page<'_>, content: &str, kind: &str) -> String
         css = escape_attr(&ctx.href(&page.assets.css)),
         js = escape_attr(&ctx.href(&page.assets.js)),
         theme_script = THEME_SCRIPT,
-        header = header(ctx),
+        header = header(ctx, &page.url),
         footer = footer(ctx),
     )
 }
 
-fn header(ctx: &Ctx<'_>) -> String {
+fn header(ctx: &Ctx<'_>, url: &str) -> String {
+    // Which of the four the reader is on. `Docs` covers the whole tree rather
+    // than one page in it, or the bar would say nothing on the twelve pages
+    // that are not `getting-started`.
+    let here = |target: &str| {
+        let on = if target == "docs/getting-started/" {
+            url.starts_with("docs/") && url != "docs/keys/" && url != "docs/themes/"
+        } else {
+            url == target
+        };
+        if on {
+            " aria-current=\"page\""
+        } else {
+            ""
+        }
+    };
     format!(
         r#"<header class="top">
 <a class="brand" href="{home}">{mark}<span class="wordmark">trafford</span></a>
 <nav class="top-nav">
-<a href="{docs}">Docs</a>
-<a href="{keys}">Keys</a>
-<a href="{themes}">Themes</a>
+<a href="{docs}"{docs_here}>Docs</a>
+<a href="{keys}"{keys_here}>Keys</a>
+<a href="{themes}"{themes_here}>Themes</a>
 <a href="https://github.com/oddurs/trafford" rel="noreferrer noopener">GitHub</a>
 </nav>
 <button class="theme-toggle" type="button" hidden aria-label="Change theme">
@@ -184,6 +199,9 @@ fn header(ctx: &Ctx<'_>) -> String {
         docs = escape_attr(&ctx.href("docs/getting-started/")),
         keys = escape_attr(&ctx.href("docs/keys/")),
         themes = escape_attr(&ctx.href("docs/themes/")),
+        docs_here = here("docs/getting-started/"),
+        keys_here = here("docs/keys/"),
+        themes_here = here("docs/themes/"),
         // `currentColor`, so the mark takes the accent from the stylesheet and
         // changes with the theme like everything else.
         mark = crate::build::mark("currentColor", None),
