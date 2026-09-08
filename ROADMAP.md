@@ -77,7 +77,7 @@ Preview stops being the editor with the syntax hidden. A note's structure folds,
 
 Obsidian is closed source, so there is nothing to read. The vault is not: its
 
-### backlog
+### in progress
 
 - [ ] `0050` Daily and weekly notes where this vault keeps them <sup>feature · p1 · vault</sup>
 

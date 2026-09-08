@@ -1565,33 +1565,62 @@ impl App {
     }
 
     pub fn daily_note(&mut self) {
-        let name = chrono::Local::now()
-            .format(&self.config.daily_note_format)
-            .to_string();
-        let dir = self.config.daily_note_dir.trim_matches('/');
+        let (fmt, dir, template) = (
+            self.config.daily_note_format.clone(),
+            self.config.daily_note_dir.clone(),
+            self.config.daily_note_template.clone(),
+        );
+        self.periodic_note(&fmt, &dir, &template);
+    }
+
+    pub fn weekly_note(&mut self) {
+        let (fmt, dir, template) = (
+            self.config.weekly_note_format.clone(),
+            self.config.weekly_note_dir.clone(),
+            self.config.weekly_note_template.clone(),
+        );
+        self.periodic_note(&fmt, &dir, &template);
+    }
+
+    /// Open the note for a period, writing it from its template if it is not
+    /// there yet.
+    ///
+    /// One function for both cadences: they differ only in the format, the
+    /// folder and the template, and a second copy would be a second place for
+    /// the "open it if it already exists" rule to go wrong.
+    fn periodic_note(&mut self, format: &str, dir: &str, template: &str) {
+        let name = chrono::Local::now().format(format).to_string();
+        let dir = dir.trim_matches('/');
         let rel = if dir.is_empty() {
             name.clone()
         } else {
             format!("{dir}/{name}")
         };
-        let existing = self.vault.resolve_target(&rel);
-        match existing {
-            Some(idx) => {
-                let id = self.vault.notes[idx].id.clone();
-                self.open_note(&id, true);
-                self.set_status(format!("opened {id}"));
-            }
-            None => {
-                let body = format!("# {name}\n\n");
-                match self.vault.create_note(&rel, &body) {
-                    Ok(id) => {
-                        self.open_note(&id, true);
-                        self.editor.buf.goto_line(1);
-                        self.set_status(format!("created {id}"));
-                    }
-                    Err(err) => self.set_status(format!("create failed: {err}")),
+        // Already written: open it. Overwriting today's note with a blank
+        // template would be the worst thing this command could do.
+        if let Some(idx) = self.vault.resolve_target(&rel) {
+            let id = self.vault.notes[idx].id.clone();
+            self.open_note(&id, true);
+            self.set_status(format!("opened {id}"));
+            return;
+        }
+        let (body, cursor) = match template.trim() {
+            "" => (format!("# {name}\n\n"), None),
+            path => match std::fs::read_to_string(self.vault.path_for(path)) {
+                Ok(text) => {
+                    let out = crate::vault::template::expand(&text, &name, chrono::Local::now());
+                    (out.text, out.cursor)
                 }
+                Err(_) => (format!("# {name}\n\n"), None),
+            },
+        };
+        match self.vault.create_note(&rel, &body) {
+            Ok(id) => {
+                self.open_note(&id, true);
+                self.editor.buf.goto_line(cursor.unwrap_or(1));
+                self.set_status(format!("created {id}"));
             }
+            Err(err) => self.set_status(format!("create failed: {err}")),
         }
     }
 
@@ -2073,6 +2102,83 @@ mod tests {
             !app.unsaved_notes().contains(&"Two.md".to_string()),
             "nothing is held for a note that is gone"
         );
+    }
+
+    #[test]
+    fn a_daily_note_is_written_from_its_template() {
+        let dir = crate::testing::TempDir::with_files(&[(
+            "_templates/daily.md",
+            "---\ntags:\n  - type/log\n---\n\n# <% tp.date.now(\"dddd, MMMM D, YYYY\") %>\n\n<< [[<% tp.date.now(\"%Y-%m-%d\", -1) %>]] >>\n",
+        )]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.config.daily_note_dir = "00-inbox/daily".into();
+        app.config.daily_note_template = "_templates/daily.md".into();
+
+        app.daily_note();
+        let text = app.editor.buf.text();
+        assert!(
+            text.contains("type/log"),
+            "the template came with it: {text:?}"
+        );
+        assert!(!text.contains("<%"), "and expanded");
+        let id = app.current.clone().unwrap();
+        assert!(
+            id.starts_with("00-inbox/daily/"),
+            "in the vault's own folder: {id}"
+        );
+    }
+
+    #[test]
+    fn asking_twice_opens_the_note_rather_than_rewriting_it() {
+        // The worst thing this command could do is replace today's note with a
+        // blank template.
+        let dir = crate::testing::TempDir::with_files(&[("Seed.md", "# Seed\n")]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.config.daily_note_dir = "journal".into();
+
+        app.daily_note();
+        let id = app.current.clone().unwrap();
+        app.editor.buf.lines.push("something I wrote today".into());
+        app.save();
+
+        app.open_note("Seed.md", true);
+        app.daily_note();
+        assert_eq!(app.current.as_deref(), Some(id.as_str()));
+        assert!(
+            app.editor.buf.text().contains("something I wrote today"),
+            "the day's work survived asking again"
+        );
+    }
+
+    #[test]
+    fn a_weekly_note_is_its_own_note_in_its_own_place() {
+        let dir = crate::testing::TempDir::with_files(&[("Seed.md", "# Seed\n")]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.config.daily_note_dir = "00-inbox/daily".into();
+        app.config.weekly_note_dir = "00-inbox/weekly".into();
+        app.config.weekly_note_format = "%Y-W%V".into();
+
+        app.daily_note();
+        let day = app.current.clone().unwrap();
+        app.weekly_note();
+        let week = app.current.clone().unwrap();
+        assert_ne!(day, week);
+        assert!(week.starts_with("00-inbox/weekly/"), "{week}");
+        assert!(week.contains("-W"), "named as a week: {week}");
+    }
+
+    #[test]
+    fn a_missing_template_still_gives_you_todays_note() {
+        let dir = crate::testing::TempDir::with_files(&[("Seed.md", "# Seed\n")]);
+        let vault = crate::vault::Vault::open(dir.path()).unwrap();
+        let mut app = App::new(vault, crate::config::Config::default());
+        app.config.daily_note_template = "_templates/gone.md".into();
+        app.daily_note();
+        assert!(app.current.is_some(), "the note was still made");
+        assert!(!app.editor.buf.text().is_empty());
     }
 
     #[test]

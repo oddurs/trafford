@@ -14,6 +14,7 @@ pub const COMMANDS: &[(&str, &str, &str)] = &[
     ("search", "Search vault", "ctrl-f"),
     ("new-note", "New note", "ctrl-n"),
     ("daily-note", "Open today's daily note", ""),
+    ("weekly-note", "Open this week's note", ""),
     ("insert-link", "Insert link to a note", "ctrl-l"),
     ("backlinks", "Jump to a note that links here", "ctrl-t"),
     ("save", "Save note", "ctrl-s"),
@@ -128,6 +129,7 @@ impl App {
                 }))
             }
             "daily-note" => self.daily_note(),
+            "weekly-note" => self.weekly_note(),
             "insert-link" => {
                 self.overlay = Some(Overlay::LinkPicker(Picker::new(
                     "Insert link",
