@@ -1,18 +1,4 @@
-mod app;
-mod clipboard;
-mod config;
-mod editor;
-mod git;
-mod keymap;
-mod layout;
-mod llm;
-mod mouse;
-#[cfg(test)]
-mod testing;
-mod tree;
-mod ui;
-mod vault;
-mod watch;
+use trafford::{app, config, editor, git, ui, vault, watch};
 
 use anyhow::{Context, Result};
 use app::App;

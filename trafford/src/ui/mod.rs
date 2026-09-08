@@ -789,7 +789,7 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     let gutter = if reading {
         0
     } else {
-        gutter_width(app.editor.buf.len())
+        gutter_width(app.editor.buf.line_count())
     };
     // The whole pane, kept for the things that belong at its edge rather than
     // at the edge of the text — the position rail draws here, or it would sit
@@ -867,7 +867,7 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     // seen. The editor still follows its caret, which is what a caret is for.
     match &view {
         Some(v) => {
-            let last = v.layout.len().saturating_sub(1);
+            let last = v.layout.row_count().saturating_sub(1);
             // A fold changed the document since the last draw; put the reader
             // back over the line they were on rather than over whatever this
             // row index now points at.
@@ -877,7 +877,7 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
             app.preview_row = app.preview_row.min(last);
             app.editor.sync_scroll_margin(
                 app.preview_row,
-                v.layout.len(),
+                v.layout.row_count(),
                 inner.height as usize,
                 READING_MARGIN,
             );
@@ -885,12 +885,12 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
             // where they were and `za`, `K` and the crumb act on a line that is
             // actually on screen.
             let source = v.source(v.layout.row(app.preview_row).map(|r| r.line).unwrap_or(0));
-            app.editor.buf.row = source.min(app.editor.buf.len().saturating_sub(1));
+            app.editor.buf.row = source.min(app.editor.buf.line_count().saturating_sub(1));
             app.editor.buf.col = 0;
         }
         None => app.editor.sync_scroll_visual(
             cursor_visual.0,
-            app.editor.layout.len(),
+            app.editor.layout.row_count(),
             inner.height as usize,
         ),
     }
@@ -898,7 +898,7 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     // Which note lines are on screen, so the crumb can hide itself when the
     // heading it names is already visible.
     let rows = |layout: &crate::layout::Layout, of: &dyn Fn(usize) -> usize| {
-        (app.editor.scroll..layout.len())
+        (app.editor.scroll..layout.row_count())
             .take(inner.height as usize)
             .filter_map(|v| layout.row(v).map(|r| of(r.line)))
             .collect::<Vec<usize>>()
@@ -911,7 +911,7 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     let crumbs = visible.first().and_then(|top| {
         sticky(
             &heads,
-            app.editor.buf.len(),
+            app.editor.buf.line_count(),
             *top,
             &visible,
             inner.width.saturating_sub(gutter) as usize,
@@ -1003,7 +1003,7 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
         // Preview walks its own rows, over text that has already been rendered
         // once. Slicing the spans rather than re-rendering a substring is what
         // keeps a link that straddles a fold looking like one link.
-        for visual in app.editor.scroll..view.layout.len() {
+        for visual in app.editor.scroll..view.layout.row_count() {
             if lines.len() >= inner.height as usize {
                 break;
             }
@@ -1057,7 +1057,7 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
             % 2
             == 1;
 
-        for visual in app.editor.scroll..app.editor.layout.len() {
+        for visual in app.editor.scroll..app.editor.layout.row_count() {
             if lines.len() >= inner.height as usize {
                 break;
             }
@@ -1102,7 +1102,7 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
             },
             app.editor.scroll,
             inner.height as usize,
-            v.layout.len(),
+            v.layout.row_count(),
         );
     }
 
@@ -1614,7 +1614,11 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
             "{}  {} words  {} ",
             app.editor.pending_hint(),
             app.editor.buf.word_count(),
-            progress(app.editor.scroll, app.editor_height, view.layout.len()),
+            progress(
+                app.editor.scroll,
+                app.editor_height,
+                view.layout.row_count()
+            ),
         ),
         _ => format!(
             "{}  {} words  {}:{} ",
@@ -2252,7 +2256,11 @@ mod tests {
         // ragged break in the middle of a line that fits.
         let (_t, view) = preview_of(&["see [[Some/Long/Path/Note|a note]] there"], 30);
         assert_eq!(view.lines[0].text, "see a note there");
-        assert_eq!(view.layout.len(), 1, "it fits once the syntax is gone");
+        assert_eq!(
+            view.layout.row_count(),
+            1,
+            "it fits once the syntax is gone"
+        );
     }
 
     #[test]
@@ -2272,10 +2280,10 @@ mod tests {
     fn a_link_split_across_a_fold_is_clickable_on_both_rows() {
         // Narrow enough that the link's own text has to break.
         let (_t, view) = preview_of(&["x [[Note|a rather long alias here]] y"], 14);
-        assert!(view.layout.len() > 1, "it has to actually fold");
+        assert!(view.layout.row_count() > 1, "it has to actually fold");
         let texts = view.texts();
         let mut found = 0;
-        for visual in 0..view.layout.len() {
+        for visual in 0..view.layout.row_count() {
             let row = view.layout.row(visual).unwrap();
             for column in 0..row.len {
                 let (line, col) = view.layout.source_of(&texts, visual, column + row.indent);
@@ -2818,7 +2826,7 @@ mod tests {
     #[test]
     fn the_rail_shows_a_bar_whose_size_is_the_share_on_screen() {
         let (_dir, mut app) = reading_a_long_note();
-        let rows = app.preview_view.as_ref().unwrap().layout.len();
+        let rows = app.preview_view.as_ref().unwrap().layout.row_count();
         assert!(rows > 40);
 
         let bar_rows = |app: &mut App| {
@@ -2900,7 +2908,7 @@ mod tests {
         let view = reading_within(&WIDE_TABLE, 40, 100);
         let prose = &view.lines[0];
         assert!(!prose.rigid);
-        let rows: Vec<usize> = (0..view.layout.len())
+        let rows: Vec<usize> = (0..view.layout.row_count())
             .filter(|v| view.layout.row(*v).unwrap().line == 0)
             .collect();
         assert!(
@@ -2955,7 +2963,7 @@ mod tests {
     #[test]
     fn reading_motions_move_within_the_drawn_document() {
         let (_dir, mut app) = reading_a_long_note();
-        let rows = app.preview_view.as_ref().unwrap().layout.len();
+        let rows = app.preview_view.as_ref().unwrap().layout.row_count();
         assert!(rows > 40, "the fixture should be longer than a screen");
 
         app.preview_to_end(true);
@@ -2973,7 +2981,7 @@ mod tests {
     #[test]
     fn reading_motions_stop_at_the_ends() {
         let (_dir, mut app) = reading_a_long_note();
-        let rows = app.preview_view.as_ref().unwrap().layout.len();
+        let rows = app.preview_view.as_ref().unwrap().layout.row_count();
         app.scroll_preview(-5);
         assert_eq!(app.preview_row, 0, "not above the first row");
         app.scroll_preview(rows as isize * 2);
@@ -3011,7 +3019,7 @@ mod tests {
         );
         // The line they were on is inside the section now standing for it.
         let heads = crate::ui::fold::headings(&app.editor.buf.lines);
-        let end = crate::ui::fold::section_end(&heads, after, app.editor.buf.len());
+        let end = crate::ui::fold::section_end(&heads, after, app.editor.buf.line_count());
         assert!(
             after <= before && before < end,
             "{before} should be inside the section at {after}..{end}"
@@ -3399,7 +3407,7 @@ mod tests {
 
     #[test]
     fn outline_collects_headings_and_skips_code_fences() {
-        let buf = crate::editor::Buffer::from_str(
+        let buf = crate::editor::Buffer::from_text(
             "# One\n\ntext\n## Two\n```\n# not a heading\n```\n### Three\n#no-space\n",
         );
         let entries = outline_of(&buf);

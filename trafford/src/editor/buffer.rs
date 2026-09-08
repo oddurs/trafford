@@ -27,12 +27,12 @@ struct Snapshot {
 
 impl Default for Buffer {
     fn default() -> Self {
-        Buffer::from_str("")
+        Buffer::from_text("")
     }
 }
 
 impl Buffer {
-    pub fn from_str(text: &str) -> Buffer {
+    pub fn from_text(text: &str) -> Buffer {
         // A file counts as CRLF if every one of its line breaks is one.
         let breaks = text.matches('\n').count();
         let crlf = breaks > 0 && text.matches("\r\n").count() == breaks;
@@ -69,7 +69,9 @@ impl Buffer {
         self.line(row).chars().count()
     }
 
-    pub fn len(&self) -> usize {
+    /// How many lines the buffer holds. Never zero: an empty buffer is one
+    /// empty line, which is why there is no `is_empty` to go with it.
+    pub fn line_count(&self) -> usize {
         self.lines.len()
     }
 
@@ -585,7 +587,7 @@ mod tests {
 
     #[test]
     fn inserting_and_undoing_round_trips() {
-        let mut b = Buffer::from_str("hello");
+        let mut b = Buffer::from_text("hello");
         b.col = 5;
         b.begin_insert();
         b.insert_str(" world");
@@ -599,7 +601,7 @@ mod tests {
 
     #[test]
     fn insert_session_undoes_as_one_unit() {
-        let mut b = Buffer::from_str("");
+        let mut b = Buffer::from_text("");
         b.begin_insert();
         for c in "abc".chars() {
             b.insert_char(c);
@@ -611,7 +613,7 @@ mod tests {
 
     #[test]
     fn newline_continues_list_markers() {
-        let mut b = Buffer::from_str("  - item");
+        let mut b = Buffer::from_text("  - item");
         b.row = 0;
         b.col = 8;
         b.insert_newline_smart();
@@ -620,17 +622,17 @@ mod tests {
 
     #[test]
     fn newline_on_empty_list_item_clears_it() {
-        let mut b = Buffer::from_str("- ");
+        let mut b = Buffer::from_text("- ");
         b.col = 2;
         b.insert_newline_smart();
         assert_eq!(b.text(), "");
-        assert_eq!(b.len(), 1);
+        assert_eq!(b.line_count(), 1);
         assert_eq!(b.col, 0);
     }
 
     #[test]
     fn ordered_lists_increment() {
-        let mut b = Buffer::from_str("3. third");
+        let mut b = Buffer::from_text("3. third");
         b.col = 8;
         b.insert_newline_smart();
         assert_eq!(b.line(1), "4. ");
@@ -638,7 +640,7 @@ mod tests {
 
     #[test]
     fn crlf_files_load_without_the_carriage_returns() {
-        let b = Buffer::from_str("one\r\ntwo\r\n");
+        let b = Buffer::from_text("one\r\ntwo\r\n");
         assert_eq!(b.line(0), "one");
         assert_eq!(b.line(1), "two");
         assert_eq!(b.line_len(0), 3, "the \\r must not count as a column");
@@ -648,7 +650,7 @@ mod tests {
     fn crlf_files_are_written_back_with_crlf() {
         let text = "one\r\ntwo\r\n";
         assert_eq!(
-            Buffer::from_str(text).text(),
+            Buffer::from_text(text).text(),
             text,
             "round trip must be exact"
         );
@@ -657,20 +659,20 @@ mod tests {
     #[test]
     fn lf_files_stay_lf() {
         let text = "one\ntwo\n";
-        assert_eq!(Buffer::from_str(text).text(), text);
+        assert_eq!(Buffer::from_text(text).text(), text);
     }
 
     #[test]
     fn a_mixed_file_is_normalised_to_lf() {
         // Mixed endings are already broken; picking one is better than
         // preserving the mess, and LF is the one git wants.
-        let b = Buffer::from_str("one\r\ntwo\nthree\r\n");
+        let b = Buffer::from_text("one\r\ntwo\nthree\r\n");
         assert_eq!(b.text(), "one\ntwo\nthree\n");
     }
 
     #[test]
     fn editing_a_crlf_file_keeps_its_endings() {
-        let mut b = Buffer::from_str("one\r\ntwo\r\n");
+        let mut b = Buffer::from_text("one\r\ntwo\r\n");
         b.row = 0;
         b.col = 3;
         b.insert_str("!");
@@ -679,7 +681,7 @@ mod tests {
 
     #[test]
     fn unicode_columns_are_character_based() {
-        let mut b = Buffer::from_str("héllo");
+        let mut b = Buffer::from_text("héllo");
         b.col = 2;
         b.insert_char('X');
         assert_eq!(b.text(), "héXllo");
@@ -689,7 +691,7 @@ mod tests {
 
     #[test]
     fn word_motions_cross_lines() {
-        let mut b = Buffer::from_str("alpha beta\ngamma");
+        let mut b = Buffer::from_text("alpha beta\ngamma");
         b.next_word();
         assert_eq!((b.row, b.col), (0, 6));
         b.next_word();
@@ -700,16 +702,16 @@ mod tests {
 
     #[test]
     fn delete_lines_returns_text_and_keeps_buffer_nonempty() {
-        let mut b = Buffer::from_str("a\nb");
+        let mut b = Buffer::from_text("a\nb");
         let removed = b.delete_lines(0, 2);
         assert_eq!(removed, "a\nb");
-        assert_eq!(b.len(), 1);
+        assert_eq!(b.line_count(), 1);
         assert_eq!(b.text(), "");
     }
 
     #[test]
     fn paste_linewise_inserts_after_current_row() {
-        let mut b = Buffer::from_str("one\ntwo");
+        let mut b = Buffer::from_text("one\ntwo");
         b.row = 0;
         b.paste("new", true, true);
         assert_eq!(b.text(), "one\nnew\ntwo");
@@ -717,7 +719,7 @@ mod tests {
 
     #[test]
     fn toggle_task_flips_the_checkbox() {
-        let mut b = Buffer::from_str("- [ ] do it");
+        let mut b = Buffer::from_text("- [ ] do it");
         assert!(b.toggle_task());
         assert_eq!(b.line(0), "- [x] do it");
         assert!(b.toggle_task());
@@ -726,7 +728,7 @@ mod tests {
 
     #[test]
     fn shift_lines_indents_and_outdents() {
-        let mut b = Buffer::from_str("a\nb");
+        let mut b = Buffer::from_text("a\nb");
         b.shift_lines(0, 1, true);
         assert_eq!(b.text(), "  a\n  b");
         b.shift_lines(0, 1, false);
@@ -735,7 +737,7 @@ mod tests {
 
     #[test]
     fn clamp_respects_normal_mode_last_column() {
-        let mut b = Buffer::from_str("abc");
+        let mut b = Buffer::from_text("abc");
         b.col = 99;
         b.clamp(false);
         assert_eq!(b.col, 2);

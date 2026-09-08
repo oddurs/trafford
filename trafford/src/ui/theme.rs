@@ -12,7 +12,11 @@
 //!      you transcribe it.
 
 use anyhow::{anyhow, Context, Result};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
+
+/// Re-exported so a consumer of a `Theme` does not have to depend on the
+/// terminal library to read one. The site does exactly that.
+pub use ratatui::style::Color;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -64,6 +68,12 @@ struct ThemeFile {
 #[derive(Debug, Clone, Copy)]
 pub struct Theme {
     pub name: &'static str,
+    /// Whether the palette is meant for a dark ground.
+    ///
+    /// The terminal never asks: it draws on whatever `bg` says. The docs site
+    /// does, because a browser has a `prefers-color-scheme` to honour and a
+    /// reader whose system is set to light should not be handed Gotham.
+    pub dark: bool,
     pub bg: Color,
     pub surface: Color,
     pub overlay: Color,
@@ -133,6 +143,7 @@ impl Theme {
 
         let accent = parse_or(file.accent.as_deref(), "#e0a458")?;
         Ok(Theme {
+            dark,
             name: "",
             bg,
             fg,

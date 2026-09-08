@@ -987,7 +987,7 @@ impl App {
         match std::fs::read_to_string(&path) {
             Ok(text) => {
                 self.loaded_from_disk = stamp_of(&path);
-                self.editor.load(Buffer::from_str(&text));
+                self.editor.load(Buffer::from_text(&text));
                 self.current = Some(id.to_string());
                 self.focus = Focus::Editor;
                 // Keep the sidebar pointing at whatever is open, opening the
@@ -1044,7 +1044,7 @@ impl App {
             self.unsaved.remove(&id);
             return;
         }
-        let buf = std::mem::replace(&mut self.editor.buf, Buffer::from_str(""));
+        let buf = std::mem::replace(&mut self.editor.buf, Buffer::from_text(""));
         self.unsaved.insert(id, (buf, self.loaded_from_disk));
     }
 
@@ -1233,7 +1233,7 @@ impl App {
         };
         let was = self.preview_source();
         let heads = crate::ui::fold::headings(&self.editor.buf.lines);
-        let total = self.editor.buf.len();
+        let total = self.editor.buf.line_count();
         // The innermost heading at or above this line whose section still
         // contains it — the one you would point at if asked "which section?".
         let target = heads
@@ -1264,7 +1264,7 @@ impl App {
             return;
         };
         let heads = crate::ui::fold::headings(&self.editor.buf.lines);
-        let total = self.editor.buf.len();
+        let total = self.editor.buf.line_count();
         let was = self.preview_source();
         self.folded.fold_all(&id, &heads, total);
         self.keep_preview_place(was);
@@ -1303,7 +1303,7 @@ impl App {
     /// move through, which the callers treat as "do not move".
     fn preview_extent(&self) -> Option<(usize, usize)> {
         let view = self.preview_view.as_ref()?;
-        (view.layout.len() > 0).then(|| (view.layout.len(), self.editor_height.max(1)))
+        (view.layout.row_count() > 0).then(|| (view.layout.row_count(), self.editor_height.max(1)))
     }
 
     /// Move the reading view by `delta` rows, or to an end when `to` says so.
@@ -1407,11 +1407,11 @@ impl App {
         // Folds are keyed by line and the lines just moved.
         self.folded.forget(&id);
         self.loaded_from_disk = stamp_of(&path);
-        self.editor.load(Buffer::from_str(&text));
+        self.editor.load(Buffer::from_text(&text));
         self.editor
             .buf
-            .goto_line(row.min(self.editor.buf.len().saturating_sub(1)));
-        self.editor.scroll = scroll.min(self.editor.buf.len().saturating_sub(1));
+            .goto_line(row.min(self.editor.buf.line_count().saturating_sub(1)));
+        self.editor.scroll = scroll.min(self.editor.buf.line_count().saturating_sub(1));
         self.preview_row = reading;
         self.set_status(format!(
             "{} changed on disk — reloaded",
@@ -1491,7 +1491,7 @@ impl App {
     pub fn jump_to(&mut self, row: usize) {
         if let Some(id) = self.current.clone() {
             let heads = crate::ui::fold::headings(&self.editor.buf.lines);
-            let total = self.editor.buf.len();
+            let total = self.editor.buf.line_count();
             let containing: Vec<usize> = crate::ui::fold::chain(&heads, row, total)
                 .iter()
                 .map(|h| h.row)
@@ -1680,7 +1680,7 @@ impl App {
                 let _ = self.vault.rescan();
                 if self.current.as_deref() == Some(id) {
                     self.current = None;
-                    self.editor.load(Buffer::from_str(""));
+                    self.editor.load(Buffer::from_text(""));
                     if let Some(next) = self.vault.notes.first().map(|n| n.id.clone()) {
                         self.open_note(&next, false);
                     }
