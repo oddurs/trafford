@@ -1,0 +1,71 @@
+name: pages
+
+# Published from `main`, by this workflow, and by nothing else. A site deployed
+# by hand is a site deployed from whatever happened to be in someone's working
+# tree, and there is then no answer to "what is live?" other than looking.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Two merges a minute apart must not race and leave the older one live.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  SITE_URL: https://oddurs.github.io/trafford
+
+jobs:
+  deploy:
+    # A broken link should not be published because the deploy job happened to
+    # start first. `workflow_dispatch` has no upstream run to check.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # For a workflow_run the default ref is the default branch tip, which
+          # is usually but not always the commit that passed CI. Be explicit.
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: pages-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: pages-cargo-
+
+      # The screenshots are committed, so this needs no Python and no terminal.
+      # `--site-url` is only for the canonical tags and the sitemap: every link
+      # on the site is relative to its own page, which is what makes one build
+      # correct at a domain root, under this project subpath, and over file://.
+      - name: Build the site
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo run --release -p trafford-site -- build --api --site-url "$SITE_URL"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: target/site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

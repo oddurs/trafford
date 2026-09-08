@@ -1,9 +1,21 @@
 name: ci
 
 on:
+  # Every branch, not only `main`. A push to a branch whose pull request is
+  # closed — or that does not have one yet — used to run nothing at all, which
+  # is indistinguishable from passing. The concurrency group below means a
+  # branch with an open pull request still only runs one set of jobs.
   push:
-    branches: [main]
   pull_request:
+  workflow_dispatch:
+  schedule:
+    # Mondays, early. Only the external-link job runs on this trigger.
+    - cron: "17 6 * * 1"
+
+# One run per ref, so pushing three times in a minute runs the jobs once.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -15,6 +27,10 @@ jobs:
   # destroying work, and it has already failed silently once.
   hooks:
     name: git guard
+    if: >-
+      github.event_name != 'schedule' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name != github.repository)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,6 +39,10 @@ jobs:
 
   check:
     name: fmt · clippy · test
+    if: >-
+      github.event_name != 'schedule' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name != github.repository)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -58,3 +78,89 @@ jobs:
       - name: Release build
         if: matrix.os == 'ubuntu-latest'
         run: cargo build --release
+
+  # The site rots in ways the compiler cannot see: a link to a renamed page, a
+  # screenshot of an interface that changed, a keymap page that no longer
+  # matches the keymap. Held to the same standard as the crate, and kept
+  # independent of the `check` job so a formatting failure and a broken link
+  # are reported together rather than one after the other.
+  site:
+    name: docs site
+    if: >-
+      github.event_name != 'schedule' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name != github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: site-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: site-cargo-
+
+      # The whole enforcement for anything generated: regenerate, and diff.
+      - name: The keymap page is current
+        run: |
+          cargo run -p trafford-site -- sync
+          git diff --exit-code docs/keys.md \
+            || { echo '::error::run `site sync` and commit docs/keys.md'; exit 1; }
+
+      - name: Build the release binary the screenshots are taken with
+        run: cargo build --release -p trafford
+
+      - name: The screenshots match what trafford draws
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet pyte "fonttools[woff]" brotli
+          .venv/bin/python tools/shots.py --check
+
+      # The quiet failure: prose gains a character the subset does not have,
+      # the browser falls back mid-word, and it reads as one broken glyph.
+      - name: The typeface covers what the site draws
+        run: |
+          cargo run -p trafford-site -- build
+          .venv/bin/python tools/subset-font.py --check
+
+      # Broken internal links, missing anchors and links into a renamed type
+      # all fail the build itself. This is where that is enforced on a branch
+      # nobody ran locally.
+      - name: Build the site, with rustdoc
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo run -p trafford-site -- build --api
+
+      # Builds it, serves it, and asks for every page. A server per test, on a
+      # port nobody named, so they run in parallel.
+      - name: Serve it and hit every page
+        run: cargo test -p trafford-site
+
+  # External links fail for reasons that have nothing to do with the change
+  # under review, and breaking someone's pull request on a third party's
+  # expired certificate is how link checking gets switched off. Weekly, on its
+  # own, opening an issue rather than failing a build.
+  external-links:
+    name: external links
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo run -p trafford-site -- build
+      - id: check
+        run: python3 tools/linkcheck.py target/site
+      - if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "External links are failing" \
+            --body "The weekly link check found unreachable links. See the run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --label docs
