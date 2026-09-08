@@ -12,10 +12,12 @@ on:
     # Mondays, early. Only the external-link job runs on this trigger.
     - cron: "17 6 * * 1"
 
-# One run per ref. Without this, a push to a branch with an open pull request
-# runs everything twice, and pushing three times in a minute runs it six.
+# One run per commit, keyed on the commit rather than on the ref. A push and a
+# pull_request event for the same code arrive under different refs
+# (`refs/heads/…` and `refs/pull/…/merge`), so keying on the ref ran everything
+# twice — which is what this pull request's own first green build did.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 env:
