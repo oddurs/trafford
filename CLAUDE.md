@@ -133,6 +133,14 @@ out to need. Each was found by opening a 127-note vault, not by reading docs.
   one and ignoring it would suggest a promise it is not keeping. Never write to
   `.obsidian/`: it belongs to Obsidian, and two programs writing one settings
   file is how settings get lost.
+- **Periodic notes come from the plugin that makes them.** Folder, format and
+  template for the day and the week are read from
+  `.obsidian/plugins/periodic-notes/data.json`, with `config.toml` still
+  winning. The formats are moment.js and trafford's are strftime, so they go
+  through the same table the templates use — `YYYY-[W]ww` must come out as the
+  week note's real name, or every week links to one that does not exist. Asking
+  for a note that already exists opens it; overwriting today's work with a blank
+  template is the worst thing that command could do.
 - **Templates expand, but only the expressions this vault uses.**
   `vault::template` covers `tp.date.now` with an optional day offset,
   `tp.file.title` and `tp.file.cursor` — the whole inventory of the five

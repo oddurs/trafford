@@ -106,6 +106,92 @@ struct Obsidian {
     readable_line_length: Option<bool>,
 }
 
+/// One cadence of `.obsidian/plugins/periodic-notes/data.json`.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+struct PeriodicKind {
+    enabled: bool,
+    format: String,
+    folder: String,
+    template_path: String,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct CalendarSet {
+    day: PeriodicKind,
+    week: PeriodicKind,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+struct Periodic {
+    calendar_sets: Vec<CalendarSet>,
+}
+
+impl Periodic {
+    fn read(vault_root: &Path) -> Option<Periodic> {
+        let text =
+            std::fs::read_to_string(vault_root.join(".obsidian/plugins/periodic-notes/data.json"))
+                .ok()?;
+        serde_json::from_str(&text).ok()
+    }
+
+    /// Fill in a cadence trafford was not told about explicitly.
+    ///
+    /// The formats are moment.js and trafford's are strftime, translated by the
+    /// same table the templates use. `YYYY-[W]ww` has to come out as the week
+    /// note's real name, or every week links to one that does not exist.
+    fn fill_in(&self, cfg: &mut Config, spoken_for: &HashSet<String>) {
+        let Some(set) = self.calendar_sets.first() else {
+            return;
+        };
+        for (kind, dir_key, fmt_key, tmpl_key) in [
+            (
+                &set.day,
+                "daily_note_dir",
+                "daily_note_format",
+                "daily_note_template",
+            ),
+            (
+                &set.week,
+                "weekly_note_dir",
+                "weekly_note_format",
+                "weekly_note_template",
+            ),
+        ] {
+            if !kind.enabled {
+                continue;
+            }
+            let day = dir_key.starts_with("daily");
+            if !spoken_for.contains(dir_key) && !kind.folder.is_empty() {
+                let slot = if day {
+                    &mut cfg.daily_note_dir
+                } else {
+                    &mut cfg.weekly_note_dir
+                };
+                *slot = kind.folder.clone();
+            }
+            if !spoken_for.contains(fmt_key) && !kind.format.is_empty() {
+                let slot = if day {
+                    &mut cfg.daily_note_format
+                } else {
+                    &mut cfg.weekly_note_format
+                };
+                *slot = crate::vault::template::moment_to_strftime(&kind.format);
+            }
+            if !spoken_for.contains(tmpl_key) && !kind.template_path.is_empty() {
+                let slot = if day {
+                    &mut cfg.daily_note_template
+                } else {
+                    &mut cfg.weekly_note_template
+                };
+                *slot = kind.template_path.clone();
+            }
+        }
+    }
+}
+
 impl Obsidian {
     fn read(vault_root: &Path) -> Option<Obsidian> {
         let text = std::fs::read_to_string(vault_root.join(".obsidian/app.json")).ok()?;
@@ -154,6 +240,9 @@ impl Config {
         // for Ghostty themes: read the configuration they already keep.
         if let Some(obsidian) = Obsidian::read(vault_root) {
             obsidian.fill_in(&mut cfg, &spoken_for);
+        }
+        if let Some(periodic) = Periodic::read(vault_root) {
+            periodic.fill_in(&mut cfg, &spoken_for);
         }
         cfg
     }
@@ -240,6 +329,76 @@ mod tests {
         assert_eq!(cfg.theme, "gotham");
         assert_eq!(cfg.trash, "none", "asked for");
         assert_eq!(cfg.new_note_dir, "00-inbox", "not asked for");
+    }
+
+    /// The vault's real periodic-notes configuration, trimmed to the parts
+    /// that are read.
+    const THEIR_PERIODIC: &str = r#"{
+      "calendarSets": [
+        {
+          "day":  { "enabled": true, "format": "YYYY-MM-DD",
+                    "folder": "00-inbox/daily",
+                    "templatePath": "_templates/daily-note.md" },
+          "week": { "enabled": true, "format": "YYYY-[W]ww",
+                    "folder": "00-inbox/weekly",
+                    "templatePath": "_templates/weekly-review.md" },
+          "month": { "enabled": false }
+        }
+      ]
+    }"#;
+
+    fn with_periodic(json: &str, trafford: Option<&str>) -> crate::testing::TempDir {
+        let dir = vault(None, trafford);
+        std::fs::create_dir_all(dir.path().join(".obsidian/plugins/periodic-notes")).unwrap();
+        std::fs::write(
+            dir.path()
+                .join(".obsidian/plugins/periodic-notes/data.json"),
+            json,
+        )
+        .unwrap();
+        dir
+    }
+
+    #[test]
+    fn periodic_notes_come_from_the_plugin_that_makes_them() {
+        let dir = with_periodic(THEIR_PERIODIC, None);
+        let cfg = Config::load(dir.path());
+        assert_eq!(cfg.daily_note_dir, "00-inbox/daily");
+        assert_eq!(cfg.daily_note_format, "%Y-%m-%d", "moment translated");
+        assert_eq!(cfg.daily_note_template, "_templates/daily-note.md");
+        assert_eq!(cfg.weekly_note_dir, "00-inbox/weekly");
+        assert_eq!(cfg.weekly_note_template, "_templates/weekly-review.md");
+    }
+
+    #[test]
+    fn a_week_keeps_its_literal_w() {
+        // `YYYY-[W]ww` names the note. Lose the W and every week links to one
+        // that does not exist.
+        let dir = with_periodic(THEIR_PERIODIC, None);
+        let cfg = Config::load(dir.path());
+        assert_eq!(cfg.weekly_note_format, "%Y-W%V");
+        let name = chrono::Local::now()
+            .format(&cfg.weekly_note_format)
+            .to_string();
+        assert!(name.contains("-W"), "named as a week: {name}");
+    }
+
+    #[test]
+    fn a_cadence_that_is_switched_off_is_left_at_traffords_default() {
+        let json = r#"{"calendarSets":[{"day":{"enabled":false,"folder":"nope"}}]}"#;
+        let dir = with_periodic(json, None);
+        assert_eq!(Config::load(dir.path()).daily_note_dir, "journal");
+    }
+
+    #[test]
+    fn config_toml_still_wins_over_the_plugin() {
+        let dir = with_periodic(THEIR_PERIODIC, Some("daily_note_dir = \"mine\"\n"));
+        let cfg = Config::load(dir.path());
+        assert_eq!(cfg.daily_note_dir, "mine", "asked for");
+        assert_eq!(
+            cfg.daily_note_template, "_templates/daily-note.md",
+            "not asked for"
+        );
     }
 
     #[test]
